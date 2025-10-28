@@ -44,15 +44,15 @@ Setup:
 
 python -m venv .venv
 # Windows:
+```
 .venv\Scripts\activate
+```
 # macOS/Linux:
 source .venv/bin/activate
 
 ```
-{
 pip install -r requirements.txt
 python -m uvicorn web.server:app --reload
-}
 ```
 
 ## Usage
@@ -95,7 +95,6 @@ python -m uvicorn web.server:app --reload
 requirements.txt
 
 ```
-{
 fastapi==0.115.0
 uvicorn[standard]==0.30.5
 jinja2==3.1.4
@@ -107,7 +106,6 @@ python-dateutil==2.9.0.post0
 pytz==2024.1
 tzdata==2024.1
 openpyxl==3.1.5
-}
 ```
 
 ## Notes:
