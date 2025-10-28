@@ -1,0 +1,385 @@
+{# /web/templates/dashboard.html #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="header-row" style="justify-content: space-between; align-items:center;">
+  <h2 style="margin:0;">{{ header_today }}</h2>
+</div>
+
+<div class="table-toolbar" style="display:flex; justify-content:flex-end; gap:.5rem; margin:.5rem 0;">
+  <a class="preview-btn"
+     href="/dashboard/export.xlsx?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ cal_weeks }}&show_private={{ show_private }}&q={{ q|urlencode }}&types={{ types|urlencode }}&status={{ status|urlencode }}&tags={{ tags|urlencode }}"
+     download="kalender_kw{{ calendar_week.weeks[0].week_number if calendar_week and calendar_week.weeks else '' }}.xlsx"
+     title="Kalender in Excel exportieren">
+    Kalender exportieren (Excel)
+  </a>
+</div>
+
+<style>
+  .cards-grid {
+    display: grid;
+    gap: .6rem;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    margin:.5rem 0;
+  }
+  .card { grid-column: span 4; }
+  .card--span2 { grid-column: span 8; }
+  .card--full { grid-column: 1 / -1; }
+  .row-sep { grid-column: 1 / -1; height:.2rem; }
+
+  .card-title { font-weight:600; margin-bottom:.25rem; }
+  .list-plain { margin:.25rem 0; padding-left:0; list-style:none; }
+  .muted { color: var(--muted, #666); }
+
+  .chip { display:inline-block; font-size:.8rem; padding:.05rem .35rem; background:var(--chip-bg, #e5e7eb); border-radius:.5rem; }
+
+  .status-badge {
+    display:inline-block;
+    padding:.1rem .4rem;
+    border-radius:.35rem;
+    font-size:.78rem;
+    line-height:1.2;
+    color:#111;
+    background:#e5e7eb; /* fallback */
+    white-space: nowrap;
+  }
+
+  .calendar { width:100%; border-collapse: collapse; table-layout: fixed; }
+  .calendar th, .calendar td { border: 1px solid var(--border, #ddd); padding:.25rem; vertical-align: top; }
+  .calendar thead th { background: var(--bg-muted, #f6f6f6); font-weight:600; text-align:center; }
+  .cal-day { font-size:.8rem; font-weight:600; margin-bottom:.25rem; text-align:right; }
+  .cal-slot { font-size:.8rem; line-height:1.2; }
+  .badge-ev { display:inline-block; color: #000; font-size:.75rem; padding:.05rem .3rem; border-radius:.35rem; background:#e8f0fe; }
+
+  /* NEU: Prioritäts- und Überfällig-Styles */
+  .priority-high { border-left: 3px solid #dc2626; padding-left: .3rem; }
+  .priority-medium { border-left: 3px solid #f59e0b; padding-left: .3rem; }
+  .priority-low { border-left: 3px solid #3b82f6; padding-left: .3rem; }
+  .overdue { background: rgba(220, 38, 38, 0.08); }
+  .birthday-icon { width: 1rem; height: 1rem; display: inline-block; vertical-align: middle; margin-right: .2rem; }
+</style>
+
+<section class="cards-grid">
+
+  <!-- Zeile 1 -->
+  <div class="card">
+    <div class="card-title">Überfällig</div>
+    <div class="card-body">
+      {% set L = overdue if overdue is defined else [] %}
+      {% if L %}
+        <ul class="list-plain">
+          {% for it in L %}
+            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} overdue">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
+              {% else %}
+              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              {% endif %}
+              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
+                {{ it.name }}
+              </a>
+              <span class="muted">
+                {% if it.type in ('appointment','event') %}
+                  {{ format_dashboard_time(it.start_utc, "next_events", berlin_tz) }}
+                {% else %}
+                  {{ format_dashboard_time(it.due_utc or it.reminder_utc, "next_events", berlin_tz) }}
+                {% endif %}
+              </span>
+              {% if not is_birthday(it) %}
+              <span class="status-badge"
+                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
+                {{ status_display(it.status) }}
+              </span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted">Nichts überfällig.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card card--span2">
+    <div class="card-title">Heute</div>
+    <div class="card-body">
+      {% set L = upcoming_today if upcoming_today is defined else [] %}
+      {% if L %}
+        <ul class="list-plain">
+          {% for it in L %}
+            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} {% if is_overdue_item(it, today) %}overdue{% endif %}">
+              {% if is_birthday(it) %}<img src="static/icons/birthday.svg" alt="🎂" class="birthday-icon">{% endif %}
+              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
+                {{ it.name }}
+              </a>
+              <span class="muted">
+                {% if it.type in ('appointment','event') %}
+                  {{ format_dashboard_time(it.start_utc, "today", berlin_tz) }}
+                {% else %}
+                  {{ format_dashboard_time(it.due_utc or it.reminder_utc, "today", berlin_tz) }}
+                {% endif %}
+              </span>
+              {% if not is_birthday(it) %}
+              <span class="status-badge"
+                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
+                {{ status_display(it.status) }}
+              </span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted">Keine heutigen Einträge.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row-sep"></div>
+
+  <!-- Zeile 2 -->
+  <div class="card">
+    <div class="card-title">Nächste 7 Tage</div>
+    <div class="card-body">
+      {% set L = upcoming_next7 if upcoming_next7 is defined else [] %}
+      {% if L %}
+        <ul class="list-plain">
+          {% for it in L %}
+            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
+              {% else %}
+              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              {% endif %}
+              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
+                {{ it.name }}
+              </a>
+              <span class="muted">
+                {% if it.type in ('appointment','event') %}
+                  {{ format_dashboard_time(it.start_utc, "next_7d", berlin_tz) }}
+                {% else %}
+                  {{ format_dashboard_time(it.due_utc or it.reminder_utc, "next_7d", berlin_tz) }}
+                {% endif %}
+              </span>
+              {% if not is_birthday(it) %}
+              <span class="status-badge"
+                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
+                {{ status_display(it.status) }}
+              </span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted">Keine Einträge in den nächsten 7 Tagen.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Serien aktiv</div>
+    <div class="card-body">
+      {% set L = recurring_items if recurring_items is defined else [] %}
+      {% if L %}
+        <ul class="list-plain">
+          {% for it in L %}
+            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
+              {% endif %}
+              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
+                {{ it.name }}
+              </a>
+              <span class="muted">
+                {% if it.type in ('appointment','event') and it.start_utc %}
+                  {{ format_dashboard_time(it.start_utc, "series", berlin_tz) }}
+                {% endif %}
+              </span>
+              {% if not is_birthday(it) %}
+              <span class="status-badge"
+                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
+                {{ status_display(it.status) }}
+              </span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted">Keine aktiven Serien.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Ohne Termin</div>
+    <div class="card-body">
+      {% set L = without_date if without_date is defined else [] %}
+      {% if L %}
+        <ul class="list-plain">
+          {% for it in L %}
+            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
+              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
+                {{ it.name }}
+              </a>
+              {% if not is_birthday(it) %}
+              <span class="status-badge"
+                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
+                {{ status_display(it.status) }}
+              </span>
+              {% endif %}
+              {% if it.last_modified_utc %}
+                <span class="muted">{{ format_dashboard_time(it.last_modified_utc, "no_date", berlin_tz) }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted">Alle Einträge sind terminiert.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row-sep"></div>
+
+  <!-- Zeile 3 -->
+  <div class="card">
+    <div class="card-title">Nächste Ereignisse</div>
+    <div class="card-body">
+      {% set L = (events_next2m if events_next2m is defined else [])[:20] %}
+      {% if L %}
+        <ul class="list-plain">
+          {% for it in L %}
+            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="icon-btn">
+              {% else %}
+              <span class="badge-ev">Event</span>
+              {% endif %}
+              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
+                {{ it.name }}
+              </a>
+              <span class="muted">
+                {{ format_dashboard_time(it.start_utc, "next_events", berlin_tz) }}
+              </span>
+              {% if not is_birthday(it) %}
+              <span class="status-badge"
+                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
+                {{ status_display(it.status) }}
+              </span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="muted">Keine Ereignisse in den nächsten 2 Monaten.</div>
+      {% endif %}
+    </div>
+  </div>
+  
+  <div class="card card--span2" style="padding: 0; border: none; background: transparent;">
+    {% set W = calendar_week if calendar_week is defined else None %}
+    {% if W %}
+    
+    <!-- Kompakte Kalender-Navigation -->
+    <div class="cal-nav">
+    <div class="cal-nav-group">
+        <a href="?cal_week_offset={{ cal_week_offset - 1 }}&cal_weeks={{ cal_weeks }}&show_private={{ request.query_params.get('show_private','0') }}" class="cal-nav-btn" title="Eine Woche zurück">‹</a>
+        <a href="?cal_week_offset={{ cal_week_offset + 1 }}&cal_weeks={{ cal_weeks }}&show_private={{ request.query_params.get('show_private','0') }}" class="cal-nav-btn" title="Eine Woche vor">›</a>
+    </div>
+
+    <div class="cal-nav-status">
+        {% if cal_week_offset == 0 %}
+        <span class="cal-nav-label">Diese Woche</span>
+        {% elif cal_week_offset > 0 %}
+        <span class="cal-nav-label cal-nav-label--future">+{{ cal_week_offset }}W</span>
+        {% else %}
+        <span class="cal-nav-label cal-nav-label--past">{{ cal_week_offset }}W</span>
+        {% endif %}
+    </div>
+
+    <div class="cal-nav-group">
+        {% if cal_week_offset != 0 %}
+        <a href="?cal_week_offset=0&cal_weeks={{ cal_weeks }}&show_private={{ request.query_params.get('show_private','0') }}" class="cal-nav-btn" title="Zurück zu heute">Heute</a>
+        {% endif %}
+
+        <span class="cal-nav-label">Wochen:</span>
+        {% for k in [1,2,3,4] %}
+        <a href="?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ k }}&show_private={{ request.query_params.get('show_private','0') }}"
+            class="cal-nav-btn {% if cal_weeks == k %}cal-nav-btn--active{% endif %}"
+            title="{{ k }} Kalenderwochen anzeigen">{{ k }}</a>
+        {% endfor %}
+    </div>
+    </div>
+
+    <!-- Bestehende Kalender-Tabelle -->
+    <table class="calendar" aria-label="Kalender 2 Wochen">
+        <thead>
+        <tr>
+        <th scope="col" class="cal-week-col">KW</th>
+        {% for d in W.headers %}
+        <th scope="col">{{ d }}</th>
+        {% endfor %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for week in W.weeks %}
+        <tr>
+        {# Kalenderwoche-Zelle #}
+        <td class="cal-week-cell">{{ week.week_number }}</td>
+        
+        {# Tages-Zellen #}
+        {% for day in week.days %}
+        <td class="{% if day.is_weekend %}cal-weekend{% endif %} {% if day.is_today %}cal-today{% endif %}">
+            <div class="cal-day">{{ day.label }}</div>
+            <div class="cal-slot">
+                {% for ev in day["items"] %}
+                    {% set ev_dt = None %}
+                    {% if ev.type in ('appointment','event') %}
+                        {# Start, sonst Ende #}
+                        {% set ev_dt = ev.end_utc or ev.start_utc %}
+                    {% elif ev.type in ('task','reminder') %}
+                        {# Fälligkeit, sonst Erinnerung #}
+                        {% set ev_dt = ev.due_utc or ev.reminder_utc %}
+                    {% endif %}
+
+                    {# Nur terminale Einträge werden als „vergangen“ markiert #}
+                    {% set is_terminal = (ev.status and status_display(ev.status) and true) %}
+                    {# Alternativ genauer: eigener Helper is_terminal im ctx nutzen, falls vorhanden #}
+                    {% set is_terminal = is_terminal_status(ev.status) %}
+
+                    {% set is_past = false %}
+                    {% if ev_dt and is_terminal %}
+                        {% set now_in_ev_tz = now_local.astimezone(ev_dt.tzinfo) if ev_dt.tzinfo else now_local %}
+                        {% set is_past = ev_dt < now_in_ev_tz %}
+                    {% elif not ev_dt and is_terminal %}
+                        {% set is_past = day.date.date() < now_local.date() %}
+                    {% endif %}
+                <div class="{{ get_priority_class(ev) }} {% if is_past %}cal-past{% endif %}">
+                    {% if is_birthday(ev) %}<img src="/static/icons/birthday.svg" alt="🎂" class="icon-btn">{% endif %}
+                    
+                    {# Uhrzeit zuerst #}
+                    <span class="cal-time">
+                    {% if ev.type in ('appointment', 'event') and ev.start_utc %}
+                        {{ format_dashboard_time(ev.start_utc, "calendar", berlin_tz) }}
+                        {% if ev.end_utc and ev.end_utc != ev.start_utc %}-{{ format_dashboard_time(ev.end_utc, "calendar", berlin_tz) }}{% endif %}
+                    {% elif ev.type in ('task', 'reminder') and (ev.due_utc or ev.reminder_utc) %}
+                        {{ format_dashboard_time(ev.due_utc or ev.reminder_utc, "calendar", berlin_tz) }}
+                    {% endif %}
+                    </span>
+                    
+                    <a class="link" href="/items/{{ ev.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
+                    {{ ev.name }}
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </td>
+        {% endfor %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+  <div class="muted" style="padding: 1rem;">Kalender nicht verfügbar.</div>
+  {% endif %}
+</div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,9 @@
+{# /web/templates/_alerts.html #}
+<div class="alert alert-error">
+  <strong>Fehler:</strong>
+  <ul>
+    {% for msg in messages %}
+      <li>{{ msg }}</li>
+    {% endfor %}
+  </ul>
+</div>

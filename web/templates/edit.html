@@ -1,0 +1,648 @@
+{# /web/templates/edit.html #}
+{% extends "base.html" %}
+{% block content %}
+
+<div id="alerts"></div>
+{% if request.query_params.get('copied') == '1' %}
+  <script>
+    (function(){
+      const alerts = document.getElementById('alerts');
+      if (!alerts) return;
+      alerts.innerHTML = '<div class="alert alert-success">Kopie erstellt. Sie bearbeiten nun die duplizierte Version dieses Eintrags.</div>';
+      setTimeout(()=>{ if (alerts.firstChild) alerts.innerHTML=''; }, 4000);
+    })();
+  </script>
+{% endif %}
+
+<div class="edit-actions" style="display:flex; justify-content:flex-end; margin:.25rem 0;">
+  <button class="preview-btn"
+          hx-post="/items/{{ it.id }}/copy"
+          hx-swap="none"
+          title="Dieses Item duplizieren">
+    Kopieren
+  </button>
+  <a class="btn btn-xs" href="/export.ics?ids={{ it.id }}" target="_blank" rel="noopener">
+    Exportieren (ICS)
+    </a>
+</div>
+<div class="edit-container">
+  <!-- Grunddaten -->
+  <fieldset class="card">
+    <legend class="card-title">Grunddaten</legend>
+    <div class="card-body form-grid">
+      <div class="full" style="max-width: 720px;">
+        <label for="name">Titel</label>
+        <input id="name" type="text" name="name" value="{{ it.name }}" placeholder="Kurzer, prägnanter Titel"
+              hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
+              hx-include="#name"
+              hx-swap="none">
+      </div>
+
+      <div class="full" style="max-width: 720px;">
+        <label for="description">Beschreibung</label>
+        <textarea id="description" name="description" placeholder="Ausführliche Beschreibung, Hinweise, Checkliste… (Markdown unterstützt)"
+                  hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:400ms"
+                  hx-include="#description"
+                  hx-swap="none" rows="8">{{ it.description | default('') }}</textarea>
+        <div class="muted">Markdown möglich: Überschriften, Listen, Links.</div>
+      </div>
+
+      <div>
+        <label for="status_key">Status</label>
+        <select id="status_key" name="status_key"
+                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                hx-include="#status_key"
+                hx-swap="none">
+          {% for key, label in status_options %}
+            <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="priority">Priorität</label>
+        <select id="priority" name="priority"
+                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                hx-include="#priority"
+                hx-swap="none">
+          <option value="0" {% if (it.priority or 0) == 0 %}selected{% endif %}>Keine</option>
+          <option value="1" {% if it.priority == 1 %}selected{% endif %}>Niedrig</option>
+          <option value="2" {% if it.priority == 2 %}selected{% endif %}>Normal</option>
+          <option value="3" {% if it.priority == 3 %}selected{% endif %}>Hoch</option>
+          <option value="4" {% if it.priority == 4 %}selected{% endif %}>Kritisch</option>
+          <option value="5" {% if it.priority == 5 %}selected{% endif %}>Blockierend</option>
+        </select>
+      </div>
+
+      {# Links-Editor: nur das Partial einbinden #}
+      {% include "_links_block.html" with context %}
+
+      <div>
+        <label>Privatsphäre</label>
+        <label class="inline">
+          <input id="is_private" type="checkbox" name="is_private" value="1" {% if it.is_private %}checked{% endif %}
+                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                hx-include="#is_private"
+                hx-swap="none">
+          Eintrag ist privat
+        </label>
+        <div class="muted">Private Einträge werden nur angezeigt, wenn in der Liste „Private“ aktiviert ist.</div>
+      </div>
+
+      <div class="full" style="max-width: 720px;">
+        <label for="tags">Tags</label>
+        <input id="tags" type="text" name="tags" value="{{ (it.tags or []) | join(', ') }}" placeholder="z. B. Arbeit, Dringend"
+              hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
+              hx-include="#tags"
+              hx-swap="none">
+        <div class="muted">Mehrere Tags durch Komma trennen.</div>
+      </div>
+
+      <!-- Audit: erstellt/geändert -->
+      <div class="full" style="max-width: 720px; margin-top:.25rem;">
+        <div class="muted">
+          {% if it.created_utc %}
+            Erstellt: {{ it.created_utc | format_local_short_weekday_de("%a %d.%m.%Y %H:%M") }}. {{ it.created_utc | format_local("%d.%m.%Y %H:%M") }}
+          {% else %}
+            Erstellt: –
+          {% endif %}
+          ·
+          {% if it.last_modified_utc %}
+            Zuletzt geändert: {{ it.last_modified_utc | format_local_short_weekday_de("%a %d.%m.%Y %H:%M") }}. {{ it.last_modified_utc | format_local("%d.%m.%Y %H:%M") }}
+          {% else %}
+            Zuletzt geändert: –
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- Zeitangaben -->
+  <fieldset class="card">
+    <legend class="card-title">Zeitangaben</legend>
+    <div class="card-body form-grid">
+      {% if it.type == 'task' %}
+        <div style="max-width: 420px;">
+          <label for="due">Fällig am</label>
+          <input id="due" class="fp-datetime" type="text" name="due" value="{{ it.due_utc | format_local }}"
+                 placeholder="dd.mm.yyyy hh:mm"
+                 hx-post="/items/{{ it.id }}/due" hx-trigger="change" hx-swap="none">
+          <div class="muted">Optionales Fälligkeitsdatum.</div>
+        </div>
+      {% elif it.type in ('appointment','event') %}
+        <div style="max-width: 420px;">
+          <label for="start_local">Beginn</label>
+          <input id="start_local" class="fp-datetime" type="text" name="start_local" value="{{ it.start_utc | format_local }}"
+                 placeholder="dd.mm.yyyy hh:mm"
+                 hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
+                 hx-include="[name='start_local']" hx-target="#occ" hx-swap="innerHTML">
+        </div>
+        <div style="max-width: 420px;">
+          <label for="end_local">Ende</label>
+          <input id="end_local" class="fp-datetime" type="text" name="end_local" value="{{ it.end_utc | format_local }}"
+                 placeholder="dd.mm.yyyy hh:mm"
+                 hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
+                 hx-include="[name='end_local']" hx-target="#occ" hx-swap="innerHTML">
+        </div>
+        <div class="full" style="max-width: 720px;">
+          <label class="inline" title="Ganztägiger Eintrag ohne Uhrzeiten">
+            <input id="is_all_day" type="checkbox" name="is_all_day" value="1" {% if it.is_all_day %}checked{% endif %}>
+            Ganztägig
+          </label>
+        </div>
+        {% set has_recur = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
+        {% if not has_recur %}
+          <div class="full" style="max-width: 720px;">
+            <a href="#" class="add-recur" id="show_recur">+ Wiederholung hinzufügen</a>
+          </div>
+        {% endif %}
+      {% elif it.type == 'reminder' %}
+        <div style="max-width: 420px;">
+          <label for="until_local">Erinnern am</label>
+          <input id="until_local" class="fp-datetime" type="text" name="until_local" value="{{ it.reminder_utc | format_local }}"
+                 placeholder="dd.mm.yyyy hh:mm"
+                 hx-post="/items/{{ it.id }}/snooze" hx-trigger="change"
+                 hx-target="#occ" hx-swap="innerHTML">
+        </div>
+        {% set has_recur = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
+        {% if not has_recur %}
+          <div class="full" style="max-width: 720px;">
+            <a href="#" class="add-recur" id="show_recur_rem">+ Wiederholung hinzufügen</a>
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </fieldset>
+
+  {% if it.type in ('appointment','event','reminder') %}
+  <!-- Wiederholung (nur bei Bedarf sichtbar) -->
+  <fieldset class="card" id="recur_card"
+            data-rrule="{{ it.recurrence.rrule_string if it.recurrence and it.recurrence.rrule_string else '' }}"
+            style="{% if not has_recur %}display:none;{% endif %}">
+    <legend class="card-title">Wiederholung</legend>
+    <div class="card-body recur-grid">
+      <div class="full muted">Lege fest, ob und wie sich dieser Eintrag wiederholt.</div>
+
+      <div>
+        <label for="recur_freq">Frequenz</label>
+        <select id="recur_freq" name="recur_freq">
+          <option value="">Keine</option>
+          <option value="DAILY">Täglich</option>
+          <option value="WEEKLY">Wöchentlich</option>
+          <option value="MONTHLY">Monatlich</option>
+          <option value="YEARLY">Jährlich</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="recur_interval">Intervall</label>
+        <div class="inline">
+          <span>Alle</span>
+          <input type="number" id="recur_interval" min="1" value="1" style="width:4.5rem">
+          <span id="recur_unit">Wochen</span>
+        </div>
+      </div>
+
+      <div class="span-2" id="recur_weekdays" style="display:none;">
+        <label>Wochentage</label>
+        <div class="weekdays">
+          {% set days = [('MO','Mo'),('TU','Di'),('WE','Mi'),('TH','Do'),('FR','Fr'),('SA','Sa'),('SU','So')] %}
+          {% for code, label in days %}
+            <label class="inline">
+              <input type="checkbox" class="byday" value="{{ code }}"> {{ label }}
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <label for="recur_end_mode">Ende der Serie</label>
+        <select id="recur_end_mode">
+          <option value="NEVER">Niemals</option>
+          <option value="UNTIL">Bis Datum</option>
+          <option value="COUNT">Nach Anzahl</option>
+        </select>
+      </div>
+
+      <div class="inline" id="recur_end_until" style="display:none;">
+        <label for="recur_until" class="sr-only">Bis</label>
+        <input class="fp-datetime" type="text" id="recur_until" placeholder="dd.mm.yyyy hh:mm" style="max-width: 260px;">
+      </div>
+
+      <div class="inline" id="recur_end_count" style="display:none;">
+        <label for="recur_count" class="sr-only">Anzahl</label>
+        <input type="number" id="recur_count" min="1" max="999" value="10" style="width:5rem;">
+        <span class="muted">Vorkommen</span>
+      </div>
+
+      <div class="full btn-row" style="margin-top:.25rem;">
+        <button type="button" class="btn btn-xs" id="save_recurrence">Wiederholung speichern</button>
+        <button type="button" class="btn btn-xs" id="clear_recurrence">Wiederholung entfernen</button>
+      </div>
+    </div>
+  </fieldset>
+  {% endif %}
+
+  <!-- Vorschau -->
+  <fieldset class="card">
+    <legend class="card-title">Vorschau</legend>
+    <div class="card-body">
+      {% set has_recur_preview = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
+      {% if has_recur_preview %}
+        <h3 class="muted" style="margin-top:0; display:flex; align-items:center; gap:.5rem;">
+          Nächste
+          <select id="occ-n" class="btn btn-xs" style="min-height:auto; padding:.1rem .35rem;">
+            {% for k in range(1,11) %}
+              <option value="{{ k }}" {% if k == 10 %}selected{% endif %}>{{ k }}</option>
+            {% endfor %}
+          </select>
+          Vorkommen
+        </h3>
+        <div id="occ"
+             hx-get="/items/{{ it.id }}/occurrences"
+             hx-trigger="load from:#occ-n changed"
+             hx-include="#occ-n"
+             hx-params="*"
+             data-locale="de">
+          {% include "_occurrences.html" with context %}
+        </div>
+      {% else %}
+        <h3 class="muted" style="margin-top:0;">Nächster Termin</h3>
+        <div id="occ"
+             hx-get="/items/{{ it.id }}/occurrences"
+             hx-trigger="load"
+             hx-params="*"
+             data-locale="de">
+          {% include "_occurrences.html" with context %}
+        </div>
+      {% endif %}
+      <div class="muted">Wochentage in Vorschau werden deutsch formatiert.</div>
+    </div>
+  </fieldset>
+</div>
+
+<script>
+  // Custom Erfolgsmeldungen via HX-Trigger (z. B. links-updated)
+  (function(){
+    function onLinksUpdated(){
+      const alerts = document.getElementById('alerts');
+      if (!alerts) return;
+      alerts.innerHTML = '<div class="alert alert-success">Links aktualisiert.</div>';
+      setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
+    }
+
+    // Delegation: document existiert immer, kein body nötig
+    document.addEventListener('links-updated', onLinksUpdated);
+  })();
+
+  // htmx Feedback
+  document.addEventListener('htmx:afterRequest', (e) => {
+    const t = e.target;
+    if (e.detail.xhr.status === 422) {
+      const alerts = document.getElementById('alerts');
+      alerts.innerHTML = e.detail.xhr.responseText;
+      if (t.matches && t.matches('select[name="status_key"]')) {
+        const sel = t;
+        const opt = sel.querySelector('option[selected]');
+        if (opt) sel.value = opt.value;
+      }
+      if (t.matches && t.matches('input[name="is_private"]')) {
+        t.checked = {{ 'true' if it.is_private else 'false' }};
+      }
+    } else if (e.detail.xhr.status === 204) {
+      if (t.matches && t.matches('select[name="status_key"]')) {
+        const sel = t;
+        sel.querySelectorAll('option').forEach(o => o.removeAttribute('selected'));
+        const cur = sel.options[sel.selectedIndex];
+        if (cur) cur.setAttribute('selected', 'selected');
+      }
+    }
+  });
+
+  // Wiederholung – Sichtbarkeit, Hydrierung aus RRULE und Speichern
+  (function(){
+    const type = "{{ it.type }}";
+    if (!(type === "appointment" || type === "event" || type === "reminder")) return;
+
+    const recurCard = document.getElementById('recur_card');
+    const rruleRaw = (recurCard?.dataset?.rrule || "").trim();
+    const showBtnApt = document.getElementById('show_recur');
+    const showBtnRem = document.getElementById('show_recur_rem');
+
+    const freqSel = document.getElementById('recur_freq');
+    const interval = document.getElementById('recur_interval');
+    const unit = document.getElementById('recur_unit');
+    const weekdays = document.getElementById('recur_weekdays');
+    const endMode = document.getElementById('recur_end_mode');
+    const untilBox = document.getElementById('recur_end_until');
+    const countBox = document.getElementById('recur_end_count');
+
+    function reveal(){ if (recurCard) { recurCard.style.display=''; setTimeout(()=>freqSel?.focus(),0); } }
+    showBtnApt && showBtnApt.addEventListener('click', (e)=>{ e.preventDefault(); reveal(); });
+    showBtnRem && showBtnRem.addEventListener('click', (e)=>{ e.preventDefault(); reveal(); });
+
+    function updateVisibility(){
+      const f = freqSel.value;
+      if (unit) unit.textContent = f === 'DAILY' ? 'Tage' : (f === 'WEEKLY' ? 'Wochen' : (f === 'MONTHLY' ? 'Monate' : 'Jahre'));
+      if (weekdays) weekdays.style.display = (f === 'WEEKLY') ? '' : 'none';
+      const m = endMode.value;
+      if (untilBox) untilBox.style.display = (m === 'UNTIL') ? '' : 'none';
+      if (countBox) countBox.style.display = (m === 'COUNT') ? '' : 'none';
+    }
+    freqSel && freqSel.addEventListener('change', updateVisibility);
+    endMode && endMode.addEventListener('change', updateVisibility);
+
+    (function hydrateFromRRule(){
+      if (!rruleRaw) return;
+      reveal();
+      const rrLine = (rruleRaw.split(/\n/).find(l => l.startsWith('RRULE:')) || rruleRaw).replace(/^RRULE:/,'').trim();
+      const parts = Object.fromEntries(rrLine.split(';').map(p => {
+        const [k,v] = p.split('='); return [k.toUpperCase(), (v||'').trim()];
+      }));
+      const FREQ = parts.FREQ || '';
+      if (FREQ) freqSel.value = FREQ;
+
+      const INTERVAL = parseInt(parts.INTERVAL || '1', 10);
+      interval.value = isNaN(INTERVAL) ? '1' : String(Math.max(1, INTERVAL));
+
+      const BYDAY = (parts.BYDAY || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (FREQ === 'WEEKLY' && BYDAY.length) {
+        document.querySelectorAll('.byday').forEach(cb => { cb.checked = BYDAY.includes(cb.value.toUpperCase()); });
+      }
+
+      if (parts.UNTIL) {
+        endMode.value = 'UNTIL';
+      } else if (parts.COUNT) {
+        endMode.value = 'COUNT';
+        const c = parseInt(parts.COUNT, 10);
+        const countEl = document.getElementById('recur_count');
+        if (countEl) countEl.value = String(isNaN(c) ? 10 : Math.max(1, c));
+      } else {
+        endMode.value = 'NEVER';
+      }
+      updateVisibility();
+    })();
+
+    function toUTCString(localStr){
+      const m = localStr.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
+      if (!m) return '';
+      const [_, dd, MM, yyyy, hh, mm] = m;
+      const d = new Date(`${yyyy}-${MM}-${dd}T${hh}:${mm}:00`);
+      const y = d.getUTCFullYear();
+      const mo = String(d.getUTCMonth()+1).padStart(2, '0');
+      const da = String(d.getUTCDate()).padStart(2, '0');
+      const H = String(d.getUTCHours()).padStart(2, '0');
+      const M = String(d.getUTCMinutes()).padStart(2, '0');
+      return `${y}${mo}${da}T${H}${M}00Z`;
+    }
+
+    function buildRRule(){
+      const f = freqSel.value; if (!f) return null;
+      const parts = [`FREQ=${f}`];
+      const n = Math.max(1, parseInt(interval.value || '1', 10));
+      if (n > 1) parts.push(`INTERVAL=${n}`);
+      if (f === 'WEEKLY') {
+        const by = Array.from(document.querySelectorAll('.byday:checked')).map(x => x.value);
+        if (by.length) parts.push(`BYDAY=${by.join(',')}`);
+      }
+      const m = endMode.value;
+      if (m === 'UNTIL') {
+        const u = (document.getElementById('recur_until')?.value || '').trim();
+        if (u) parts.push(`UNTIL=${toUTCString(u)}`);
+      } else if (m === 'COUNT') {
+        const c = Math.max(1, parseInt((document.getElementById('recur_count')?.value || '1'), 10));
+        parts.push(`COUNT=${c}`);
+      }
+      return parts.join(';');
+    }
+
+    function postRecurrence(rrule){
+      const formValues = {
+        name: document.getElementById('name')?.value || "",
+        description: document.getElementById('description')?.value || "",
+        status_key: document.getElementById('status_key')?.value || "",
+        is_private: (document.getElementById('is_private')?.checked ? "1" : "0"),
+        tags: document.getElementById('tags')?.value || "",
+        dtstart_local: "",
+        rrule_line: rrule || "",
+        exdates_local: ""
+      };
+      htmx.ajax('POST', '/items/{{ it.id }}/edit', { values: formValues, target: '#occ', swap: 'innerHTML' })
+        .then(()=> {
+          const alerts = document.getElementById('alerts');
+          alerts.innerHTML = `<div class="alert alert-success">${rrule ? 'Wiederholung gespeichert.' : 'Wiederholung entfernt.'}</div>`;
+        });
+    }
+
+    document.getElementById('save_recurrence')?.addEventListener('click', () => postRecurrence(buildRRule()));
+    document.getElementById('clear_recurrence')?.addEventListener('click', () => postRecurrence(""));
+  })();
+
+  // Export-Button: öffnet den ICS-Export für dieses Item
+  (function(){
+    const btn = document.getElementById('export-selected');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const url = new URL('/export.ics', window.location.origin);
+      url.searchParams.append('ids', '{{ it.id }}');
+      window.open(url.toString(), '_blank');
+    });
+  })();
+
+  (function(){
+    const type = "{{ it.type }}";
+    if (!(type === "appointment" || type === "event")) return;
+
+    const startInput = document.getElementById('start_local');
+    const endInput   = document.getElementById('end_local');
+    if (!startInput || !endInput) return;
+
+    // Merke initiale Werte, um Überschreiben nur bei "leeren"/gleichen Werten zu erlauben
+    let lastStart = startInput.value || "";
+    let lastEnd   = endInput.value || "";
+
+    function mirrorIfAppropriate() {
+      const curStart = startInput.value.trim();
+      const curEnd   = endInput.value.trim();
+
+      // Spiegeln nur wenn:
+      // - Ende leer ist, oder
+      // - Ende bisher exakt dem vorherigen Start entsprach (typischer Erstfall)
+      const shouldMirror = (curEnd.length === 0) || (curEnd === lastStart);
+
+      if (shouldMirror && curStart.length) {
+        endInput.value = curStart;
+
+        // Optional: gleich die Vorschau aktualisieren, ohne manuellen Blur nötig
+        // Nur end_local posten, um deine Route /start_end unverändert zu nutzen
+        try {
+          if (window.htmx) {
+            htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
+              target: '#occ',
+              swap: 'innerHTML',
+              values: { end_local: curStart }
+            });
+          }
+        } catch (e) { /* no-op */ }
+      }
+
+      // Stände aktualisieren
+      lastStart = curStart;
+      lastEnd   = endInput.value.trim();
+    }
+
+    // Auf Änderungen am Startfeld reagieren
+    startInput.addEventListener('change', mirrorIfAppropriate);
+    // Auch auf Eingabe (live), damit sofort gespiegelt wird
+    startInput.addEventListener('input', mirrorIfAppropriate);
+
+    // Ende-Änderungen verfolgen, damit "curEnd === lastStart"-Heuristik korrekt bleibt
+    endInput.addEventListener('change', () => { lastEnd = endInput.value.trim(); });
+  })();
+
+  (function(){
+    const type = "{{ it.type }}";
+    if (!(type === "appointment" || type === "event")) return;
+
+    const startInput = document.getElementById('start_local');
+    const endInput   = document.getElementById('end_local');
+    const alldayCb   = document.getElementById('is_all_day');
+    if (!startInput || !endInput || !alldayCb) return;
+
+    // Merker für Spiegel-/Schutzlogik
+    let lastStart = startInput.value || "";
+    let lastEnd   = endInput.value || "";
+
+    function mirrorIfAppropriate() {
+      const curStart = startInput.value.trim();
+      const curEnd   = endInput.value.trim();
+      const shouldMirror = (curEnd.length === 0) || (curEnd === lastStart);
+      if (shouldMirror && curStart.length) {
+        endInput.value = curStart;
+        try {
+          if (window.htmx) {
+            htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
+              target: '#occ', swap: 'innerHTML', values: { end_local: curStart }
+            });
+          }
+        } catch (e) {}
+      }
+      lastStart = curStart;
+      lastEnd   = endInput.value.trim();
+    }
+
+    function parseLocal(str) {
+      // erwartet "dd.mm.yyyy hh:mm" oder "dd.mm.yyyy"
+      const m = str.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+      if (!m) return null;
+      const [, dd, MM, yyyy, hh = "00", mm = "00"] = m;
+      return { dd, MM, yyyy, hh, mm };
+    }
+
+    function fmtLocal(obj) {
+      return `${obj.dd}.${obj.MM}.${obj.yyyy} ${obj.hh}:${obj.mm}`;
+    }
+
+    function setAllDayBounds(fromStr) {
+      const p = parseLocal(fromStr);
+      if (!p) return null;
+      const startDay = { ...p, hh: "00", mm: "00" };
+      const endDay   = { ...p, hh: "23", mm: "59" };
+      return { startStr: fmtLocal(startDay), endStr: fmtLocal(endDay) };
+    }
+
+    function postIsAllDay(val) {
+      try {
+        if (window.htmx) {
+          htmx.ajax('POST', '/items/{{ it.id }}/edit', {
+            swap: 'none',
+            values: { is_all_day: val ? "1" : "0" }
+          });
+        }
+      } catch (e) {}
+    }
+
+    function applyAllDayOn() {
+      const curStart = startInput.value.trim();
+      if (!curStart) return;
+      const bounds = setAllDayBounds(curStart);
+      if (!bounds) return;
+
+      // Start auf 00:00, Ende auf 23:59 – Ende nur überschreiben, wenn leer oder gleich lastStart/alter AllDay-Ende
+      startInput.value = bounds.startStr;
+
+      const curEnd = endInput.value.trim();
+      const prevAllDayEnd = setAllDayBounds(lastStart || curStart)?.endStr || "";
+      const shouldOverwriteEnd = (curEnd.length === 0) || (curEnd === lastStart) || (curEnd === prevAllDayEnd);
+
+      if (shouldOverwriteEnd) {
+        endInput.value = bounds.endStr;
+      }
+
+      // Server informieren: is_all_day=1 und neue Zeiten posten
+      postIsAllDay(true);
+      try {
+        if (window.htmx) {
+          htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
+            target: '#occ',
+            swap: 'innerHTML',
+            values: { start_local: startInput.value, end_local: endInput.value }
+          });
+        }
+      } catch (e) {}
+
+      lastStart = startInput.value.trim();
+      lastEnd   = endInput.value.trim();
+    }
+
+    function applyAllDayOff() {
+      // Nur Flag zurücksetzen; Zeiten bleiben, Nutzer kann Uhrzeiten anpassen
+      postIsAllDay(false);
+    }
+
+    // Events
+    startInput.addEventListener('change', mirrorIfAppropriate);
+    startInput.addEventListener('input', mirrorIfAppropriate);
+
+    endInput.addEventListener('change', () => { lastEnd = endInput.value.trim(); });
+
+    alldayCb.addEventListener('change', () => {
+      if (alldayCb.checked) applyAllDayOn();
+      else applyAllDayOff();
+    });
+  
+  (function(){
+    const btn = document.getElementById('copy-item');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      try {
+        // HTMX kann Redirects automatisch folgen; mit fetch geht's explizit:
+        const resp = await fetch('/items/{{ it.id }}/copy', { method: 'POST' });
+        if (resp.redirected) {
+          window.location.href = resp.url;
+        } else if (resp.status === 200 || resp.status === 204) {
+          // Falls Server 200+Location liefert, manuell aus Location weiterleiten
+          const loc = resp.headers.get('Location');
+          if (loc) { window.location.href = loc; return; }
+          // Fallback: Alerts
+          const alerts = document.getElementById('alerts');
+          if (alerts) alerts.innerHTML = '<div class="alert alert-success">Kopie erstellt.</div>';
+        } else {
+          const txt = await resp.text();
+          const alerts = document.getElementById('alerts') || document.body;
+          const wrap = document.createElement('div');
+          wrap.innerHTML = txt || '<div class="alert alert-danger">Kopieren fehlgeschlagen.</div>';
+          alerts.prepend(wrap);
+        }
+      } catch (e) {
+        const alerts = document.getElementById('alerts') || document.body;
+        const wrap = document.createElement('div');
+        wrap.innerHTML = '<div class="alert alert-danger">Netzwerkfehler beim Kopieren.</div>';
+        alerts.prepend(wrap);
+      }
+    });
+  })();
+</script>
+
+
+{% endblock %}

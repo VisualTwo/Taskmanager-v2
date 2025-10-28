@@ -1,0 +1,8 @@
+type,status_key,COUNT()
+appointment,APPOINTMENT_DONE,99
+appointment,APPOINTMENT_PLANNED,4
+event,EVENT_SCHEDULED,37
+event,EVENT_DONE,22
+task,TASK_OPEN,12
+task,TASK_DONE,11
+task,TASK_IN_PROGRESS,3

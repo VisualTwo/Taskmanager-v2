@@ -1,0 +1,116 @@
+{# /web/templates/base.html #}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>TaskManager</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/themes/material_blue.css">
+</head>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/de.js"></script>
+<script>
+  function initDatePickers(root){
+    try {
+      // Schon initialisierte Inputs nicht doppelt initialisieren
+      const scope = root || document;
+      const nodes = scope.querySelectorAll('.fp-datetime:not([data-fp])');
+      nodes.forEach(el => {
+        flatpickr(el, {
+          enableTime: true,
+          time_24hr: true,
+          dateFormat: "d.m.Y H:i",
+          locale: "de"
+        });
+        el.setAttribute('data-fp', '1');
+      });
+    } catch(e) { /* noop */ }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    initDatePickers(document);
+  });
+</script>
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+<script>
+  // Globale htmx Hooks: Datepicker-Reinit und Alerts
+  document.addEventListener('htmx:afterSwap', (e) => {
+    // Falls ein Teilbereich neu gerendert wurde, Datepicker initialisieren
+    initDatePickers(e.target);
+  });
+
+  document.addEventListener('htmx:responseError', (e) => {
+    // 4xx/5xx: Fehlerinhalt (z. B. _alerts.html) anzeigen
+    try {
+      const alerts = document.getElementById('alerts') || document.body;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = e.detail.xhr.responseText || '<div class="alert alert-error">Fehler</div>';
+      alerts.prepend(wrap);
+    } catch(_) {}
+  });
+
+  // Custom Erfolgsmeldungen via HX-Trigger (z. B. links-updated)
+  document.body.addEventListener('links-updated', () => {
+    const alerts = document.getElementById('alerts');
+    if (!alerts) return;
+    alerts.innerHTML = '<div class="alert alert-success">Links aktualisiert.</div>';
+    setTimeout(()=>{ if (alerts.firstChild) alerts.innerHTML=''; }, 3000);
+  });
+</script>
+
+<body>
+<header class="header-row" style="display:flex; justify-content:space-between; align-items:center; gap:.75rem; margin:.25rem 0 .25rem;">
+  <h1 style="margin:0;">TaskManager</h1>
+  <nav class="header-group" style="display:flex; gap:.4rem; align-items:center;">
+    <a href="/dashboard{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" class="header-btn">Dashboard</a>
+    <a href="{{ request.url_for('index') }}{% set qs2 = request.query_params | urlencode_qs %}{% if qs2 %}?{{ qs2 }}{% endif %}" class="header-btn">Liste</a>
+    <a href="/import{% set qs3 = request.query_params | urlencode_qs %}{% if qs3 %}?{{ qs3 }}{% endif %}" class="header-btn">Import</a>
+    <form id="export-form-head" method="post" action="/export_selected" class="inline" style="gap:.4rem; margin:0;">
+      <input type="hidden" name="q" value="{{ request.query_params.get('q','') }}">
+      <input type="hidden" name="types" value="{{ request.query_params.get('types','') }}">
+      <input type="hidden" name="status_keys" value="{{ request.query_params.get('status_keys','') }}">
+      <input type="hidden" name="show_private" value="{{ request.query_params.get('show_private','0') }}">
+      <input type="hidden" name="tags" value="{{ request.query_params.get('tags','') }}">
+      <input type="hidden" name="include_past" value="{{ request.query_params.get('include_past','0') }}">
+      <!-- optional konsistent halten -->
+      <input type="hidden" name="range" value="{{ request.query_params.get('range','') }}">
+      <input type="hidden" name="sort" value="{{ request.query_params.get('sort','') }}">
+      <input type="hidden" name="dir" value="{{ request.query_params.get('dir','asc') }}">
+    </form>
+    <button type="button" id="themeBtn" class="header-btn" aria-label="Theme umschalten">Light</button>
+  </nav>
+</header>
+
+<script>
+  // Zentrale Theme-Initialisierung inkl. Button
+  (function(){
+    const THEME_KEY = 'ui.theme';
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', initialTheme);
+    const btn = document.getElementById('themeBtn');
+    function label(){
+      const cur = document.documentElement.getAttribute('data-theme') || 'light';
+      btn.textContent = (cur === 'dark') ? 'Light' : 'Dark';
+    }
+    if (btn){
+      label();
+      btn.addEventListener('click', ()=>{
+        const cur = document.documentElement.getAttribute('data-theme') || 'light';
+        const next = (cur === 'light') ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem(THEME_KEY, next);
+        label();
+      });
+    }
+  })();
+</script>
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{# /web/templates/import.html #}
+{% extends "base.html" %}
+{% block content %}
+<h2>ICS importieren</h2>
+<form method="post" action="/import" enctype="multipart/form-data">
+  <input type="hidden" name="back_qs" value="{{ request.query_params | urlencode_qs }}">
+  <input type="file" name="file" accept=".ics,text/calendar" required>
+  <button type="submit">Import</button>
+</form>
+{% endblock %}

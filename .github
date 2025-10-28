@@ -1,0 +1,17 @@
+# SQLite and local DBs
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Backups that start with "20" (e.g., dated backups)
+20*
+
+# Local environment and OS junk
+.venv/
+.env
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

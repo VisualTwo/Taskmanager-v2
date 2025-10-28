@@ -1,0 +1,410 @@
+# infrastructure/db_repository.py
+from __future__ import annotations
+import sqlite3
+import json
+import uuid
+from typing import Optional, List, Union, Iterable
+from domain.models import Task, Appointment, Event, Reminder, Recurrence
+from utils.datetime_helpers import parse_db_datetime, format_db_datetime, now_utc
+from utils.status_manager import catalog_choose_default_status
+
+Item = Union[Task, Appointment, Event, Reminder]
+
+DDL = """
+CREATE TABLE IF NOT EXISTS items(
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK(type IN ('task','appointment','event','reminder')),
+  name TEXT NOT NULL,
+  description TEXT,
+  status_key TEXT NOT NULL,
+  is_private INTEGER NOT NULL DEFAULT 0,
+  tags TEXT,
+  links TEXT,
+
+  -- Zeitfelder
+  start_utc TEXT,
+  end_utc TEXT,
+  due_utc TEXT,
+
+  -- Tasks: optionales Planungsfenster
+  task_planned_start_utc TEXT,
+  task_planned_end_utc TEXT,
+
+  -- Reminder: primärer Zeitpunkt
+  reminder_utc TEXT,
+
+  is_all_day INTEGER DEFAULT 0,
+  rrule_string TEXT,
+  exdates TEXT,
+
+  -- ICS
+  ics_uid TEXT,
+
+  -- Priorität
+  priority INTEGER,
+
+  -- Audit
+  created_utc TEXT,
+  last_modified_utc TEXT
+);
+"""
+
+EXPECTED_COLS = {
+  "id","type","name","description","status_key","is_private","tags","links",
+  "start_utc","end_utc","due_utc",
+  "task_planned_start_utc","task_planned_end_utc",
+  "reminder_utc",
+  "is_all_day","rrule_string","exdates",
+  "ics_uid",
+  "priority",
+  "created_utc","last_modified_utc"
+}
+
+class DbRepository:
+    def __init__(self, db_path: str):
+        # check_same_thread=False erlaubt Nutzung im Threadpool
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self._init_schema()
+
+    def _init_schema(self):
+        self.conn.executescript(DDL)
+        self.conn.commit()
+        self._ensure_columns()
+
+    def clear(self) -> None:
+        self.conn.execute("DELETE FROM items")
+        self.conn.commit()
+        self._ensure_columns()
+
+    def _ensure_columns(self):
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(items)").fetchall()}
+        to_add = []
+        if "description" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN description TEXT;")
+        if "task_planned_start_utc" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN task_planned_start_utc TEXT;")
+        if "task_planned_end_utc" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN task_planned_end_utc TEXT;")
+        if "reminder_utc" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN reminder_utc TEXT;")
+        if "links" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN links TEXT;")
+        if "tags" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN tags TEXT;")
+        if "ics_uid" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN ics_uid TEXT;")
+        if "priority" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN priority INTEGER;")
+        if "created_utc" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN created_utc TEXT;")
+        if "last_modified_utc" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN last_modified_utc TEXT;")
+
+        for stmt in to_add:
+            self.conn.execute(stmt)
+        if to_add:
+            # Defaults initialisieren
+            self.conn.execute("UPDATE items SET links='[]' WHERE links IS NULL;")
+            # optionale Indizes
+            try:
+                self.conn.execute("CREATE INDEX IF NOT EXISTS idx_items_ics_uid ON items(ics_uid);")
+            except Exception:
+                pass
+            try:
+                self.conn.execute("CREATE INDEX IF NOT EXISTS idx_items_priority ON items(priority);")
+            except Exception:
+                pass
+            self.conn.commit()
+
+    def upsert(self, item: Item) -> None:
+        """
+        Fügt ein Item ein oder aktualisiert es.
+        WICHTIG: Führt KEIN commit() aus. Transaktionsgrenzen liegen beim Aufrufer.
+        """
+        # JSON-Felder
+        tags_json = json.dumps(list(getattr(item, "tags", ()) or ()))
+        links_json = json.dumps(list(getattr(item, "links", ()) or ()))
+        description = (getattr(item, "description", None) or "")
+
+        # Recurrence
+        rrule_string = item.recurrence.rrule_string if getattr(item, "recurrence", None) else None
+        exdates = getattr(item.recurrence, "exdates_utc", ()) if getattr(item, "recurrence", None) else ()
+        exdates_str = "|".join([format_db_datetime(x) for x in exdates]) or None
+
+        # ICS UID und Priority
+        ics_uid = (getattr(item, "ics_uid", None) or None)
+        priority = getattr(item, "priority", None)
+        # Cast: SQLite speichert numerisch, None bleibt None
+        prio_val = int(priority) if (priority is not None and str(priority).strip() != "") else None
+
+        # Audit
+        now_iso = format_db_datetime(now_utc())
+
+        if item.type == "task":
+            self.conn.execute(
+                """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
+                                      due_utc,task_planned_start_utc,task_planned_end_utc,
+                                      rrule_string,exdates,ics_uid,priority,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
+                     is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
+                     due_utc=excluded.due_utc,
+                     task_planned_start_utc=excluded.task_planned_start_utc,
+                     task_planned_end_utc=excluded.task_planned_end_utc,
+                     rrule_string=excluded.rrule_string, exdates=excluded.exdates,
+                     ics_uid=excluded.ics_uid,
+                     priority=excluded.priority,
+                     last_modified_utc=excluded.last_modified_utc
+                """,
+                (
+                    item.id, "task", item.name, description, item.status, int(item.is_private), tags_json, links_json,
+                    format_db_datetime(getattr(item, "due_utc", None)),
+                    format_db_datetime(getattr(item, "planned_start_utc", None)),
+                    format_db_datetime(getattr(item, "planned_end_utc", None)),
+                    rrule_string, exdates_str,
+                    ics_uid, prio_val,
+                    now_iso, now_iso,
+                ),
+            )
+        elif item.type in ("appointment","event"):
+            self.conn.execute(
+                """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
+                                      start_utc,end_utc,is_all_day,
+                                      rrule_string,exdates,ics_uid,priority,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
+                     is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
+                     start_utc=excluded.start_utc, end_utc=excluded.end_utc, is_all_day=excluded.is_all_day,
+                     rrule_string=excluded.rrule_string, exdates=excluded.exdates,
+                     ics_uid=excluded.ics_uid,
+                     priority=excluded.priority,
+                     last_modified_utc=excluded.last_modified_utc
+                """,
+                (
+                    item.id, item.type, item.name, description, item.status, int(item.is_private), tags_json, links_json,
+                    format_db_datetime(getattr(item, "start_utc", None)),
+                    format_db_datetime(getattr(item, "end_utc", None)),
+                    int(getattr(item, "is_all_day", False)),
+                    rrule_string, exdates_str,
+                    ics_uid, prio_val,
+                    now_iso, now_iso,
+                ),
+            )
+        elif item.type == "reminder":
+            self.conn.execute(
+                """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
+                                      reminder_utc,rrule_string,exdates,ics_uid,priority,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
+                     is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
+                     reminder_utc=excluded.reminder_utc, rrule_string=excluded.rrule_string, exdates=excluded.exdates,
+                     ics_uid=excluded.ics_uid,
+                     priority=excluded.priority,
+                     last_modified_utc=excluded.last_modified_utc
+                """,
+                (
+                    item.id, "reminder", item.name, description, item.status, int(item.is_private), tags_json, links_json,
+                    format_db_datetime(getattr(item, "reminder_utc", None)),
+                    rrule_string, exdates_str,
+                    ics_uid, prio_val,
+                    now_iso, now_iso,
+                ),
+            )
+        else:
+            raise ValueError(f"Unknown item type: {item.type}")
+
+    def get(self, item_id: str) -> Optional[Item]:
+        row = self.conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+        return self._row_to_item(row) if row else None
+
+    def get_by_ics_uid(self, uid: str) -> Optional[Item]:
+        if not uid:
+            return None
+        row = self.conn.execute("SELECT * FROM items WHERE ics_uid=? LIMIT 1", (uid,)).fetchone()
+        return self._row_to_item(row) if row else None
+
+    def delete(self, item_id: str) -> bool:
+        """
+        Löscht ein Item. Kein Commit hier – Transaktionsgrenzen liegen beim Aufrufer.
+        """
+        cur = self.conn.execute("DELETE FROM items WHERE id=?", (item_id,))
+        return cur.rowcount > 0
+
+    def list_all(self) -> List[Item]:
+        rows = self.conn.execute("SELECT * FROM items").fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def list_by_type(self, item_type: str) -> List[Item]:
+        rows = self.conn.execute("SELECT * FROM items WHERE type=?", (item_type,)).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def filter(self, where_sql: str, params: Iterable = ()) -> List[Item]:
+        rows = self.conn.execute(f"SELECT * FROM items WHERE {where_sql}", params).fetchall()
+        return [self._row_to_item(r) for r in rows]
+
+    def _get_col(self, r: sqlite3.Row, name: str):
+        try:
+            return r[name]
+        except (IndexError, KeyError):
+            return None
+        
+    def copy_item(self, item_id: str, *, with_new_id: Optional[str] = None, with_new_ics_uid: Optional[str] = None) -> Item:
+        """
+        Dupliziert ein Item: neue ID, neue ICS-UID, aktualisierte Audit-Felder.
+        Persistiert die Kopie via upsert und gibt das neue Domain-Objekt zurück.
+        Commit erfolgt NICHT hier.
+        """
+        src = self.get(item_id)
+        if not src:
+            raise ValueError("Item not found")
+
+        # Neue Schlüssel
+        new_id = with_new_id or str(uuid.uuid4())
+        new_uid = with_new_ics_uid or None
+
+        # JSON-Felder (Repo speichert selbst als JSON; Domain hält tuples)
+        tags = tuple(getattr(src, "tags", ()) or ())
+        links = tuple(getattr(src, "links", ()) or ())
+
+        # Recurrence: baue aus Domain-Objekt die Spalten, wie es upsert erwartet
+        recur = getattr(src, "recurrence", None)
+        rrule_string = recur.rrule_string if recur else None
+        exdates_utc = tuple(getattr(recur, "exdates_utc", ()) or ())
+
+        t = getattr(src, "type", "")
+        common_kwargs = {
+            "id": new_id,
+            "type": t,
+            "name": src.name,
+            "status": catalog_choose_default_status(t), # always default status
+            "is_private": bool(getattr(src, "is_private", False)),
+            "tags": tags,
+            "links": links,
+            "description": getattr(src, "description", "") or "",
+            "priority": getattr(src, "priority", None),
+            "ics_uid": new_uid,
+            "created_utc": now_utc(),
+            "last_modified_utc": now_utc(),
+        }
+
+        # Typ-spezifische Zeitfelder setzen
+        if t == "task":
+            new_obj = Task(
+                **common_kwargs,
+                due_utc=getattr(src, "due_utc", None),
+                recurrence=Recurrence(rrule_string=rrule_string, exdates_utc=exdates_utc) if rrule_string else None,
+            )
+        elif t == "reminder":
+            new_obj = Reminder(
+                **common_kwargs,
+                reminder_utc=getattr(src, "reminder_utc", None),
+                recurrence=Recurrence(rrule_string=rrule_string, exdates_utc=exdates_utc) if rrule_string else None,
+            )
+        elif t in ("appointment", "event"):
+            new_obj = (Appointment if t == "appointment" else Event)(
+                **common_kwargs,
+                start_utc=getattr(src, "start_utc", None),
+                end_utc=getattr(src, "end_utc", None),
+                is_all_day=bool(getattr(src, "is_all_day", False)),
+                recurrence=Recurrence(rrule_string=rrule_string, exdates_utc=exdates_utc) if rrule_string else None,
+            )
+        else:
+            raise ValueError(f"Unknown type for copy: {t}")
+
+        # Persistieren
+        self.upsert(new_obj)
+        return new_obj
+
+    def _parse_json_array(self, raw: Optional[str]) -> tuple[str, ...]:
+        if not raw:
+            return ()
+        try:
+            arr = json.loads(raw)
+            if isinstance(arr, list):
+                return tuple(str(x) for x in arr if x is not None)
+        except Exception:
+            pass
+        parts = [p.strip() for p in (raw or "").split(",") if p.strip()]
+        return tuple(parts)
+
+    def _row_to_recur(self, r: sqlite3.Row) -> Optional[Recurrence]:
+        rrule = r["rrule_string"]
+        if not rrule:
+            return None
+        exdates_str = r["exdates"] or ""
+        exdates = tuple(
+            d for d in (parse_db_datetime(x) for x in exdates_str.split("|") if x)
+            if d is not None
+        )
+        return Recurrence(rrule_string=rrule, exdates_utc=exdates)
+
+    def _row_to_item(self, r: sqlite3.Row) -> Item:
+        t = r["type"]
+        tags = self._parse_json_array(r["tags"])
+        links = self._parse_json_array(r["links"])
+        description = r["description"] if r["description"] is not None else ""
+
+        common_kwargs = {
+            "id": r["id"],
+            "type": t,
+            "name": r["name"],
+            "status": r["status_key"],
+            "is_private": bool(r["is_private"]),
+            "tags": tags,
+            "links": links,
+            "description": description,
+        }
+        # Audit-Felder
+        created_dt = parse_db_datetime(self._get_col(r, "created_utc"))
+        modified_dt = parse_db_datetime(self._get_col(r, "last_modified_utc"))
+        if created_dt is not None:
+            common_kwargs["created_utc"] = created_dt
+        if modified_dt is not None:
+            common_kwargs["last_modified_utc"] = modified_dt
+        # ICS UID
+        ics_uid = self._get_col(r, "ics_uid")
+        if ics_uid:
+            common_kwargs["ics_uid"] = ics_uid
+        # Priority
+        if "priority" in r.keys():
+            prio = self._get_col(r, "priority")
+            if prio is not None:
+                try:
+                    common_kwargs["priority"] = int(prio)
+                except Exception:
+                    pass
+
+        if t == "task":
+            return Task(
+                **common_kwargs,
+                due_utc=parse_db_datetime(self._get_col(r, "due_utc")),
+                recurrence=self._row_to_recur(r)
+            )
+        elif t == "appointment":
+            return Appointment(
+                **common_kwargs,
+                start_utc=parse_db_datetime(r["start_utc"]),
+                end_utc=parse_db_datetime(r["end_utc"]),
+                is_all_day=bool(r["is_all_day"]),
+                recurrence=self._row_to_recur(r)
+            )
+        elif t == "event":
+            return Event(
+                **common_kwargs,
+                start_utc=parse_db_datetime(r["start_utc"]),
+                end_utc=parse_db_datetime(r["end_utc"]),
+                is_all_day=bool(r["is_all_day"]),
+                recurrence=self._row_to_recur(r)
+            )
+        elif t == "reminder":
+            return Reminder(
+                **common_kwargs,
+                reminder_utc=parse_db_datetime(self._get_col(r, "reminder_utc")),
+                recurrence=self._row_to_recur(r)
+            )
+        else:
+            raise ValueError(f"Unknown item type: {t}")

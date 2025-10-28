@@ -1,0 +1,116 @@
+{# web/templates/_occurrences.html #}
+{% set fmt_time = "%H:%M" %}
+{% set fmt_date = "%d.%m.%Y" %}
+{% set fmt_day  = "%Y-%m-%d" %}
+{% set fmt_iso  = "%Y-%m-%d %H:%M" %}
+{% set fmt_mmdd = "%d.%m." %}
+
+{# Lokale Macros IM PARTIAL definieren, damit sie beim Include verfügbar sind #}
+{% macro wk_short(dt) -%} {{ dt | format_local_short_weekday_de("%a") }}.{%- endmacro %}
+{% macro d_de(dt) -%} {{ dt | format_local(fmt_date) }}{%- endmacro %}
+{% macro t_de(dt) -%} {{ dt | format_local(fmt_time) }}{%- endmacro %}
+{% macro iso(dt) -%} {{ dt | format_local(fmt_iso) }}{%- endmacro %}
+{% macro day_key(dt) -%} {{ dt | format_local(fmt_day) }}{%- endmacro %}
+
+{% macro has_birthday_tag(it) -%}
+  {% if it.type == 'event' and (it.tags or []) and ('geburtstag' in it.tags) %}true{% else %}false{% endif %}
+{%- endmacro %}
+
+{% macro is_all_day_disp(ds,de) -%}
+  {% if not ds or not de %}{{ false }}{% else %}
+    {% set s_mid = (ds.hour==0 and ds.minute==0) %}
+    {% set same_day = (ds.date() == de.date()) %}
+    {% set e_2359xx = (de.hour==23 and de.minute==59) %}
+    {% set e_next_mid = (de.hour==0 and de.minute==0 and (de.date() - ds.date()).days==1) %}
+    {{ s_mid and ( (same_day and e_2359xx) or e_next_mid ) }}
+  {% endif %}
+{%- endmacro %}
+
+{% macro same_day_span(s,e) -%}
+  {{ s and e and (s.date() == e.date()) }}
+{%- endmacro %}
+
+{# Duplikate entfernen #}
+{% set seen = {} %}
+{% set uniq = [] %}
+{% for occ in (occs or []) %}
+  {% set s = occ.start_utc %}
+  {% set e = occ.end_utc %}
+  {% set key = (s and s.isoformat() or '') ~ '|' ~ (e and e.isoformat() or '') %}
+  {% if not seen.get(key) %}
+    {% set _ = seen.update({key:1}) %}
+    {% set _ = uniq.append(occ) %}
+  {% endif %}
+{% endfor %}
+
+<!-- DEBUG: uniq|length = {{ uniq|length }} -->
+{% for occ in uniq %}
+  <!-- OCC: start={{ occ.start_utc }}, end={{ occ.end_utc }} -->
+{% endfor %}
+
+{% if uniq|length == 0 %}
+<div class="muted">Keine anstehenden Vorkommen.</div>
+{% else %}
+  {% for occ in uniq %}
+    {% if occ.item_type in ('task','reminder') %}
+      {% if occ.due_utc %}
+        <div class="occ-row">
+          <span class="occ-val">{{ wk_short(occ.due_utc) }} {{ d_de(occ.due_utc) }} {{ t_de(occ.due_utc) }}</span>
+        </div>
+      {% endif %}
+    {% else %}
+      {% set s = occ.start_utc %}
+      {% set e = occ.end_utc %}
+
+      {# Hole Original-Item für Tag-Prüfung #}
+      {% set occ_item = none %}
+      {% for item_tuple in rows %}
+        {% if item_tuple[0].id == occ.item_id %}
+          {% set occ_item = item_tuple[0] %}
+        {% endif %}
+      {% endfor %}
+
+      {% if s %}
+        {# Effektive Anzeigezeiten: pro Occurrence, nicht aus dem Item-Kontext #}
+        {% set ds = s %}
+        {% set de = e %}
+
+        {# All‑Day per UTC‑Dauer: 23:59:00 .. 24:00:00 #}
+        {% set has_end = (e is not none) %}
+        {% set dur_s = (has_end and (e - s).total_seconds() or 0) %}
+        {% set allday = has_end and (dur_s >= (23*3600 + 59*60)) and (dur_s <= 24*3600) %}
+
+        {# Größerer UTC‑Anteil: Tag s.date() vs. e.date() #}
+        {% if allday %}
+          {% set s_mid = s.replace(hour=0, minute=0, second=0, microsecond=0) %}
+          {% set next_mid = s_mid + timedelta(days=1) %}
+          {% set until_mid = (next_mid - s).total_seconds() %}
+          {% set after_mid = (e - next_mid).total_seconds() %}
+          {% set map_date = (after_mid > until_mid) and e.date() or s.date() %}
+        {% endif %}
+
+        {% set same = same_day_span(s,e) %}
+        {% set birthday_short = (allday and occ.is_birthday|default(false)) %}
+
+        <div class="occ-row">
+          {# Debug bei Bedarf:
+            <small class="muted">e_hour={{ e and e.hour }} dur_s={{ dur_s }} allday={{ allday }} same={{ same }}</small>
+          #}
+          {% if birthday_short %}
+            <span class="occ-val">{{ ds | format_local(fmt_mmdd) }}</span>
+          {% elif allday %}
+            <span class="occ-val">{{ wk_short(ds) }} {{ d_de(ds) }}</span>
+          {% elif same %}
+            <span class="occ-val">
+              {{ wk_short(ds) }} {{ d_de(ds) }} {{ t_de(ds) }} – {{ t_de(de) if de else '—' }}
+            </span>
+          {% else %}
+            <span class="occ-val">
+              {{ wk_short(ds) }} {{ d_de(ds) }} {{ t_de(ds) }} – {{ wk_short(de) }} {{ d_de(de) }} {{ t_de(de) if de else '' }}
+            </span>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+{% endif %}

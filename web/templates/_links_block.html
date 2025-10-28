@@ -1,0 +1,37 @@
+{# /web/templates/_links_block.html #}
+<div class="full" id="links_block" style="max-width: 720px;">
+  <label for="new_link">Links</label>
+
+  <!-- Hinzufügen -->
+  <form hx-post="/items/{{ it.id }}/links/add"
+        hx-target="#links_block"
+        hx-swap="outerHTML"
+        class="inline"
+        style="display:flex; gap:.5rem; align-items:center; margin-bottom:.35rem;">
+    <input id="new_link" type="url" name="url" placeholder="https://example.com" style="flex:1; min-width: 260px;" required>
+    <button type="submit" class="btn btn-xs">Hinzufügen</button>
+  </form>
+
+  {% set LINKS = it.links or () %}
+  {% if LINKS %}
+    <ul class="list-plain" style="margin:.25rem 0 0 0;">
+      {% for u in LINKS %}
+        <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;">
+          <a class="link" href="{{ u }}" target="_blank" rel="noopener noreferrer" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            {{ u }}
+          </a>
+          <form hx-post="/items/{{ it.id }}/links/remove"
+                hx-target="#links_block"
+                hx-swap="outerHTML"
+                style="margin:0;">
+            <input type="hidden" name="url" value="{{ u }}">
+            <button type="submit" class="btn btn-xs">Entfernen</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="muted">Keine Links hinterlegt.</div>
+  {% endif %}
+  <div class="muted" style="margin-top:.25rem;">Tipp: Vollständige URLs mit https:// eintragen.</div>
+</div>
