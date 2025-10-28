@@ -13,8 +13,10 @@ __pycache__/
 *.db-shm
 *.db-wal
 
-# Local backup files starting with a date-like prefix (e.g., 2025-10-28_backup.zip)
+# Backups starting with date-like prefix anywhere
 20*
+*/20*
+**/20*
 
 # Virtual environments and local config
 .venv/
