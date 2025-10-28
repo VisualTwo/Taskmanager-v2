@@ -299,11 +299,13 @@
         <a href="?cal_week_offset=0&cal_weeks={{ cal_weeks }}&show_private={{ request.query_params.get('show_private','0') }}" class="cal-nav-btn" title="Zurück zu heute">Heute</a>
         {% endif %}
 
-        <span class="cal-nav-label">Wochen:</span>
+        <span class="cal-nav-label">Wochen</span>
         {% for k in [1,2,3,4] %}
-        <a href="?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ k }}&show_private={{ request.query_params.get('show_private','0') }}"
-            class="cal-nav-btn {% if cal_weeks == k %}cal-nav-btn--active{% endif %}"
-            title="{{ k }} Kalenderwochen anzeigen">{{ k }}</a>
+        <a
+            href="?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ k }}&show_private={{ request.query_params.get('show_private','0') }}"
+            class="cal-nav-btn {% if cal_weeks|int == k %}cal-nav-btn--active{% endif %}"
+            title="{{ k }} Kalenderwochen anzeigen"
+          >{{ k }}</a>
         {% endfor %}
     </div>
     </div>

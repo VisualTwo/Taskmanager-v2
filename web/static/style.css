@@ -505,7 +505,7 @@ html[data-theme="dark"] .col-occs .occ-row { border-bottom-color: rgba(255,255,2
 }
 
 /* ====== Dashboard ====== */
-.cards-grid { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: .5rem 0; }
+.cards-grid { display: grid; gap: .4rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: .5rem 0; }
 
 .cards-grid a,
 .cards-grid a:visited { color: var(--color-fg); text-decoration: none; }
@@ -594,9 +594,57 @@ html[data-theme="dark"] .cal-today { background: rgba(50, 184, 198, 0.12); }
 .link-del:hover { background: var(--link-del-hover-bg); }
 
 /* ====== Cards ====== */
-.card { border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-bg); margin: .75rem 0; }
+.card { border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-bg); margin: 0; }
 .card-title { font-weight: 600; color: var(--color-muted); padding: .35rem .6rem; }
+
+/* Panel-Items kompakt und gut scannbar */
+
 .card-body { padding: .6rem .75rem; }
+.card-body .item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: .35rem .6rem;
+  padding: .15rem 0;
+}
+
+.card-body .item .when {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: .9em;
+  white-space: nowrap;
+}
+
+.card-body .item .title {
+  font-weight: 500;
+  min-width: 0; /* für ellipsis */
+}
+
+.card-body .item .prio-badge {
+  justify-self: end;
+  font-size: .75em;
+  line-height: 1.4;
+  padding: .05rem .35rem;
+}
+
+/* Dezente Trennung zwischen Items (statt großer Abstände) */
+.card-body .item + .item {
+  border-top: 1px dashed color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+/* Klickfläche nur für Titel hervorheben, nicht die ganze Karte */
+.card-body .item a.title:hover,
+.card-body .item a.title:focus {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  outline: none;
+  border-radius: .25rem;
+}
+
+.card-body .item .meta {
+  grid-column: 1 / -1;
+  font-size: .85em;
+  line-height: 1.3;
+}
 
 /* ====== Icon Theming (SVG) ====== */
 img.icon, img[src$=".svg"], svg.icon { filter: none; }

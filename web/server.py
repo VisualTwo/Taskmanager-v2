@@ -615,8 +615,14 @@ def index(
         # Typstrikte Normalisierung: gibt originalen String zurück, wenn nicht passend
         norm = status_svc.normalize_input(cur, it_type) if cur else ""
 
-        # Wenn der aktuelle Status bereits erlaubt ist, NICHT überschreiben
-        if cur in allowed_keys:
+        # Typstrikter Check: nur akzeptieren, wenn Präfix passt
+        def _prefix_ok(t, key):
+            return (t == "task" and key.startswith("TASK_")) or \
+                (t == "appointment" and key.startswith("APPOINTMENT_")) or \
+                (t == "event" and key.startswith("EVENT_")) or \
+                (t == "reminder" and (key.startswith("REMINDER_") or key == ""))
+
+        if _prefix_ok(it_type, cur) and (cur in allowed_keys):
             norm = cur
         else:
             # Nur wenn norm typgültig ist, übernehmen
@@ -1981,23 +1987,27 @@ def get_priority_class(item) -> str:
 
 def is_overdue_item(item, now_dt: datetime) -> bool:
     """Prüft ob Item überfällig ist."""
-    # Hole relevanten Zeitpunkt
-    relevant_dt = None
-    
+    # Relevante Zeit je Typ
     if item.type in ("appointment", "event"):
         relevant_dt = getattr(item, "start_utc", None)
+        end_dt = getattr(item, "end_utc", None)
+        # Als überfällig nur werten, wenn komplett vorbei:
+        if end_dt is not None:
+            return (end_dt < now_dt) and not status_svc.is_terminal(item.status)
     elif item.type in ("task", "reminder"):
         relevant_dt = getattr(item, "due_utc", None) or getattr(item, "reminder_utc", None)
-    
+    else:
+        relevant_dt = None
+
     if not relevant_dt:
         return False
-    
-    # Überfällig wenn in Vergangenheit UND nicht abgeschlossen
+
+    # Überfällig = Datum vergangen UND Status nicht terminal (zentral geprüft)
     is_past = relevant_dt < now_dt
-    is_open = item.status not in ("TASK_DONE", "TASK_CANCELLED", "EVENT_COMPLETED", "EVENT_CANCELLED", 
-                                    "APPOINTMENT_COMPLETED", "APPOINTMENT_CANCELLED", "REMINDER_DISMISSED")
-    
+    is_open = not status_svc.is_terminal(getattr(item, "status", None))
+
     return is_past and is_open
+
 
 # ====== Import & Tags & Links ======
 @app.get("/import", response_class=HTMLResponse)
@@ -2689,22 +2699,50 @@ def dashboard(
         for t, defs in _raw.items()
     }
 
-    # Nächste Ereignisse (nur Events, 2 Monate)
+    # Nächste Ereignisse (Events + Holidays, 2 Monate)
     horizon_2m_end = now_utc() + timedelta(days=60)
-    _events = []
+
+    # Holidays vorbereiten (nutzt die oben geladenen holidays_upcoming)
+    holiday_events = []
+    for ev in holidays_upcoming:
+        s = ev.get("start_utc")
+        e = ev.get("end_utc")
+        if s and (s < horizon_2m_end):
+            holiday_events.append({
+                "type": "event",
+                "name": ev.get("name"),
+                "start_utc": s,
+                "end_utc": e,
+                "priority": ev.get("priority", 0),
+                "tags": list(ev.get("tags", [])),
+                "status": ev.get("status", "EVENT_SCHEDULED"),
+            })
+
+    # Echte Events aus Items (nächste Occurrence im Horizont)
+    real_events = []
     for it in items:
         if getattr(it, "type", "") != "event":
             continue
         s, e = next_or_display_occurrence(it, now=now_utc())
-        if not s:
+        if not s and not e:
             continue
-        if s >= now_utc() and s <= horizon_2m_end:
+        is_running = (s and e and (s <= now_utc() < e))
+        is_upcoming = (s and (now_utc() <= s <= horizon_2m_end))
+        if is_running or is_upcoming:
             data = it.__dict__.copy()
             data["start_utc"] = s
             data["end_utc"] = e
             it2 = it.__class__(**data)
-            _events.append(it2)
-    events_next2m = sorted(_events, key=lambda x: getattr(x, "start_utc", None) or _aware(datetime.max))
+            real_events.append(it2)
+
+    # Gemeinsame Sortierfunktion für gemischte Typen (Objekt oder Dict)
+    def _start_key_mixed(ev):
+        if hasattr(ev, "start_utc"):
+            return getattr(ev, "start_utc") or _aware(datetime.max)
+        return ev.get("start_utc") or _aware(datetime.max)
+
+    # Zusammenführen und sortieren
+    events_next2m = sorted([*real_events, *holiday_events], key=_start_key_mixed)
 
     # Hilfsfunktion für Export: rows für d0_utc..dN_utc erzeugen
     def build_calendar_rows(start_utc, end_utc):
