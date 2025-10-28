@@ -40,17 +40,22 @@ Setup:
 3. Install dependencies
 4. Start the server
 
-## Example:
+## Example 
 
-python -m venv .venv
-# Windows:
+### Windows:
 ```
-.venv\Scripts\activate
+python -m venv venv
+venv\Scripts\activate
+source venv\bin\activate
+pip install -r requirements.txt
+python -m uvicorn web.server:app --reload
 ```
-# macOS/Linux:
-source .venv/bin/activate
 
+### macOS/Linux:
 ```
+python -m venv venv
+venv/Scripts/activate
+source venv/bin/activate
 pip install -r requirements.txt
 python -m uvicorn web.server:app --reload
 ```
