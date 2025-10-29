@@ -46,7 +46,6 @@ Setup:
 ```
 python -m venv venv
 venv\Scripts\activate
-source venv\bin\activate
 pip install -r requirements.txt
 python -m uvicorn web.server:app --reload
 ```
@@ -54,8 +53,7 @@ python -m uvicorn web.server:app --reload
 ### macOS/Linux:
 ```
 python -m venv venv
-venv/Scripts/activate
-source venv/bin/activate
+source ./venv/bin/activate
 pip install -r requirements.txt
 python -m uvicorn web.server:app --reload
 ```
@@ -105,6 +103,7 @@ uvicorn[standard]==0.30.5
 jinja2==3.1.4
 python-multipart==0.0.9
 anyio==4.4.0
+holidays-=0.83
 pydantic==2.9.2
 pydantic-core==2.23.4
 python-dateutil==2.9.0.post0
