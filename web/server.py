@@ -299,31 +299,6 @@ def _status_display(status, key: str) -> str:
         return status.display_name(key)
     return key
 
-def _status_validate_transition(status, old_status: Optional[str], new_status: Optional[str], item_type: Optional[str], is_recurring: bool) -> tuple[bool, Optional[str]]:
-    if not hasattr(status, "validate_transition"):
-        return True, None
-    fn = status.validate_transition
-    try:
-        sig = inspect.signature(fn)
-        params = sig.parameters
-        kwargs = {}
-        if "old_status" in params:
-            kwargs["old_status"] = old_status
-        if "new_status" in params:
-            kwargs["new_status"] = new_status
-        if "item_type" in params:
-            kwargs["item_type"] = item_type
-        if "is_recurring" in params:
-            kwargs["is_recurring"] = is_recurring
-        if not kwargs:
-            return fn(old_status, new_status), None  # type: ignore
-        res = fn(**kwargs)  # Korrektur
-        if isinstance(res, tuple) and len(res) >= 1:
-            return bool(res[0]), (res[1] if len(res) > 1 else None)
-        return (bool(res), None)
-    except Exception:
-        return True, None
-
 # ====== Zeit-/RRULE-Helfer ======
 def _parse_local_dt(s: str) -> Optional[datetime]:
     try:
@@ -386,8 +361,6 @@ def _validate_edit_input(it, name, status_key, due, start_local, end_local, dtst
     if normalized:
         is_recurring = bool(getattr(it, "recurrence", None) or getattr(it, "rrule_string", None))
         ok, reason = status_svc.validate_transition(getattr(it, "status", None), normalized, is_recurring=is_recurring)
-        if not ok:
-            msgs.append(reason or "Statuswechsel nicht erlaubt.")
 
     # Datumshilfsprüfer
     def _try_dt(label: str, val: Optional[str]):
@@ -1112,10 +1085,28 @@ def _extract_links_from_text(text: str) -> list[str]:
     raw = URL_RE.findall(text or "")
     if not raw:
         return []
+
+    TRAILING_ESCAPES = ("\\n", "\\r", "\\t")  # literal Backslash + Buchstabe
+    TRAILING_PUNCT   = (".", ",", ";", ":", "!", "?", ")", "]", "}", "\"", "’", "”", "'")
+
     def trim_trailing(u: str) -> str:
-        while u and u[-1] in (".", ",", ";", ":", "!", "?", ")", "]", "}", "\"", "’", "”", "'"):
-            u = u[:-1]
+        # Erst Whitespace an den Enden entfernen (falls vorhanden)
+        u = (u or "").strip()
+        # Iterativ: erst Escape-Suffixe, dann Satzzeichen kappen
+        changed = True
+        while changed and u:
+            changed = False
+            # literal-Escapes wie "\n", "\r", "\t" am Ende entfernen
+            for esc in TRAILING_ESCAPES:
+                if u.endswith(esc):
+                    u = u[: -len(esc)]
+                    changed = True
+            # danach typische Satzzeichen am Ende entfernen
+            while u and u[-1] in TRAILING_PUNCT:
+                u = u[:-1]
+                changed = True
         return u
+
     cleaned = [trim_trailing(u) for u in raw]
     seen = set()
     out = []
@@ -1227,10 +1218,10 @@ async def edit_item_submit(
     new_key = status_svc.normalize_input(requested_status_key or old_key, getattr(it, "type", None)) if (requested_status_key or old_key) else None
     is_recurring = bool(eff_recurrence)
 
-    ok, reason = status_svc.validate_transition(old_key, new_key, is_recurring=is_recurring)
-    if not ok:
-        html = templates.get_template("_alerts.html").render({"messages": [reason or "Statuswechsel nicht erlaubt."]})
-        return HTMLResponse(content=html, status_code=422)
+    # ok, reason = status_svc.validate_transition(old_key, new_key, is_recurring=is_recurring)
+    # if not ok:
+    #     html = templates.get_template("_alerts.html").render({"messages": [reason or "Statuswechsel nicht erlaubt."]})
+    #    return HTMLResponse(content=html, status_code=422)
 
     # Tags deduplizieren
     tags_list = [t.strip() for t in (tags or "").split(",") if t.strip()]
@@ -2277,15 +2268,15 @@ def dashboard(
     request: Request,
     q: str | None = None,
     types: str | None = None,
-    status_keys: str | None = None,   # CSV optional (Abwärtskompatibilität)
-    status: str | None = None,        # EINZELNER Status aus URL (wie Index)
+    status_keys: str | None = None,
+    status: str | None = None,
     show_private: int = 0,
     include_past: int = 0,
     tags: str | None = None,
     cal_weeks: int = 2,
     cal_week_offset: int = 0,
     repo: DbRepository = Depends(get_repo),
-    sm=Depends(get_status),           # StatusManager umbenannt
+    sm=Depends(get_status),
 ):
     print("=== DASHBOARD DEBUG ===")
     print("raw query:", dict(request.query_params))
@@ -2293,22 +2284,19 @@ def dashboard(
     print("show_private:", show_private, "include_past:", include_past, "tags:", tags, "cal_week_offset:", cal_week_offset)
     print("=======================")
 
-    # Heutiges Datum (Berlin) für Template
     berlin = ZoneInfo("Europe/Berlin")
     today = now_utc().astimezone(berlin)
 
-    # Daten laden
+    # Daten laden und Privatsphäre filtern
     items = repo.list_all()
-
     include_private = bool(int(show_private or 0))
-
     def _visible_by_privacy(it) -> bool:
         is_private = bool(getattr(it, "private", False))
         return include_private or not is_private
-
     items = [it for it in items if _visible_by_privacy(it)]
+    print(f"[DB] total items: {len(items)}")
 
-    # Auto-Finalisierung vergangener Termine/Ereignisse – gesammelt updaten
+    # Auto-Finalisierung vergangener Termine/Ereignisse
     changed = False
     updated = []
     for it in items:
@@ -2324,18 +2312,17 @@ def dashboard(
                     repo.upsert(it2)
                     updated.append(it2)
                     changed = True
-
     if changed:
         repo.conn.commit()
         id2obj = {it.id: it for it in items}
         for it2 in updated: id2obj[it2.id] = it2
         items = list(id2obj.values())
 
-    # Quick-Übersichten (Counts)
+    # Quick-Übersichten
     by_type = Counter(getattr(it, "type", "") for it in items)
     by_status = Counter(getattr(it, "status", "") for it in items)
 
-    # Fenster-Definitionen (lokal)
+    # Zeitfenster (lokal)
     now_local = today
     start_today = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     end_today = now_local.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -2344,107 +2331,59 @@ def dashboard(
     def as_local(dt_utc: datetime | None) -> datetime | None:
         return dt_utc.astimezone(berlin) if dt_utc else None
 
-    # Listen vorbereiten (Events werden hier NICHT einsortiert)
-    upcoming = []         # 48h
-    overdue = []
-    upcoming_today = []
-    upcoming_next7 = []
-    without_date = []
-    recurring_items = []
+    upcoming, overdue, upcoming_today, upcoming_next7, without_date, recurring_items = [], [], [], [], [], []
 
-    win_start = now_utc()
     win_end_48h = now_utc() + timedelta(hours=48)
 
-    def _with_disp_times(it, now):
-        if getattr(it, "type", "") == "event":
-            s, e = next_or_display_occurrence(it, now=now)
-            if s or e:
-                data = it.__dict__.copy()
-                if s: data["start_utc"] = s
-                if e: data["end_utc"] = e
-                return it.__class__(**data)
-        return it
-    
-    print(f"[DB] total items: {len(items)}")
+    # Serien-Panel: „aktiv in dieser Woche“
+    week_monday_local = today - timedelta(days=today.weekday())
+    week_monday_local = week_monday_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start_utc = week_monday_local.astimezone(ZoneInfo("UTC"))
+    week_end_utc = (week_monday_local + timedelta(days=7)).astimezone(ZoneInfo("UTC"))
 
-    def _is_future_or_active(it):
-        now_cut = now_utc()
-        t = getattr(it, "type", "")
-        if t in ("task","reminder"):
-            ts = getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None)
-            return (ts is None) or (ts >= now_cut)
-        elif t in ("appointment","event"):
-            s, e = next_or_display_occurrence(it, now=now_cut)
-            if s is None and e is None:
-                return True
-            if e is None:
-                return s >= now_cut
-            return e >= now_cut
-        return True
-    
-    for it in items:
-        t = getattr(it, "type", "")
-
-        # Serien sammeln: nur wiederkehrende Items, die in der aktuellen Kalenderwoche aktiv sind
-        # Woche lokal (Berlin) bestimmen
-        week_monday_local = today - timedelta(days=today.weekday())
-        week_monday_local = week_monday_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_start_utc = week_monday_local.astimezone(ZoneInfo("UTC"))
-        week_end_utc = (week_monday_local + timedelta(days=7)).astimezone(ZoneInfo("UTC"))
-
-        def _series_active_in_week(item, ws, we):
-            t0 = getattr(item, "type", "")
-            rec = getattr(item, "recurrence", None)
-            rrule_string = getattr(rec, "rrule_string", None) if rec else None
-            if not rrule_string:
-                return False
-            # Geburtstage nicht als „Serien aktiv“ führen
-            if is_birthday(item):
-                return False
-
-            # Appointments/Events: Überlappung Start/Ende oder Vorkommen in Woche
-            if t0 in ("appointment", "event"):
-                s0 = getattr(item, "start_utc", None)
-                e0 = getattr(item, "end_utc", None)
-                # Überlappungsprüfung, wenn Start/Ende gesetzt
-                if s0:
-                    if e0:
-                        if (s0 < we) and (e0 > ws):
-                            return True
-                    # Occurrence-Expansion im Wochenfenster (robust)
-                    try:
-                        from utils.rrule_helpers import enumerate_occurrences
-                        occs = list(enumerate_occurrences(s0, e0, rrule_string, window_start=ws, window_end=we))
-                        if occs:
-                            return True
-                    except Exception:
-                        # Fallback: nur Startprüfung im Fenster
-                        if ws <= s0 < we:
-                            return True
-                return False
-
-            # Tasks/Reminders: prüfe Vorkommen im Wochenfenster
-            if t0 in ("task", "reminder"):
-                base_ts = getattr(item, "due_utc", None) or getattr(item, "reminder_utc", None)
+    def _series_active_in_week(item, ws, we):
+        t0 = getattr(item, "type", "")
+        rec = getattr(item, "recurrence", None)
+        rrule_string = getattr(rec, "rrule_string", None) if rec else None
+        if not rrule_string:
+            return False
+        if is_birthday(item):
+            return False
+        if t0 in ("appointment", "event"):
+            s0 = getattr(item, "start_utc", None)
+            e0 = getattr(item, "end_utc", None)
+            if s0:
+                if e0 and (s0 < we) and (e0 > ws):
+                    return True
                 try:
                     from utils.rrule_helpers import enumerate_occurrences
-                    occs = list(enumerate_occurrences(base_ts, None, rrule_string, window_start=ws, window_end=we)) if base_ts else []
-                    return bool(occs)
+                    occs = list(enumerate_occurrences(s0, e0, rrule_string, window_start=ws, window_end=we))
+                    if occs:
+                        return True
                 except Exception:
-                    # Fallback: einfache Fensterprüfung des Basiszeitpunkts
-                    return bool(base_ts and (ws <= base_ts < we))
-
+                    if ws <= s0 < we:
+                        return True
             return False
+        if t0 in ("task", "reminder"):
+            base_ts = getattr(item, "due_utc", None) or getattr(item, "reminder_utc", None)
+            try:
+                from utils.rrule_helpers import enumerate_occurrences
+                occs = list(enumerate_occurrences(base_ts, None, rrule_string, window_start=ws, window_end=we)) if base_ts else []
+                return bool(occs)
+            except Exception:
+                return bool(base_ts and (ws <= base_ts < we))
+        return False
 
+    for it in items:
+        t = getattr(it, "type", "")
         has_recur = bool(getattr(it, "recurrence", None) and getattr(it.recurrence, "rrule_string", None))
         if has_recur and _series_active_in_week(it, week_start_utc, week_end_utc):
             recurring_items.append(it)
 
-        # Termine in die Panels (Events werden separat gelistet und hier übersprungen)
+        # Panels Heute/Nächste 7/Überfällig
         if t == "appointment":
             s = getattr(it, "start_utc", None)
             e = getattr(it, "end_utc", None)
-
             if not s and not e:
                 without_date.append(it)
             else:
@@ -2455,7 +2394,6 @@ def dashboard(
                     upcoming_today.append(it)
                 elif sL and (start_today < sL <= end_7d):
                     upcoming_next7.append(it)
-
         elif t in ("task", "reminder"):
             ts = getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None)
             if not ts:
@@ -2469,56 +2407,14 @@ def dashboard(
                 elif start_today < tsL <= end_7d:
                     upcoming_next7.append(it)
 
-        without_date = [it for it in without_date if not status_svc.is_terminal(it.status)]
+    # Ohne Termin: terminale ausblenden
+    without_date = [it for it in without_date if not status_svc.is_terminal(it.status)]
 
-    # Feiertage einfließen lassen
+    # Feiertage
     holidays_upcoming = get_next_holidays_de_ni(today, count=30)
 
-    # Mischen: zusammenführen und nach Startzeit sortieren
-    def _start_key(ev):
-        dt = getattr(ev, "start_utc", None) if hasattr(ev, "start_utc") else ev.get("start_utc")
-        return dt or datetime.max.replace(tzinfo=timezone.utc)
-
-    holidays_upcoming.sort(key=_start_key)
-
-    seen = set()
-    _events = []
-    for ev in holidays_upcoming:
-
-        k = (getattr(ev, "name", None) or ev.get("name"), (getattr(ev, "start_utc", None) or ev.get("start_utc")))
-        if k in seen:
-            continue
-        seen.add(k)
-        new_ev = {"type": "event", "name": ev.get("name"), "start_utc": ev.get("start_utc"), "end_utc": ev.get("end_utc"), "priority": ev.get("priority", 0), "tags": list(ev.get("tags", [])), "status": ev.get("status", "EVENT_SCHEDULED"),}
-        if (ev.get("start_utc") and ev.get("end_utc")) and (ev.get("start_utc") < now_utc() + timedelta(days=60)):
-            _events.append(new_ev)
-
-
-    # Events aus "Überfällig" und "Nächste 7 Tage" ausschließen
-    upcoming_next7 = [it for it in upcoming_next7 if getattr(it, "type", "") != "event"]
-
-    # „Überfällig“: nur Tasks, nicht-terminal, due in der Vergangenheit oder ohne due
-    def _is_overdue_task(t):
-        if getattr(t, "type", "") != "task":
-            return False
-        if status_svc.is_terminal(getattr(t, "status", None)):
-            return False
-        due = getattr(t, "due_utc", None)
-        return (due is None) or (due < now_utc())
-
-    overdue = [t for t in items if _is_overdue_task(t)]
-
-    # Sortierung „Überfällig“:
-    # 1) Tasks mit due_utc zuerst, gruppiert vor Tasks ohne due_utc
-    # 2) Innerhalb der Gruppe: Priorität absteigend (5..0)
-    # 3) Mit due_utc: Datum aufsteigend (älteste zuerst)
-    # 4) Ohne due_utc: created_utc aufsteigend (älteste zuerst)
-    def _overdue_key(t):
-        prio = getattr(t, "priority", -1)
-        due = getattr(t, "due_utc", None)
-        created = getattr(t, "created_utc", datetime.max.replace(tzinfo=timezone.utc))
-        group = 0 if due is not None else 1
-        return (group, -int(prio if prio is not None else -1), due or datetime.max.replace(tzinfo=timezone.utc), created)
+    def _aware(dt):
+        return dt if dt and dt.tzinfo else (dt.replace(tzinfo=timezone.utc) if dt else datetime.max.replace(tzinfo=timezone.utc))
 
     def sort_key_time(it):
         if getattr(it, "type", "") in ("appointment","event"):
@@ -2527,22 +2423,14 @@ def dashboard(
         else:
             return _aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None) or datetime.max)
 
-    upcoming.sort(key=sort_key_time)
-    overdue.sort(key=_overdue_key)
-    upcoming_today.sort(key=sort_key_time)
-    upcoming_next7.sort(key=sort_key_time)
-    without_date.sort(key=lambda x: (x.type, (x.name or "").lower()))
-    # Sortierung nach nächstem Termin (Events/Appointments mit Display-Zeit)
-    def sort_key_recurring(it):
-        t = getattr(it, "type", "")
-        if t in ("appointment", "event"):
-            s, e = next_or_display_occurrence(it, now=datetime.now(timezone.utc))
-            return s or datetime.max.replace(tzinfo=timezone.utc)
-        else:
-            return getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None) or datetime.max.replace(tzinfo=timezone.utc)
+    def _overdue_key(t):
+        prio = getattr(t, "priority", -1)
+        due = getattr(t, "due_utc", None)
+        created = getattr(t, "created_utc", datetime.max.replace(tzinfo=timezone.utc))
+        group = 0 if due is not None else 1
+        return (group, -int(prio if prio is not None else -1), due or datetime.max.replace(tzinfo=timezone.utc), created)
 
-    recurring_items.sort(key=sort_key_recurring)
-
+    # Sichtzeiten für Event-Panels
     _now = datetime.now(timezone.utc)
     def _with_disp_times(it, now):
         if getattr(it, "type", "") == "event":
@@ -2558,25 +2446,35 @@ def dashboard(
     upcoming_today = [_with_disp_times(x, _now) for x in upcoming_today]
     upcoming_next7 = [_with_disp_times(x, _now) for x in upcoming_next7]
     overdue = [_with_disp_times(x, _now) for x in overdue]
-    # events_next2m ist bereits auf disp_* gesetzt
 
-    # Wochenkalender: ab Montag (mit Offset) und dynamischer Wochenanzahl
-    base_local = today
-    monday_this_week = (base_local - timedelta(days=base_local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    upcoming.sort(key=sort_key_time)
+    overdue.sort(key=_overdue_key)
+    upcoming_today.sort(key=sort_key_time)
+    upcoming_next7.sort(key=sort_key_time)
+    without_date.sort(key=lambda x: (x.type, (x.name or "").lower()))
+
+    def sort_key_recurring(it):
+        t = getattr(it, "type", "")
+        if t in ("appointment", "event"):
+            s, e = next_or_display_occurrence(it, now=datetime.now(timezone.utc))
+            return s or datetime.max.replace(tzinfo=timezone.utc)
+        else:
+            return getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None) or datetime.max.replace(tzinfo=timezone.utc)
+    recurring_items.sort(key=sort_key_recurring)
+
+    # Wochenkalender-Raster
+    monday_this_week = (today - timedelta(days=today.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     monday_start = monday_this_week + timedelta(weeks=cal_week_offset)
-
-    # Fenster-Grenzen in lokaler TZ und UTC
     total_days = max(1, int(cal_weeks)) * 7
     d0_local = monday_start
     dN_local = d0_local + timedelta(days=total_days)
     d0_utc = d0_local.astimezone(ZoneInfo("UTC"))
     dN_utc = dN_local.astimezone(ZoneInfo("UTC"))
 
-    # Helper: alle Occurrences eines Items im Fenster generieren
+    # Occurrence-Expansion mit RRULE, Mehrtages-Spannen und Geburtstagen
     def expand_occurrences(it, start_utc, end_utc):
         out = []
         t = getattr(it, "type", "")
-
         if t in ("task","reminder"):
             ts = getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None)
             if ts and start_utc <= ts < end_utc:
@@ -2588,27 +2486,22 @@ def dashboard(
         recur = getattr(it, "recurrence", None)
         rrule_string = getattr(recur, "rrule_string", None) if recur else None
 
-        # Sonderfall: Geburtstag -> jährlich, auch ohne RRULE
-        is_bday = (getattr(it, "type", "") == "event") and ("geburtstag" in (getattr(it, "tags", []) or []))
+        # Geburtstage jährlich projizieren (auch ohne RRULE)
+        is_bday = (t == "event") and ("geburtstag" in (getattr(it, "tags", []) or []))
         if is_bday and s0:
-            # Jährliche Projektion im Fenster: gleiche Uhrzeit, Jahr variiert
-            # Grenzen in lokaler Zone für tag-genaue Jahr-Iteration ermitteln
-            berlin = ZoneInfo("Europe/Berlin")
             s0_local = s0.astimezone(berlin)
-            y_start = start_utc.astimezone(berlin).year
-            y_end = end_utc.astimezone(berlin).year
+            y_start = d0_utc.astimezone(berlin).year
+            y_end = dN_utc.astimezone(berlin).year
             for y in range(y_start, y_end + 1):
                 try:
                     occ_local = s0_local.replace(year=y)
                 except ValueError:
-                    # 29. Feb -> auf 28. Feb fallback
                     if s0_local.month == 2 and s0_local.day == 29:
                         occ_local = s0_local.replace(year=y, day=28)
                     else:
                         continue
                 occ_utc = occ_local.astimezone(ZoneInfo("UTC"))
                 if start_utc <= occ_utc < end_utc:
-                    # Ende projizieren, falls vorhanden, mit gleicher Dauer
                     occ_end_utc = None
                     if e0:
                         dur = e0 - s0
@@ -2616,7 +2509,6 @@ def dashboard(
                     out.append((occ_utc, occ_end_utc, it))
             return out
 
-        # Kein Start und keine Recurrence -> nichts
         if not s0 and not rrule_string:
             return out
 
@@ -2625,47 +2517,51 @@ def dashboard(
                 out.append((s0, e0, it))
             return out
 
-        # Mit RRULE: regulär expandieren
         try:
             from utils.rrule_helpers import enumerate_occurrences
             for occ_s, occ_e in enumerate_occurrences(s0, e0, rrule_string, window_start=start_utc, window_end=end_utc):
                 out.append((occ_s, occ_e, it))
         except Exception:
-            # Fallback (ein Vorkommen, falls sichtbar)
             if s0 and (start_utc <= s0 < end_utc):
                 out.append((s0, e0, it))
         return out
 
-    # Tageslisten vorbereiten
-    headers = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    weeks = []
-    # Vorab: alle Occurrences einmal sammeln, dann pro Tag einsortieren
-    all_day_buckets = {}  # key = date() in lokaler TZ -> Liste von Items mit projizierten Zeiten
+    # Tagesbuckets in lokaler TZ füllen (jede Occurrence einem Tag zuweisen)
+    all_day_buckets: dict[date, list] = {}
     for it in items:
-        for occ_s, occ_e, src in expand_occurrences(it, d0_utc, dN_utc):
-            # Projektierte Instanz mit dieser Occurrence-Zeit
+        occs = expand_occurrences(it, d0_utc, dN_utc)
+        for occ_s, occ_e, src in occs:
             data = src.__dict__.copy()
             if getattr(src, "type", "") in ("appointment","event"):
                 data["start_utc"] = occ_s
                 data["end_utc"] = occ_e
-            else:
-                # Tasks/Reminders schon als (ts, None) erzeugt
-                pass
             inst = src.__class__(**data)
 
-            # Tag in lokaler TZ bestimmen (Startpriorität, sonst Due/Reminder)
+            # Bei Mehrtages-Span: jeden betroffenen Tag befüllen
             if inst.type in ("appointment","event"):
-                basis = inst.start_utc or inst.end_utc
+                start_l = inst.start_utc.astimezone(berlin) if getattr(inst, "start_utc", None) else None
+                end_l = inst.end_utc.astimezone(berlin) if getattr(inst, "end_utc", None) else start_l
+                if not start_l:
+                    continue
+                d = start_l.date()
+                last = end_l.date() if end_l else d
+                while d <= last:
+                    if d0_local.date() <= d < dN_local.date():
+                        all_day_buckets.setdefault(d, []).append(inst)
+                    d = d + timedelta(days=1)
             else:
+                # task/reminder: Einzeltermin
                 basis = getattr(inst, "due_utc", None) or getattr(inst, "reminder_utc", None)
+                if not basis:
+                    continue
+                basis_local = basis.astimezone(berlin)
+                key_date = basis_local.date()
+                if d0_local.date() <= key_date < dN_local.date():
+                    all_day_buckets.setdefault(key_date, []).append(inst)
 
-            if not basis:
-                continue
-            basis_local = basis.astimezone(berlin)
-            key_date = basis_local.date()
-            all_day_buckets.setdefault(key_date, []).append(inst)
-
-    # Wochen-/Tagesgitter füllen
+    # Wochen/Tag-Grid
+    headers = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    weeks = []
     for week_idx in range(max(1, int(cal_weeks))):
         week_start_local = monday_start + timedelta(weeks=week_idx)
         calendar_week_number = week_start_local.isocalendar()[1]
@@ -2673,14 +2569,12 @@ def dashboard(
         for day_num in range(7):
             day_local = week_start_local + timedelta(days=day_num)
             day_items = list(all_day_buckets.get(day_local.date(), []))
-            # Sortierung pro Tag
             def per_day_key(x):
                 if x.type in ("appointment","event"):
                     return getattr(x, "start_utc", None) or getattr(x, "end_utc", None) or datetime.max.replace(tzinfo=timezone.utc)
                 else:
                     return getattr(x, "due_utc", None) or getattr(x, "reminder_utc", None) or datetime.max.replace(tzinfo=timezone.utc)
             day_items.sort(key=per_day_key)
-
             week_days.append({
                 "label": day_local.strftime("%d.%m."),
                 "items": day_items,
@@ -2689,24 +2583,25 @@ def dashboard(
                 "date": day_local
             })
         weeks.append({"week_number": calendar_week_number, "days": week_days})
+    calendar_week = {"headers": headers, "weeks": weeks, "offset": cal_week_offset, "count": max(1, int(cal_weeks))}
 
-        calendar_week = {"headers": headers, "weeks": weeks, "offset": cal_week_offset, "count": max(1, int(cal_weeks))}
-
-    # Status-Farben für Template
+    # Status-Farben
     _raw = {t: status_svc.get_options_for(t) for t in ("task","reminder","appointment","event")}
     type_status_colors = {
         t: {sd.key: sd.color_light for sd in defs if getattr(sd, "color_light", None)}
         for t, defs in _raw.items()
     }
 
-    # Nächste Ereignisse (Events + Holidays, 2 Monate)
+    # Nächste Ereignisse: Holidays + echte Events (2 Monate)
     horizon_2m_end = now_utc() + timedelta(days=60)
+    def _start_key(ev):
+        dt = getattr(ev, "start_utc", None) if hasattr(ev, "start_utc") else ev.get("start_utc")
+        return dt or datetime.max.replace(tzinfo=timezone.utc)
 
-    # Holidays vorbereiten (nutzt die oben geladenen holidays_upcoming)
     holiday_events = []
+    holidays_upcoming.sort(key=_start_key)
     for ev in holidays_upcoming:
-        s = ev.get("start_utc")
-        e = ev.get("end_utc")
+        s = ev.get("start_utc"); e = ev.get("end_utc")
         if s and (s < horizon_2m_end):
             holiday_events.append({
                 "type": "event",
@@ -2718,7 +2613,6 @@ def dashboard(
                 "status": ev.get("status", "EVENT_SCHEDULED"),
             })
 
-    # Echte Events aus Items (nächste Occurrence im Horizont)
     real_events = []
     for it in items:
         if getattr(it, "type", "") != "event":
@@ -2730,21 +2624,18 @@ def dashboard(
         is_upcoming = (s and (now_utc() <= s <= horizon_2m_end))
         if is_running or is_upcoming:
             data = it.__dict__.copy()
-            data["start_utc"] = s
-            data["end_utc"] = e
+            data["start_utc"] = s; data["end_utc"] = e
             it2 = it.__class__(**data)
             real_events.append(it2)
 
-    # Gemeinsame Sortierfunktion für gemischte Typen (Objekt oder Dict)
     def _start_key_mixed(ev):
         if hasattr(ev, "start_utc"):
             return getattr(ev, "start_utc") or _aware(datetime.max)
         return ev.get("start_utc") or _aware(datetime.max)
 
-    # Zusammenführen und sortieren
     events_next2m = sorted([*real_events, *holiday_events], key=_start_key_mixed)
 
-    # Hilfsfunktion für Export: rows für d0_utc..dN_utc erzeugen
+    # Export-Hilfsfunktion (nutzt dieselbe Expansion)
     def build_calendar_rows(start_utc, end_utc):
         rows = []
         lok = berlin
@@ -2768,8 +2659,7 @@ def dashboard(
                 })
         return rows
 
-    now_local = datetime.now(ZoneInfo("Europe/Berlin"))
-    header_today = format_local_weekday_de(now_local) + ", " + now_local.strftime("%d.%m.%Y")
+    header_today = format_local_weekday_de(today) + ", " + today.strftime("%d.%m.%Y")
 
     # Kontext
     ctx = {
@@ -2785,23 +2675,22 @@ def dashboard(
         "without_date": without_date[:50],
         "recurring_items": recurring_items[:50],
         "events_next2m": events_next2m[:50],
-        "calendar_week": calendar_week,
+        "calendar_week": {"headers": headers, "weeks": weeks, "offset": cal_week_offset, "count": max(1, int(cal_weeks))},
         "cal_week_offset": cal_week_offset,
         "cal_weeks": max(1, int(cal_weeks)),
+        "status_display": lambda k: (status_svc.get_display_name(k) or (k or "")),
+        "header_today": header_today,
+        "type_status_colors": type_status_colors,
+        "format_dashboard_time": format_dashboard_time,
+        "is_birthday": is_birthday,
+        "get_priority_class": get_priority_class,
+        "is_overdue_item": is_overdue_item,
+        "berlin_tz": berlin,
+        "is_terminal_status": lambda k: status_svc.is_terminal(k),
     }
 
-    # Status-Helfer und -Farben für Template
-    ctx["status_display"] = lambda k: (status_svc.get_display_name(k) or (k or ""))
-    ctx["header_today"] = header_today
-    ctx["type_status_colors"] = type_status_colors
-    ctx["format_dashboard_time"] = format_dashboard_time
-    ctx["is_birthday"] = is_birthday
-    ctx["get_priority_class"] = get_priority_class
-    ctx["is_overdue_item"] = is_overdue_item
-    ctx["berlin_tz"] = berlin
-    ctx["is_terminal_status"] = lambda k: status_svc.is_terminal(k)
-
     return templates.TemplateResponse("dashboard.html", ctx)
+
 
 @app.post("/tools/normalize_birthdays")
 def normalize_birthdays(request: Request, confirm: int = 0, repo: DbRepository = Depends(get_repo)):
@@ -3057,3 +2946,38 @@ def export_dashboard_excel(
         headers={"Content-Disposition": f'attachment; filename="{fname}"',
                  "Cache-Control": "no-store"}
     )
+
+@app.get("/items/{item_id}/zoom", response_class=HTMLResponse)
+def zoom_item_description(item_id: str, request: Request, repo: DbRepository = Depends(get_repo)):
+    it = repo.get(item_id)
+    if not it:
+        raise HTTPException(404, "Item nicht gefunden")
+
+    # Name/Titel
+    title = f"Details – {getattr(it, 'name', '') or 'Unbenannt'}"
+
+    # Beschreibung als HTML. Falls du Markdown nutzt, hier rendern; sonst escapen.
+    from markupsafe import escape
+    desc_raw = getattr(it, "description", "") or ""
+    # Optional: Markdown-Konvertierung, falls vorhanden:
+    # html_body = markdown(desc_raw)  # nur wenn markdown() vorhanden
+    html_body = f"<pre style='white-space:pre-wrap; font:inherit; margin:0;'>{escape(desc_raw)}</pre>"
+
+    html = f"""<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>{escape(title)}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {{ margin: 1rem; font: 14.5px/1.5 system-ui, Arial, sans-serif; color:#111; background:#fff; }}
+    h1 {{ font-size: 1.1rem; margin:0 0 .75rem; color:#666; }}
+    .content {{ white-space: normal; }}
+  </style>
+</head>
+<body>
+  <h1>{escape(title)}</h1>
+  <div class="content">{html_body}</div>
+</body>
+</html>"""
+    return HTMLResponse(content=html, status_code=200)

@@ -1,5 +1,8 @@
 {# /web/templates/edit.html #}
 {% extends "base.html" %}
+
+{% block title %}TM: {{ (it.name or 'Unbenannt') | e }}{% endblock %}
+
 {% block content %}
 
 <div id="alerts"></div>
@@ -14,7 +17,7 @@
   </script>
 {% endif %}
 
-<div class="edit-actions" style="display:flex; justify-content:flex-end; margin:.25rem 0;">
+<div class="edit-actions actions-right">
   <button class="preview-btn"
           hx-post="/items/{{ it.id }}/copy"
           hx-swap="none"
@@ -23,22 +26,23 @@
   </button>
   <a class="btn btn-xs" href="/export.ics?ids={{ it.id }}" target="_blank" rel="noopener">
     Exportieren (ICS)
-    </a>
+  </a>
 </div>
+
 <div class="edit-container">
   <!-- Grunddaten -->
   <fieldset class="card">
     <legend class="card-title">Grunddaten</legend>
     <div class="card-body form-grid">
-      <div class="full" style="max-width: 720px;">
+      <div class="full">
         <label for="name">Titel</label>
         <input id="name" type="text" name="name" value="{{ it.name }}" placeholder="Kurzer, prägnanter Titel"
-              hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
-              hx-include="#name"
-              hx-swap="none">
+               hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
+               hx-include="#name"
+               hx-swap="none">
       </div>
 
-      <div class="full" style="max-width: 720px;">
+      <div class="full">
         <label for="description">Beschreibung</label>
         <textarea id="description" name="description" placeholder="Ausführliche Beschreibung, Hinweise, Checkliste… (Markdown unterstützt)"
                   hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:400ms"
@@ -47,31 +51,33 @@
         <div class="muted">Markdown möglich: Überschriften, Listen, Links.</div>
       </div>
 
-      <div>
-        <label for="status_key">Status</label>
-        <select id="status_key" name="status_key"
-                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
-                hx-include="#status_key"
-                hx-swap="none">
-          {% for key, label in status_options %}
-            <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      <div class="edit-compact-row">
+        <div>
+          <label for="status_key">Status</label>
+          <select id="status_key" name="status_key"
+                  hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                  hx-include="#status_key"
+                  hx-swap="none">
+            {% for key, label in status_options %}
+              <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-      <div>
-        <label for="priority">Priorität</label>
-        <select id="priority" name="priority"
-                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
-                hx-include="#priority"
-                hx-swap="none">
-          <option value="0" {% if (it.priority or 0) == 0 %}selected{% endif %}>Keine</option>
-          <option value="1" {% if it.priority == 1 %}selected{% endif %}>Niedrig</option>
-          <option value="2" {% if it.priority == 2 %}selected{% endif %}>Normal</option>
-          <option value="3" {% if it.priority == 3 %}selected{% endif %}>Hoch</option>
-          <option value="4" {% if it.priority == 4 %}selected{% endif %}>Kritisch</option>
-          <option value="5" {% if it.priority == 5 %}selected{% endif %}>Blockierend</option>
-        </select>
+        <div>
+          <label for="priority">Priorität</label>
+          <select id="priority" name="priority"
+                  hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                  hx-include="#priority"
+                  hx-swap="none">
+            <option value="0" {% if (it.priority or 0) == 0 %}selected{% endif %}>Keine</option>
+            <option value="1" {% if it.priority == 1 %}selected{% endif %}>Niedrig</option>
+            <option value="2" {% if it.priority == 2 %}selected{% endif %}>Normal</option>
+            <option value="3" {% if it.priority == 3 %}selected{% endif %}>Hoch</option>
+            <option value="4" {% if it.priority == 4 %}selected{% endif %}>Kritisch</option>
+            <option value="5" {% if it.priority == 5 %}selected{% endif %}>Blockierend</option>
+          </select>
+        </div>
       </div>
 
       {# Links-Editor: nur das Partial einbinden #}
@@ -89,17 +95,17 @@
         <div class="muted">Private Einträge werden nur angezeigt, wenn in der Liste „Private“ aktiviert ist.</div>
       </div>
 
-      <div class="full" style="max-width: 720px;">
+      <div class="full">
         <label for="tags">Tags</label>
         <input id="tags" type="text" name="tags" value="{{ (it.tags or []) | join(', ') }}" placeholder="z. B. Arbeit, Dringend"
-              hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
-              hx-include="#tags"
-              hx-swap="none">
+               hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
+               hx-include="#tags"
+               hx-swap="none">
         <div class="muted">Mehrere Tags durch Komma trennen.</div>
       </div>
 
       <!-- Audit: erstellt/geändert -->
-      <div class="full" style="max-width: 720px; margin-top:.25rem;">
+      <div class="edit-audit">
         <div class="muted">
           {% if it.created_utc %}
             Erstellt: {{ it.created_utc | format_local_short_weekday_de("%a %d.%m.%Y %H:%M") }}. {{ it.created_utc | format_local("%d.%m.%Y %H:%M") }}
@@ -122,7 +128,7 @@
     <legend class="card-title">Zeitangaben</legend>
     <div class="card-body form-grid">
       {% if it.type == 'task' %}
-        <div style="max-width: 420px;">
+        <div>
           <label for="due">Fällig am</label>
           <input id="due" class="fp-datetime" type="text" name="due" value="{{ it.due_utc | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
@@ -130,21 +136,21 @@
           <div class="muted">Optionales Fälligkeitsdatum.</div>
         </div>
       {% elif it.type in ('appointment','event') %}
-        <div style="max-width: 420px;">
+        <div>
           <label for="start_local">Beginn</label>
           <input id="start_local" class="fp-datetime" type="text" name="start_local" value="{{ it.start_utc | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
                  hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
                  hx-include="[name='start_local']" hx-target="#occ" hx-swap="innerHTML">
         </div>
-        <div style="max-width: 420px;">
+        <div>
           <label for="end_local">Ende</label>
           <input id="end_local" class="fp-datetime" type="text" name="end_local" value="{{ it.end_utc | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
                  hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
                  hx-include="[name='end_local']" hx-target="#occ" hx-swap="innerHTML">
         </div>
-        <div class="full" style="max-width: 720px;">
+        <div class="full">
           <label class="inline" title="Ganztägiger Eintrag ohne Uhrzeiten">
             <input id="is_all_day" type="checkbox" name="is_all_day" value="1" {% if it.is_all_day %}checked{% endif %}>
             Ganztägig
@@ -152,12 +158,12 @@
         </div>
         {% set has_recur = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
         {% if not has_recur %}
-          <div class="full" style="max-width: 720px;">
+          <div class="full">
             <a href="#" class="add-recur" id="show_recur">+ Wiederholung hinzufügen</a>
           </div>
         {% endif %}
       {% elif it.type == 'reminder' %}
-        <div style="max-width: 420px;">
+        <div>
           <label for="until_local">Erinnern am</label>
           <input id="until_local" class="fp-datetime" type="text" name="until_local" value="{{ it.reminder_utc | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
@@ -166,7 +172,7 @@
         </div>
         {% set has_recur = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
         {% if not has_recur %}
-          <div class="full" style="max-width: 720px;">
+          <div class="full">
             <a href="#" class="add-recur" id="show_recur_rem">+ Wiederholung hinzufügen</a>
           </div>
         {% endif %}
@@ -198,7 +204,7 @@
         <label for="recur_interval">Intervall</label>
         <div class="inline">
           <span>Alle</span>
-          <input type="number" id="recur_interval" min="1" value="1" style="width:4.5rem">
+          <input type="number" id="recur_interval" min="1" value="1">
           <span id="recur_unit">Wochen</span>
         </div>
       </div>
@@ -226,16 +232,16 @@
 
       <div class="inline" id="recur_end_until" style="display:none;">
         <label for="recur_until" class="sr-only">Bis</label>
-        <input class="fp-datetime" type="text" id="recur_until" placeholder="dd.mm.yyyy hh:mm" style="max-width: 260px;">
+        <input class="fp-datetime" type="text" id="recur_until" placeholder="dd.mm.yyyy hh:mm">
       </div>
 
       <div class="inline" id="recur_end_count" style="display:none;">
         <label for="recur_count" class="sr-only">Anzahl</label>
-        <input type="number" id="recur_count" min="1" max="999" value="10" style="width:5rem;">
+        <input type="number" id="recur_count" min="1" max="999" value="10">
         <span class="muted">Vorkommen</span>
       </div>
 
-      <div class="full btn-row" style="margin-top:.25rem;">
+      <div class="full btn-row">
         <button type="button" class="btn btn-xs" id="save_recurrence">Wiederholung speichern</button>
         <button type="button" class="btn btn-xs" id="clear_recurrence">Wiederholung entfernen</button>
       </div>
@@ -249,9 +255,9 @@
     <div class="card-body">
       {% set has_recur_preview = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
       {% if has_recur_preview %}
-        <h3 class="muted" style="margin-top:0; display:flex; align-items:center; gap:.5rem;">
+        <h3 class="muted">
           Nächste
-          <select id="occ-n" class="btn btn-xs" style="min-height:auto; padding:.1rem .35rem;">
+          <select id="occ-n" class="btn btn-xs">
             {% for k in range(1,11) %}
               <option value="{{ k }}" {% if k == 10 %}selected{% endif %}>{{ k }}</option>
             {% endfor %}
@@ -267,7 +273,7 @@
           {% include "_occurrences.html" with context %}
         </div>
       {% else %}
-        <h3 class="muted" style="margin-top:0;">Nächster Termin</h3>
+        <h3 class="muted">Nächster Termin</h3>
         <div id="occ"
              hx-get="/items/{{ it.id }}/occurrences"
              hx-trigger="load"
@@ -282,7 +288,6 @@
 </div>
 
 <script>
-  // Custom Erfolgsmeldungen via HX-Trigger (z. B. links-updated)
   (function(){
     function onLinksUpdated(){
       const alerts = document.getElementById('alerts');
@@ -290,12 +295,9 @@
       alerts.innerHTML = '<div class="alert alert-success">Links aktualisiert.</div>';
       setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
     }
-
-    // Delegation: document existiert immer, kein body nötig
     document.addEventListener('links-updated', onLinksUpdated);
   })();
 
-  // htmx Feedback
   document.addEventListener('htmx:afterRequest', (e) => {
     const t = e.target;
     if (e.detail.xhr.status === 422) {
@@ -319,7 +321,6 @@
     }
   });
 
-  // Wiederholung – Sichtbarkeit, Hydrierung aus RRULE und Speichern
   (function(){
     const type = "{{ it.type }}";
     if (!(type === "appointment" || type === "event" || type === "reminder")) return;
@@ -438,7 +439,6 @@
     document.getElementById('clear_recurrence')?.addEventListener('click', () => postRecurrence(""));
   })();
 
-  // Export-Button: öffnet den ICS-Export für dieses Item
   (function(){
     const btn = document.getElementById('export-selected');
     if (!btn) return;
@@ -457,7 +457,6 @@
     const endInput   = document.getElementById('end_local');
     if (!startInput || !endInput) return;
 
-    // Merke initiale Werte, um Überschreiben nur bei "leeren"/gleichen Werten zu erlauben
     let lastStart = startInput.value || "";
     let lastEnd   = endInput.value || "";
 
@@ -465,16 +464,10 @@
       const curStart = startInput.value.trim();
       const curEnd   = endInput.value.trim();
 
-      // Spiegeln nur wenn:
-      // - Ende leer ist, oder
-      // - Ende bisher exakt dem vorherigen Start entsprach (typischer Erstfall)
       const shouldMirror = (curEnd.length === 0) || (curEnd === lastStart);
 
       if (shouldMirror && curStart.length) {
         endInput.value = curStart;
-
-        // Optional: gleich die Vorschau aktualisieren, ohne manuellen Blur nötig
-        // Nur end_local posten, um deine Route /start_end unverändert zu nutzen
         try {
           if (window.htmx) {
             htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
@@ -486,17 +479,12 @@
         } catch (e) { /* no-op */ }
       }
 
-      // Stände aktualisieren
       lastStart = curStart;
       lastEnd   = endInput.value.trim();
     }
 
-    // Auf Änderungen am Startfeld reagieren
     startInput.addEventListener('change', mirrorIfAppropriate);
-    // Auch auf Eingabe (live), damit sofort gespiegelt wird
     startInput.addEventListener('input', mirrorIfAppropriate);
-
-    // Ende-Änderungen verfolgen, damit "curEnd === lastStart"-Heuristik korrekt bleibt
     endInput.addEventListener('change', () => { lastEnd = endInput.value.trim(); });
   })();
 
@@ -509,7 +497,6 @@
     const alldayCb   = document.getElementById('is_all_day');
     if (!startInput || !endInput || !alldayCb) return;
 
-    // Merker für Spiegel-/Schutzlogik
     let lastStart = startInput.value || "";
     let lastEnd   = endInput.value || "";
 
@@ -532,7 +519,6 @@
     }
 
     function parseLocal(str) {
-      // erwartet "dd.mm.yyyy hh:mm" oder "dd.mm.yyyy"
       const m = str.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
       if (!m) return null;
       const [, dd, MM, yyyy, hh = "00", mm = "00"] = m;
@@ -568,7 +554,6 @@
       const bounds = setAllDayBounds(curStart);
       if (!bounds) return;
 
-      // Start auf 00:00, Ende auf 23:59 – Ende nur überschreiben, wenn leer oder gleich lastStart/alter AllDay-Ende
       startInput.value = bounds.startStr;
 
       const curEnd = endInput.value.trim();
@@ -579,7 +564,6 @@
         endInput.value = bounds.endStr;
       }
 
-      // Server informieren: is_all_day=1 und neue Zeiten posten
       postIsAllDay(true);
       try {
         if (window.htmx) {
@@ -596,11 +580,9 @@
     }
 
     function applyAllDayOff() {
-      // Nur Flag zurücksetzen; Zeiten bleiben, Nutzer kann Uhrzeiten anpassen
       postIsAllDay(false);
     }
 
-    // Events
     startInput.addEventListener('change', mirrorIfAppropriate);
     startInput.addEventListener('input', mirrorIfAppropriate);
 
@@ -610,21 +592,19 @@
       if (alldayCb.checked) applyAllDayOn();
       else applyAllDayOff();
     });
-  
+  })();
+
   (function(){
     const btn = document.getElementById('copy-item');
     if (!btn) return;
     btn.addEventListener('click', async () => {
       try {
-        // HTMX kann Redirects automatisch folgen; mit fetch geht's explizit:
         const resp = await fetch('/items/{{ it.id }}/copy', { method: 'POST' });
         if (resp.redirected) {
           window.location.href = resp.url;
         } else if (resp.status === 200 || resp.status === 204) {
-          // Falls Server 200+Location liefert, manuell aus Location weiterleiten
           const loc = resp.headers.get('Location');
           if (loc) { window.location.href = loc; return; }
-          // Fallback: Alerts
           const alerts = document.getElementById('alerts');
           if (alerts) alerts.innerHTML = '<div class="alert alert-success">Kopie erstellt.</div>';
         } else {
@@ -643,6 +623,5 @@
     });
   })();
 </script>
-
 
 {% endblock %}

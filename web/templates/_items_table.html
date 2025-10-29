@@ -79,7 +79,6 @@
       </span>
     </td>
 
-
     <!-- Priorität -->
     {% set pv = it.priority if it.priority is not none else 0 %}
     <td class="col-priority">
@@ -227,8 +226,12 @@
 
     <!-- Aktionen -->
     <td class="col-action">
-      <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" class="icon-btn" title="Details" aria-label="Details">
+      <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" class="icon-btn" title="Details" aria-label="Details" target="_blank" rel="noopener noreferrer">
         <img src="/static/icons/details.svg" alt="" width="16" height="16">
+      </a>
+      {# Zoom – Beschreibung in separatem Fenster anzeigen #}
+      <a href="/items/{{ it.id }}/zoom" class="icon-btn" title="Zoom" aria-label="Zoom" target="_blank" rel="noopener">
+        <img src="/static/icons/zoom.svg" alt="" width="16" height="16">
       </a>
 
       <span class="delete-wrap" data-id="{{ it.id }}">

@@ -146,10 +146,6 @@ class StatusManager:
             return True, None
         old_def = self._defs.get(old_status)
         new_def = self._defs.get(new_status)
-        if old_def and old_def.is_terminal and not is_recurring:
-            if item_type in ("task", "reminder", "appointment", "event"):
-                return True, None
-            return False, f"Old status '{old_status}' is terminal; transition to '{new_status}' disallowed by default."
         return True, None
 
     # --- UI helpers -----------------------------------
