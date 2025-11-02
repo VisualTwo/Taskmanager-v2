@@ -500,10 +500,9 @@ html[data-theme="dark"] .col-occs .occ-row { border-bottom-color: rgba(255,255,2
 }
 .cal-nav-btn:hover { background: var(--color-bg); border-color: var(--color-primary); }
 .cal-nav-btn:active { transform: scale(0.95); }
-.cal-nav-group .cal-nav-btn:first-child, .cal-nav-group .cal-nav-btn:nth-child(2) { font-size: 20px; font-weight: 600; line-height: 1; padding: 0; width: 32px; }
+.cal-nav-group:first-of-type .cal-nav-btn { font-size: 20px; font-weight: 600; line-height: 1; padding: 0; width: 32px; }
 .cal-nav-btn--primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .cal-nav-btn--primary:hover { background: color-mix(in srgb, var(--color-primary) 90%, #000 10%); }
-.cal-nav-btn--active { font-weight: 600; }
 .cal-nav-btn--today { font-size: var(--font-size-md); }
 
 .cal-nav-label { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); }
