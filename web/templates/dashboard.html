@@ -26,7 +26,7 @@
         <ul class="list-plain">
           {% for it in L %}
             <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} overdue">
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
               <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
@@ -53,7 +53,7 @@
           {% for it in L %}
             <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} {% if is_overdue_item(it, today) %}overdue{% endif %}">
               {% if is_birthday(it) %}<img src="static/icons/birthday.svg" alt="🎂" class="birthday-icon">{% endif %}
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
               <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
@@ -92,7 +92,7 @@
             <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
               {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
               {% else %}
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
               {% endif %}
               <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
@@ -159,7 +159,7 @@
         <ul class="list-plain">
           {% for it in L %}
             <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
               <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
@@ -192,9 +192,9 @@
         <ul class="list-plain">
           {% for it in L %}
             <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="icon-btn">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" width="20" height="20" title="Birthday" class="icon-btn">
               {% else %}
-              <span class="badge-ev">Event</span>
+              <img src="/static/icons/event.svg" alt="" width="20" height="20" title="Event" class="icon-btn">
               {% endif %}
               <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
