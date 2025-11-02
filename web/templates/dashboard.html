@@ -26,26 +26,15 @@
         <ul class="list-plain">
           {% for it in L %}
             <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} overdue">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
-              {% else %}
               <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
-              {% endif %}
               <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
               <span class="muted">
-                {% if it.type in ('appointment','event') %}
-                  {{ format_dashboard_time(it.start_utc, "next_events", berlin_tz) }}
-                {% else %}
+                {% if it.type in ('task','reminder') %}
                   {{ format_dashboard_time(it.due_utc or it.reminder_utc, "next_events", berlin_tz) }}
                 {% endif %}
               </span>
-              {% if not is_birthday(it) %}
-              <span class="status-badge"
-                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
-                {{ status_display(it.status) }}
-              </span>
-              {% endif %}
             </li>
           {% endfor %}
         </ul>
@@ -304,7 +293,12 @@
                   {% endif %}
 
                   {# Durchstreichen, wenn terminal ODER zeitlich vergangen #}
-                  {% set is_past = is_terminal or time_past %}
+                  {% set is_past = false %}
+                  {% if ev.type in ('appointment', 'event') %}
+                    {% set is_past = is_terminal or time_past %}
+                  {% elif ev.type in ('task', 'reminder') %}
+                    {% set is_past = is_terminal %}
+                  {% endif %}
 
                   <div class="{{ get_priority_class(ev) }} {% if is_past %}cal-past{% endif %}">
                     {% if is_birthday(ev) %}<img src="/static/icons/birthday.svg" alt="🎂" class="icon-btn">{% endif %}

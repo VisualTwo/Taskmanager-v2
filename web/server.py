@@ -2399,6 +2399,13 @@ def dashboard(
             if not ts:
                 without_date.append(it)
             else:
+                # Überfällig-Check: vergangen UND nicht-terminal
+                now_utc_ts = now_utc()
+                is_overdue = (ts < now_utc_ts) and not status_svc.is_terminal(getattr(it, "status", ""))
+                
+                if is_overdue:
+                    overdue.append(it)
+                    
                 if ts <= win_end_48h:
                     upcoming.append(it)
                 tsL = as_local(ts)
