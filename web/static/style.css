@@ -999,6 +999,335 @@ html[data-theme="dark"] .cards-grid img[src$=".svg"] { filter: invert(1); }
   }
 }
 
+/* Extra-kleine Screens (Edit) */
+@media (max-width: 375px) {
+  body {
+    margin: 0.25rem 0.5rem;
+  }
+
+  .card-title {
+    font-size: 16px;
+  }
+
+  .weekdays {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ====== Mobile Responsive: Dashboard ====== */
+@media (max-width: 960px) {
+  /* Dashboard-Grid: 2 Spalten auf Tablets */
+  .cards-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  
+  .card { 
+    grid-column: span 3; /* 2 Karten pro Zeile */
+  }
+  
+  .card--span2 { 
+    grid-column: span 6; /* Kalender volle Breite */
+  }
+}
+
+@media (max-width: 640px) {
+  /* Dashboard: Alle Cards einspaltig */
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .card,
+  .card--span2,
+  .card--full {
+    grid-column: 1;
+  }
+
+  /* Dashboard-Listen: größere Touch-Targets */
+  .cards-grid ul li {
+    padding: 0.5rem 0;
+    line-height: 1.4;
+  }
+
+  .cards-grid a {
+    padding: 0.5rem 0.25rem;
+    display: inline-block;
+    min-height: 44px;
+    line-height: 1.4;
+  }
+
+  /* Status-Badges größer */
+  .status-badge {
+    font-size: 14px;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Prio-Badges größer */
+  .prio-badge {
+    font-size: 14px;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Birthday-Icons größer */
+  .birthday-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Kalender-Navigation: Stack */
+  .cal-nav {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .cal-nav-group {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .cal-nav-status {
+    width: 100%;
+  }
+
+  .cal-nav-btn {
+    min-height: 44px;
+    font-size: 16px;
+    padding: 0.5rem 1rem;
+  }
+
+  .cal-nav-label {
+    font-size: 14px;
+    padding: 0.5rem;
+  }
+
+  /* Kalender-Tabelle: Kompakter */
+  table.calendar {
+    font-size: 13px;
+  }
+
+  table.calendar th,
+  table.calendar td {
+    padding: 0.35rem 0.25rem;
+  }
+
+  .cal-week-col {
+    width: 30px;
+    font-size: 11px;
+  }
+
+  td.cal-week-cell {
+    width: 30px;
+    font-size: 1.2rem;
+  }
+
+  .cal-day {
+    font-size: 12px;
+    margin-bottom: 0.25rem;
+  }
+
+  .cal-slot {
+    gap: 0.15rem;
+  }
+
+  .cal-slot > div {
+    font-size: 11px;
+    line-height: 1.2;
+    flex-wrap: wrap;
+  }
+
+  .cal-time {
+    font-size: 10px;
+    margin-right: 0.15rem;
+  }
+
+  /* Icon-Buttons im Kalender */
+  .icon-btn img {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Header: Stack */
+  header.header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  header.header-row h1 {
+    font-size: 22px;
+    margin: 0;
+  }
+
+  header.header-row nav {
+    width: 100%;
+  }
+
+  .header-group {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .header-btn {
+    flex: 1 1 auto;
+    min-width: 80px;
+    justify-content: center;
+  }
+}
+
+/* Extra-kleine Screens (Dashboard) */
+@media (max-width: 375px) {
+  /* Kalender: Noch kompakter */
+  table.calendar {
+    font-size: 11px;
+  }
+
+  table.calendar th,
+  table.calendar td {
+    padding: 0.25rem 0.15rem;
+  }
+
+  .cal-week-col,
+  td.cal-week-cell {
+    width: 25px;
+  }
+
+  td.cal-week-cell {
+    font-size: 1rem;
+  }
+
+  .cal-slot > div {
+    font-size: 10px;
+  }
+
+  .cal-time {
+    font-size: 9px;
+  }
+
+  /* Listen: Kleiner Abstand */
+  .cards-grid ul li {
+    padding: 0.35rem 0;
+  }
+
+  header.header-row h1 {
+    font-size: 20px;
+  }
+}
+
+/* ====== Mobile Responsive: Index/Liste ====== */
+@media (max-width: 640px) {
+  /* Toolbar: Stack */
+  .filterbar {
+    padding: 0.75rem;
+  }
+
+  .filter-toolbar {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .filter-group-left,
+  .filter-group-right {
+    width: 100%;
+  }
+
+  .filter-group-right {
+    justify-content: start;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+
+  .field {
+    width: 100%;
+  }
+
+  .field input[type="text"],
+  .field select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+    padding: 0.75rem;
+  }
+
+  /* New-Item: Stack */
+  .new-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .new-item input[type="text"] {
+    width: 100% !important;
+    min-height: 44px;
+    font-size: 16px;
+    padding: 0.75rem;
+  }
+
+  .new-item select {
+    width: 100% !important;
+    min-height: 44px;
+    font-size: 16px;
+    padding: 0.75rem;
+  }
+
+  .new-item .btn {
+    width: 100%;
+  }
+
+  /* Table: Horizontal-Scroll */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table.items {
+    min-width: 100%;
+    font-size: 13px;
+  }
+
+  table.items th,
+  table.items td {
+    padding: 0.5rem 0.35rem;
+    white-space: nowrap;
+  }
+
+  /* Wichtige Spalten behalten, Rest ausblenden */
+  th.col-sel,
+  td.col-sel,
+  th.col-type,
+  td.col-type,
+  th.col-name,
+  td.col-name,
+  th.col-action,
+  td.col-action {
+    display: table-cell;
+  }
+
+  /* Priorität und Status kompakter */
+  .prio-badge {
+    font-size: 12px;
+    padding: 0.15rem 0.35rem;
+  }
+
+  .status-badge {
+    font-size: 11px;
+    padding: 0.15rem 0.35rem;
+  }
+
+  /* Icon-Buttons kleiner */
+  .icon-btn {
+    padding: 0.25rem;
+  }
+
+  .icon-btn img {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 /* Zusammenführung der mehrfachen Form-Definitionen */
 .edit .muted, .edit .hint, .muted { color: var(--color-muted); font-size: .9em; }
 

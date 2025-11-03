@@ -1149,9 +1149,9 @@ async def edit_item_submit(
     dtstart_local: Optional[str] = Form(None),
     rrule_line: Optional[str] = Form(None),
     exdates_local: Optional[str] = Form(None),
-    is_private: Optional[str] = Form("0"),
-    tags: Optional[str] = Form(""),
-    priority: Optional[str] = Form(""),
+    is_private: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    priority: Optional[str] = Form(None),
 ):
     it = repo.get(item_id)
 
@@ -1197,17 +1197,10 @@ async def edit_item_submit(
         eff_recurrence = getattr(it, "recurrence", None)
 
     # Vorvalidierung auf Basis der effektiven Eingaben
-    # Für die Validierung die lokalen Rohwerte übergeben; Name bereits gemerged
     messages = _validate_edit_input(
-        it,
-        eff_name,
-        requested_status_key,
-        due,
-        start_local,
-        end_local,
-        dtstart_local,
-        rrule_line,
-        exdates_local,
+        it, status, eff_name, requested_status_key,
+        due, start_local, end_local,
+        dtstart_local, rrule_line, exdates_local,
     )
     if messages:
         html = templates.get_template("_alerts.html").render({"messages": messages})
@@ -1224,26 +1217,35 @@ async def edit_item_submit(
     #    return HTMLResponse(content=html, status_code=422)
 
     # Tags deduplizieren
-    tags_list = [t.strip() for t in (tags or "").split(",") if t.strip()]
-    tags_tuple = tuple(dict.fromkeys(tags_list))
+    if tags is not None:
+        tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+        tags_tuple = tuple(dict.fromkeys(tags_list))
+    else:
+        # Bestehende Tags beibehalten
+        tags_tuple = getattr(it, "tags", None)
 
-    # Priority nur ändern, wenn gesendet; 0..5 validieren; 0 bedeutet "Keine"
-    prio_val = getattr(it, "priority", None)
-
-    if priority is not None and (priority or "").strip() != "":
+    # Priority nur ändern, wenn explizit gesendet
+    if priority is not None:
         try:
             pv = int(priority)
             if 0 <= pv <= 5:
                 prio_val = pv
             else:
-                # Außerhalb des Bereichs -> unverändert lassen
-                pass
-        except Exception:
-            # Nicht parsebar -> unverändert lassen
-            pass
+                # Außerhalb Bereich -> bestehenden Wert behalten
+                prio_val = getattr(it, "priority", None)
+        except (ValueError, TypeError):
+            # Nicht parsebar -> bestehenden Wert behalten
+            prio_val = getattr(it, "priority", None)
+    else:
+        # Nicht gesendet -> bestehenden Wert behalten
+        prio_val = getattr(it, "priority", None)
 
-    # Privacy
-    priv_bool = bool(int((is_private or "0").strip() or "0"))
+    # Privacy nur ändern, wenn explizit gesendet
+    if is_private is not None:
+        priv_bool = bool(int(is_private))
+    else:
+        # Nicht gesendet -> bestehenden Wert behalten
+        priv_bool = bool(getattr(it, "is_private", False))
 
     # Payload zusammenbauen
     payload = {
