@@ -750,7 +750,253 @@ html[data-theme="dark"] .cards-grid img[src$=".svg"] { filter: invert(1); }
 
 /* Mobile Fallback */
 @media (max-width: 640px) {
-  .edit-compact-row { grid-template-columns: 1fr; }
+  /* Basis: Schrift & Spacing */
+  body {
+    font-size: 16px; /* iOS zoom prevention */
+    margin: 0.5rem 1rem;
+  }
+
+  /* Formularelemente: Touch-optimiert */
+  input[type="text"],
+  input[type="datetime-local"],
+  select,
+  textarea {
+    font-size: 16px; /* iOS zoom prevention */
+    padding: 0.75rem;
+    min-height: 44px; /* iOS touch target minimum */
+  }
+
+  /* Buttons: Größer & Stack-Layout */
+  .btn, .header-btn, .preview-btn {
+    font-size: 16px;
+    padding: 0.75rem 1rem;
+    min-height: 44px;
+  }
+
+  .edit-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .edit-actions .btn,
+  .edit-actions .preview-btn {
+    width: 100%;
+  }
+
+  /* Edit-Grids: Immer einspaltig */
+  .edit-compact-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .recur-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .recur-grid .span-2,
+  .recur-grid .full {
+    grid-column: 1;
+  }
+
+  /* Wochentage: 2-spaltig, größere Touch-Targets */
+  .weekdays {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .weekdays label {
+    font-size: 16px;
+    padding: 0.75rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-bg-alt);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    font-weight: 600;
+  }
+
+  .weekdays label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Checkboxen: Größer */
+  label.inline {
+    font-size: 16px;
+    padding: 0.75rem 0;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  label.inline input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  /* Cards: Optimiertes Spacing */
+  .card {
+    margin-bottom: 1rem;
+  }
+
+  .card-title {
+    font-size: 18px;
+    padding: 0.75rem;
+  }
+
+  .card-body {
+    padding: 0.75rem;
+  }
+
+  /* Form-Grid: Mehr Spacing */
+  .form-grid {
+    gap: 1rem;
+  }
+
+  .form-grid label {
+    font-size: 16px;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Muted-Text lesbar */
+  .muted,
+  .edit .muted,
+  .edit .hint {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  /* Links-Editor: Stack-Layout */
+  .links-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .link-row {
+    width: 100%;
+  }
+
+  .link-anchor {
+    max-width: 100%;
+    padding: 0.75rem 0.5rem;
+    min-height: 44px;
+  }
+
+  .link-text {
+    max-width: calc(100% - 40px);
+  }
+
+  .links-input-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .link-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .link-del {
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+  }
+
+  /* Tag-Editor: Stack-Layout */
+  .tag-input-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .tag-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tag-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tag-chip {
+    width: 100%;
+    max-width: none;
+    padding: 0.5rem 0.75rem;
+    min-height: 44px;
+  }
+
+  .tag-text {
+    max-width: none;
+  }
+
+  .tag-x {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.5rem;
+  }
+
+  /* Audit-Zeile: Stack */
+  .edit-audit .muted {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 13px;
+  }
+
+  /* Select-Felder: Touch-optimiert */
+  #occ-n {
+    min-height: 44px;
+    font-size: 16px;
+    padding: 0.75rem;
+  }
+
+  /* Button-Reihen: Stack */
+  .btn-row {
+    flex-direction: column;
+  }
+
+  .btn-row .btn {
+    width: 100%;
+  }
+
+  /* Edit-Container: Volle Breite */
+  .edit-container {
+    max-width: 100%;
+    margin: 0;
+  }
+
+  /* Recurrence-Inline: Wrap */
+  .recur-grid .inline {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .recur-grid .inline input[type="number"] {
+    min-width: 100px;
+    font-size: 16px;
+    padding: 0.75rem;
+  }
+
+  /* Flatpickr: Volle Breite */
+  .fp-datetime {
+    width: 100% !important;
+  }
+
+  /* Add-Recur Link: Größer */
+  .add-recur {
+    min-height: 44px;
+    padding: 0.5rem 0;
+    font-size: 16px;
+  }
 }
 
 /* Zusammenführung der mehrfachen Form-Definitionen */
