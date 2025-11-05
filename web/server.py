@@ -339,7 +339,7 @@ def _build_recurrence(rrule_string: Optional[str], exdates_utc: Optional[tuple])
         return None
     return Recurrence(rrule_string=rrule_string or "", exdates_utc=exdates_utc or ())
 
-def _validate_edit_input(it, name, status_key, due, start_local, end_local, dtstart_local, rrule_line, exdates_local) -> list[str]:
+def _validate_edit_input(it, status, name, status_key, due, start_local, end_local, dtstart_local, rrule_line, exdates_local) -> list[str]:
     msgs = []
 
     # Name prüfen
@@ -1150,6 +1150,7 @@ async def edit_item_submit(
     rrule_line: Optional[str] = Form(None),
     exdates_local: Optional[str] = Form(None),
     is_private: Optional[str] = Form(None),
+    is_all_day: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     priority: Optional[str] = Form(None),
 ):
@@ -1247,6 +1248,12 @@ async def edit_item_submit(
         # Nicht gesendet -> bestehenden Wert behalten
         priv_bool = bool(getattr(it, "is_private", False))
 
+    # All-Day Flag
+    if is_all_day is not None:
+        allday_bool = bool(int(is_all_day))
+    else:
+        allday_bool = bool(getattr(it, "is_all_day", False))
+
     # Payload zusammenbauen
     payload = {
         **it.__dict__,
@@ -1263,6 +1270,7 @@ async def edit_item_submit(
     elif it.type in ("appointment", "event"):
         payload["start_utc"] = eff_start
         payload["end_utc"] = eff_end
+        payload["is_all_day"] = allday_bool
     elif it.type == "reminder":
         payload["reminder_utc"] = eff_due
 
@@ -1361,17 +1369,81 @@ async def edit_item_submit(
     """
         return HTMLResponse(content=html, status_code=200)
 
-def _occ_sort_key(o):
-    # Bevorzugt Startzeit, sonst Due/Reminder; fallback = very large time
-    t = getattr(o, "start_utc", None) or getattr(o, "due_utc", None) or getattr(o, "reminder_utc", None)
-    return t or datetime.max.replace(tzinfo=timezone.utc)
+def _parse_rrule_parts(rrule_str: str):
+    parts = {}
+    for token in (rrule_str or "").upper().split(";"):
+        if "=" in token:
+            k, v = token.split("=", 1)
+            parts[k.strip()] = v.strip()
+    return parts
 
-def _expand_next(it, start_dt: datetime, max_count: int = 10):
-    horizon = start_dt + timedelta(days=365)
-    seg = expand_item(it, start_dt, horizon) or []
-    seg_sorted = sorted(seg, key=_occ_sort_key)
-    result = seg_sorted[:max_count]
-    return result
+def _occ_sort_key(occ):
+    return (getattr(occ, "start_utc", None) or 
+            getattr(occ, "due_utc", None) or 
+            getattr(occ, "end_utc", None))
+
+def _expand_next(it, start_dt, max_count: int = 10):
+    """
+    Liefert bis zu max_count Occurrences ab start_dt.
+    Vergrößert das Auswertefenster iterativ, bis genügend Treffer vorhanden sind.
+    """
+    rec = getattr(it, "recurrence", None)
+    rrule_str = (getattr(rec, "rrule_string", None) or "") if rec else ""
+    parts = _parse_rrule_parts(rrule_str)
+
+    freq = parts.get("FREQ", "DAILY")
+    try:
+        interval = int(parts.get("INTERVAL", "1"))
+    except ValueError:
+        interval = 1
+
+    # Basisfenster in Tagen je Frequenz
+    unit_days = 1
+    if freq == "DAILY":
+        unit_days = 1
+    elif freq == "WEEKLY":
+        unit_days = 7
+    elif freq == "MONTHLY":
+        unit_days = 30
+    elif freq == "YEARLY":
+        unit_days = 365
+
+    # ✅ FIX: Intelligentere Startwert-Berechnung
+    # Ziel: Mindestens max_count + Puffer im ersten Versuch
+    safety_buffer = 1.5
+    initial_horizon_days = max(
+        365,  # Minimum: 1 Jahr
+        int(max_count * interval * unit_days * safety_buffer)
+    )
+
+    # ✅ FIX: Höheres Iterations-Limit
+    hard_cap_days = 365 * 20  # Bis zu 20 Jahre
+    hard_cap_iters = 15  # Mehr Iterationen erlauben
+
+    horizon_days = initial_horizon_days
+    iters = 0
+    results = []
+
+    while iters < hard_cap_iters and horizon_days <= hard_cap_days:
+        win_end = start_dt + timedelta(days=horizon_days)
+        seg = expand_item(it, start_dt, win_end) or []
+        seg_sorted = sorted(seg, key=_occ_sort_key)
+        results = [s for s in seg_sorted if (_occ_sort_key(s) is not None)]
+        
+        if len(results) >= max_count:
+            break
+        
+        # ✅ FIX: Aggressivere Expansion bei wenigen Treffern
+        if len(results) < max_count // 2:
+            # Sehr wenige Treffer → 3x Multiplikator
+            horizon_days = int(horizon_days * 3)
+        else:
+            # Fast genug → 1.5x Multiplikator
+            horizon_days = int(horizon_days * 1.5)
+        
+        iters += 1
+
+    return results[:max_count]
 
 
 @app.get("/items/{item_id}/occurrences", response_class=HTMLResponse)
@@ -2407,7 +2479,7 @@ def dashboard(
                 
                 if is_overdue:
                     overdue.append(it)
-                    
+
                 if ts <= win_end_48h:
                     upcoming.append(it)
                 tsL = as_local(ts)
@@ -2460,7 +2532,11 @@ def dashboard(
     overdue.sort(key=_overdue_key)
     upcoming_today.sort(key=sort_key_time)
     upcoming_next7.sort(key=sort_key_time)
-    without_date.sort(key=lambda x: (x.type, (x.name or "").lower()))
+    without_date.sort(key=lambda x: (
+        -(x.priority or 0),  # Höchste Priorität zuerst (negativ: -5, -4, -3, -2, -1, 0)
+        (x.last_modified_utc or datetime.min.replace(tzinfo=timezone.utc))  # Älteste Änderung zuerst (aufsteigend)
+    ))
+
 
     def sort_key_recurring(it):
         t = getattr(it, "type", "")

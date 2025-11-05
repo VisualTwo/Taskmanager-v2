@@ -86,13 +86,15 @@
       <div>
         <label>Privatsphäre</label>
         <label class="inline">
-          <input id="is_private" type="checkbox" name="is_private" value="1" {% if it.is_private %}checked{% endif %}
-                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
-                hx-include="#is_private"
-                hx-swap="none">
+          <input id="is_private" type="checkbox" name="is_private" value="1" 
+                 {% if it.is_private %}checked{% endif %}
+                 hx-post="/items/{{ it.id }}/edit" 
+                 hx-trigger="change"
+                 hx-vals='js:{"is_private": document.getElementById("is_private").checked ? "1" : "0"}'
+                 hx-swap="none">
           Eintrag ist privat
         </label>
-        <div class="muted">Private Einträge werden nur angezeigt, wenn in der Liste „Private“ aktiviert ist.</div>
+        <div class="muted">Private Einträge werden nur angezeigt, wenn in der Liste „Private" aktiviert ist.</div>
       </div>
 
       <div class="full">
@@ -108,13 +110,13 @@
       <div class="edit-audit">
         <div class="muted">
           {% if it.created_utc %}
-            Erstellt: {{ it.created_utc | format_local_short_weekday_de("%a %d.%m.%Y %H:%M") }}. {{ it.created_utc | format_local("%d.%m.%Y %H:%M") }}
+            Erstellt: {{ it.created_utc | format_local("%a. %d.%m.%Y %H:%M") }}
           {% else %}
             Erstellt: –
           {% endif %}
           ·
           {% if it.last_modified_utc %}
-            Zuletzt geändert: {{ it.last_modified_utc | format_local_short_weekday_de("%a %d.%m.%Y %H:%M") }}. {{ it.last_modified_utc | format_local("%d.%m.%Y %H:%M") }}
+            Zuletzt geändert: {{ it.last_modified_utc | format_local("%a. %d.%m.%Y %H:%M") }}
           {% else %}
             Zuletzt geändert: –
           {% endif %}
@@ -152,7 +154,12 @@
         </div>
         <div class="full">
           <label class="inline" title="Ganztägiger Eintrag ohne Uhrzeiten">
-            <input id="is_all_day" type="checkbox" name="is_all_day" value="1" {% if it.is_all_day %}checked{% endif %}>
+            <input id="is_all_day" type="checkbox" name="is_all_day" value="1" 
+                   {% if it.is_all_day %}checked{% endif %}
+                   hx-post="/items/{{ it.id }}/edit" 
+                   hx-trigger="change"
+                   hx-vals='js:{"is_all_day": document.getElementById("is_all_day").checked ? "1" : "0"}'
+                   hx-swap="none">
             Ganztägig
           </label>
         </div>
@@ -209,6 +216,7 @@
         </div>
       </div>
 
+      <!-- Wochentage: WEEKLY + MONTHLY -->
       <div class="span-2" id="recur_weekdays" style="display:none;">
         <label>Wochentage</label>
         <div class="weekdays">
@@ -219,6 +227,27 @@
             </label>
           {% endfor %}
         </div>
+      </div>
+
+      <!-- MONTHLY: Position (BYSETPOS) -->
+      <div class="span-2" id="recur_monthly_pos" style="display:none;">
+        <label for="recur_setpos">Position im Monat (optional)</label>
+        <select id="recur_setpos">
+          <option value="">Alle Vorkommen</option>
+          <option value="1">Erster</option>
+          <option value="2">Zweiter</option>
+          <option value="3">Dritter</option>
+          <option value="4">Vierter</option>
+          <option value="-1">Letzter</option>
+        </select>
+        <div class="muted">Z.B. "Erster Montag" oder "Letzter Freitag"</div>
+      </div>
+
+      <!-- MONTHLY: Tag im Monat (BYMONTHDAY) -->
+      <div class="span-2" id="recur_monthly_day" style="display:none;">
+        <label for="recur_monthday">Tag im Monat (optional)</label>
+        <input type="text" id="recur_monthday" placeholder="z.B. 15, -1 (letzter Tag)">
+        <div class="muted">Mehrere durch Komma: 1,15,-1</div>
       </div>
 
       <div>
@@ -241,6 +270,19 @@
         <span class="muted">Vorkommen</span>
       </div>
 
+      <!-- Erweiterte RRULE (Freitext) -->
+      <div class="full">
+        <label class="inline">
+          <input type="checkbox" id="recur_advanced"> Erweiterte RRULE manuell eingeben
+        </label>
+      </div>
+
+      <div class="full" id="recur_manual" style="display:none;">
+        <label for="recur_raw">RRULE (roh)</label>
+        <input type="text" id="recur_raw" placeholder="FREQ=MONTHLY;BYDAY=2MO">
+        <div class="muted">Für komplexe Regeln direkt eingeben</div>
+      </div>
+
       <div class="full btn-row">
         <button type="button" class="btn btn-xs" id="save_recurrence">Wiederholung speichern</button>
         <button type="button" class="btn btn-xs" id="clear_recurrence">Wiederholung entfernen</button>
@@ -257,7 +299,12 @@
       {% if has_recur_preview %}
         <h3 class="muted">
           Nächste
-          <select id="occ-n" class="btn btn-xs">
+          <select id="occ-n" class="btn btn-xs" name="n"
+                  hx-get="/items/{{ it.id }}/occurrences"
+                  hx-trigger="change"
+                  hx-target="#occ"
+                  hx-swap="innerHTML"
+                  hx-include="#occ-n">
             {% for k in range(1,11) %}
               <option value="{{ k }}" {% if k == 10 %}selected{% endif %}>{{ k }}</option>
             {% endfor %}
@@ -265,10 +312,8 @@
           Vorkommen
         </h3>
         <div id="occ"
-             hx-get="/items/{{ it.id }}/occurrences"
-             hx-trigger="load from:#occ-n changed"
-             hx-include="#occ-n"
-             hx-params="*"
+             hx-get="/items/{{ it.id }}/occurrences?n=10"
+             hx-trigger="load"
              data-locale="de">
           {% include "_occurrences.html" with context %}
         </div>
@@ -277,7 +322,6 @@
         <div id="occ"
              hx-get="/items/{{ it.id }}/occurrences"
              hx-trigger="load"
-             hx-params="*"
              data-locale="de">
           {% include "_occurrences.html" with context %}
         </div>
@@ -311,6 +355,9 @@
       if (t.matches && t.matches('input[name="is_private"]')) {
         t.checked = {{ 'true' if it.is_private else 'false' }};
       }
+      if (t.matches && t.matches('input[name="is_all_day"]')) {
+        t.checked = {{ 'true' if it.is_all_day else 'false' }};
+      }
     } else if (e.detail.xhr.status === 204) {
       if (t.matches && t.matches('select[name="status_key"]')) {
         const sel = t;
@@ -334,9 +381,13 @@
     const interval = document.getElementById('recur_interval');
     const unit = document.getElementById('recur_unit');
     const weekdays = document.getElementById('recur_weekdays');
+    const monthlyPos = document.getElementById('recur_monthly_pos');
+    const monthlyDay = document.getElementById('recur_monthly_day');
     const endMode = document.getElementById('recur_end_mode');
     const untilBox = document.getElementById('recur_end_until');
     const countBox = document.getElementById('recur_end_count');
+    const advancedCb = document.getElementById('recur_advanced');
+    const manualBox = document.getElementById('recur_manual');
 
     function reveal(){ if (recurCard) { recurCard.style.display=''; setTimeout(()=>freqSel?.focus(),0); } }
     showBtnApt && showBtnApt.addEventListener('click', (e)=>{ e.preventDefault(); reveal(); });
@@ -345,13 +396,29 @@
     function updateVisibility(){
       const f = freqSel.value;
       if (unit) unit.textContent = f === 'DAILY' ? 'Tage' : (f === 'WEEKLY' ? 'Wochen' : (f === 'MONTHLY' ? 'Monate' : 'Jahre'));
-      if (weekdays) weekdays.style.display = (f === 'WEEKLY') ? '' : 'none';
+      
+      if (weekdays) weekdays.style.display = (f === 'WEEKLY' || f === 'MONTHLY') ? '' : 'none';
+      
+      if (monthlyPos) monthlyPos.style.display = (f === 'MONTHLY') ? '' : 'none';
+      if (monthlyDay) monthlyDay.style.display = (f === 'MONTHLY') ? '' : 'none';
+      
       const m = endMode.value;
       if (untilBox) untilBox.style.display = (m === 'UNTIL') ? '' : 'none';
       if (countBox) countBox.style.display = (m === 'COUNT') ? '' : 'none';
     }
     freqSel && freqSel.addEventListener('change', updateVisibility);
     endMode && endMode.addEventListener('change', updateVisibility);
+
+    advancedCb && advancedCb.addEventListener('change', (e) => {
+      if (manualBox) manualBox.style.display = e.target.checked ? '' : 'none';
+      if (e.target.checked) {
+        const rawInput = document.getElementById('recur_raw');
+        if (rawInput && !rawInput.value && rruleRaw) {
+          const rrLine = (rruleRaw.split(/\n/).find(l => l.startsWith('RRULE:')) || rruleRaw).replace(/^RRULE:/,'').trim();
+          rawInput.value = rrLine;
+        }
+      }
+    });
 
     (function hydrateFromRRule(){
       if (!rruleRaw) return;
@@ -360,6 +427,7 @@
       const parts = Object.fromEntries(rrLine.split(';').map(p => {
         const [k,v] = p.split('='); return [k.toUpperCase(), (v||'').trim()];
       }));
+      
       const FREQ = parts.FREQ || '';
       if (FREQ) freqSel.value = FREQ;
 
@@ -367,12 +435,45 @@
       interval.value = isNaN(INTERVAL) ? '1' : String(Math.max(1, INTERVAL));
 
       const BYDAY = (parts.BYDAY || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-      if (FREQ === 'WEEKLY' && BYDAY.length) {
-        document.querySelectorAll('.byday').forEach(cb => { cb.checked = BYDAY.includes(cb.value.toUpperCase()); });
+      if (BYDAY.length) {
+        const clean = BYDAY.map(d => d.replace(/^[+-]?\d+/, ''));
+        document.querySelectorAll('.byday').forEach(cb => { 
+          cb.checked = clean.includes(cb.value.toUpperCase()); 
+        });
+      }
+
+      const BYSETPOS = parts.BYSETPOS;
+      if (BYSETPOS) {
+        const setposEl = document.getElementById('recur_setpos');
+        if (setposEl) setposEl.value = BYSETPOS;
+      }
+
+      const BYMONTHDAY = parts.BYMONTHDAY;
+      if (BYMONTHDAY) {
+        const monthdayEl = document.getElementById('recur_monthday');
+        if (monthdayEl) monthdayEl.value = BYMONTHDAY;
       }
 
       if (parts.UNTIL) {
         endMode.value = 'UNTIL';
+        const untilEl = document.getElementById('recur_until');
+        if (untilEl && parts.UNTIL.endsWith('Z')) {
+          try {
+            const utcStr = parts.UNTIL.replace('Z', '');
+            const y = parseInt(utcStr.substr(0, 4), 10);
+            const m = parseInt(utcStr.substr(4, 2), 10);
+            const d = parseInt(utcStr.substr(6, 2), 10);
+            const H = parseInt(utcStr.substr(9, 2), 10);
+            const M = parseInt(utcStr.substr(11, 2), 10);
+            const utcDate = new Date(Date.UTC(y, m-1, d, H, M));
+            const dd = String(utcDate.getDate()).padStart(2, '0');
+            const MM = String(utcDate.getMonth() + 1).padStart(2, '0');
+            const yyyy = utcDate.getFullYear();
+            const hh = String(utcDate.getHours()).padStart(2, '0');
+            const mm = String(utcDate.getMinutes()).padStart(2, '0');
+            untilEl.value = `${dd}.${MM}.${yyyy} ${hh}:${mm}`;
+          } catch (e) {}
+        }
       } else if (parts.COUNT) {
         endMode.value = 'COUNT';
         const c = parseInt(parts.COUNT, 10);
@@ -398,14 +499,40 @@
     }
 
     function buildRRule(){
-      const f = freqSel.value; if (!f) return null;
+      if (advancedCb?.checked) {
+        const raw = document.getElementById('recur_raw')?.value.trim() || null;
+        return raw;
+      }
+
+      const f = freqSel.value; 
+      if (!f) return null;
+      
       const parts = [`FREQ=${f}`];
       const n = Math.max(1, parseInt(interval.value || '1', 10));
       if (n > 1) parts.push(`INTERVAL=${n}`);
+
       if (f === 'WEEKLY') {
         const by = Array.from(document.querySelectorAll('.byday:checked')).map(x => x.value);
         if (by.length) parts.push(`BYDAY=${by.join(',')}`);
       }
+
+      if (f === 'MONTHLY') {
+        const by = Array.from(document.querySelectorAll('.byday:checked')).map(x => x.value);
+        const setpos = document.getElementById('recur_setpos')?.value.trim();
+        const monthday = document.getElementById('recur_monthday')?.value.trim();
+
+        if (by.length && setpos) {
+          parts.push(`BYDAY=${by.join(',')}`);
+          parts.push(`BYSETPOS=${setpos}`);
+        } else if (by.length) {
+          parts.push(`BYDAY=${by.join(',')}`);
+        }
+
+        if (monthday) {
+          parts.push(`BYMONTHDAY=${monthday}`);
+        }
+      }
+
       const m = endMode.value;
       if (m === 'UNTIL') {
         const u = (document.getElementById('recur_until')?.value || '').trim();
@@ -414,6 +541,7 @@
         const c = Math.max(1, parseInt((document.getElementById('recur_count')?.value || '1'), 10));
         parts.push(`COUNT=${c}`);
       }
+
       return parts.join(';');
     }
 
@@ -432,6 +560,7 @@
         .then(()=> {
           const alerts = document.getElementById('alerts');
           alerts.innerHTML = `<div class="alert alert-success">${rrule ? 'Wiederholung gespeichert.' : 'Wiederholung entfernt.'}</div>`;
+          setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
         });
     }
 
@@ -455,55 +584,18 @@
 
     const startInput = document.getElementById('start_local');
     const endInput   = document.getElementById('end_local');
-    if (!startInput || !endInput) return;
-
-    let lastStart = startInput.value || "";
-    let lastEnd   = endInput.value || "";
-
-    function mirrorIfAppropriate() {
-      const curStart = startInput.value.trim();
-      const curEnd   = endInput.value.trim();
-
-      const shouldMirror = (curEnd.length === 0) || (curEnd === lastStart);
-
-      if (shouldMirror && curStart.length) {
-        endInput.value = curStart;
-        try {
-          if (window.htmx) {
-            htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
-              target: '#occ',
-              swap: 'innerHTML',
-              values: { end_local: curStart }
-            });
-          }
-        } catch (e) { /* no-op */ }
-      }
-
-      lastStart = curStart;
-      lastEnd   = endInput.value.trim();
-    }
-
-    startInput.addEventListener('change', mirrorIfAppropriate);
-    startInput.addEventListener('input', mirrorIfAppropriate);
-    endInput.addEventListener('change', () => { lastEnd = endInput.value.trim(); });
-  })();
-
-  (function(){
-    const type = "{{ it.type }}";
-    if (!(type === "appointment" || type === "event")) return;
-
-    const startInput = document.getElementById('start_local');
-    const endInput   = document.getElementById('end_local');
     const alldayCb   = document.getElementById('is_all_day');
     if (!startInput || !endInput || !alldayCb) return;
 
     let lastStart = startInput.value || "";
     let lastEnd   = endInput.value || "";
+    let userTouchedEnd = false;
 
     function mirrorIfAppropriate() {
       const curStart = startInput.value.trim();
       const curEnd   = endInput.value.trim();
-      const shouldMirror = (curEnd.length === 0) || (curEnd === lastStart);
+      const shouldMirror = !userTouchedEnd && ((curEnd.length === 0) || (curEnd === lastStart));
+      
       if (shouldMirror && curStart.length) {
         endInput.value = curStart;
         try {
@@ -577,6 +669,7 @@
 
       lastStart = startInput.value.trim();
       lastEnd   = endInput.value.trim();
+      userTouchedEnd = false;
     }
 
     function applyAllDayOff() {
@@ -586,7 +679,13 @@
     startInput.addEventListener('change', mirrorIfAppropriate);
     startInput.addEventListener('input', mirrorIfAppropriate);
 
-    endInput.addEventListener('change', () => { lastEnd = endInput.value.trim(); });
+    endInput.addEventListener('input', () => { 
+      userTouchedEnd = true; 
+    });
+    endInput.addEventListener('change', () => { 
+      lastEnd = endInput.value.trim(); 
+      userTouchedEnd = true; 
+    });
 
     alldayCb.addEventListener('change', () => {
       if (alldayCb.checked) applyAllDayOn();

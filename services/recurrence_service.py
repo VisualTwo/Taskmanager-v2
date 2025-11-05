@@ -1,8 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from domain.models import BaseItem, Task, Appointment, Event, Reminder, Occurrence
 from domain.recurrence import expand_rrule
-
 
 
 def expand_item(item: BaseItem, win_start_utc: datetime, win_end_utc: datetime) -> List[Occurrence]:
@@ -19,25 +18,48 @@ def expand_item(item: BaseItem, win_start_utc: datetime, win_end_utc: datetime) 
         return []
 
     # Serielle Items: Zeitpunkte aus RRULE ableiten
+    
+    # ✅ FIX: Bei is_all_day DTSTART auf Mitternacht UTC des lokalen Datums normalisieren
+    dtstart = getattr(item, "start_utc", None)
+    is_all_day = getattr(item, "is_all_day", False)
+    
+    if is_all_day and dtstart:
+        # Konvertiere zu lokalem Datum (Berlin), dann zurück zu Mitternacht UTC des Datums
+        from zoneinfo import ZoneInfo
+        try:
+            berlin_tz = ZoneInfo("Europe/Berlin")
+            local_dt = dtstart.astimezone(berlin_tz)
+            
+            # Extrahiere nur das Datum
+            local_date = local_dt.date()
+            
+            # Erstelle Mitternacht UTC für dieses Datum (kein Timezone-Shift!)
+            dtstart = datetime(
+                local_date.year,
+                local_date.month,
+                local_date.day,
+                0, 0, 0,
+                tzinfo=timezone.utc
+            )
+            print(f"[RRULE-FIX] is_all_day: original={item.start_utc} → normalized={dtstart}")
+        except Exception as e:
+            print(f"[RRULE-FIX] Fehler bei Normalisierung: {e}")
+            # Fallback: Verwende original dtstart
 
-    # Variante A: expand_rrule mit dtstart-Argument (wenn vorhanden)
+    # Variante A: expand_rrule mit dtstart-Argument
     try:
-        dtstart = getattr(item, "start_utc", None)
-        print(f"[RRULE-CALL] item={getattr(item,'name','?')} dtstart={dtstart} win=[{win_start_utc}..{win_end_utc})")
+        print(f"[RRULE-CALL] item={getattr(item,'name','?')} dtstart={dtstart} is_all_day={is_all_day} win=[{win_start_utc}..{win_end_utc})")
         seq_times = expand_rrule(item.recurrence, win_start_utc, win_end_utc, explicit_dtstart=dtstart)
         print(f"[RRULE-RET] item={getattr(item,'name','?')} seq_times={seq_times}")
     except TypeError:
-        # Variante B: Fallback – Recurrence-Strang mit DTSTART injizieren, wenn deine expand_rrule nur Strings liest
+        # Variante B: Fallback
         r = getattr(item, "recurrence", None)
         r_with_dt = None
         if r:
-            # Wenn dein Recurrence-Objekt ein rrule_string-Attribut hat:
             if hasattr(r, "rrule_string"):
                 r_with_dt = f"{r.rrule_string}"
             else:
-                # wenn r schon ein String ist
                 r_with_dt = f"{str(r)}"
-        # Letzter Versuch: expand_rrule versteht zusammengesetzten String
         seq_times = expand_rrule(r_with_dt or item.recurrence, win_start_utc, win_end_utc)
 
     # Hilfsfunktion: Startzeit im Fenster?
@@ -58,7 +80,7 @@ def expand_item(item: BaseItem, win_start_utc: datetime, win_end_utc: datetime) 
                 occs.append(Occurrence(item.id, "reminder", None, None, t, False, t.isoformat()))
         return occs
 
-    # Termine/Events: Dauer aus Basis ableiten (aus start_utc/end_utc)
+    # Termine/Events: Dauer aus Basis ableiten
     base_start = item.start_utc
     base_end = item.end_utc
     dur = (base_end - base_start) if (base_start and base_end) else None
@@ -67,7 +89,19 @@ def expand_item(item: BaseItem, win_start_utc: datetime, win_end_utc: datetime) 
     for s in seq_times:
         if not in_window(s):
             continue
-        e = (s + dur) if dur else None
+        
+        # ✅ FIX: Bei is_all_day auch Ende korrekt berechnen
+        if is_all_day:
+            # Für ganztägige Termine: s ist bereits Mitternacht UTC des Datums
+            # Ende = 23:59 UTC desselben Datums
+            e = datetime(
+                s.year, s.month, s.day,
+                23, 59, 59,
+                tzinfo=timezone.utc
+            )
+        else:
+            e = (s + dur) if dur else None
+        
         occ = Occurrence(item.id, itype, s, e, None, item.is_all_day, s.isoformat())
         occs.append(occ)
 
