@@ -985,6 +985,14 @@ def index(
         "dir": dir or "asc",
     }
 
+    # DEBUG
+    print("=== STATUS OPTIONS DEBUG ===")
+    print(f"type_status_options keys: {list(type_status_options.keys())}")
+    print(f"type_status_options['task']: {type_status_options.get('task', [])[:3]}")
+    print(f"type_status_colors keys: {list(type_status_colors.keys())}")
+    print("============================")
+
+
     # Im Index-Handler, direkt nach der Filter-Vorbereitung
     print(f"=== FILTER DEBUG ===")
     print(f"q: {q}")
@@ -1408,7 +1416,7 @@ def _expand_next(it, start_dt, max_count: int = 10):
     elif freq == "YEARLY":
         unit_days = 365
 
-    # ✅ FIX: Intelligentere Startwert-Berechnung
+    # Intelligentere Startwert-Berechnung
     # Ziel: Mindestens max_count + Puffer im ersten Versuch
     safety_buffer = 1.5
     initial_horizon_days = max(
@@ -1416,7 +1424,7 @@ def _expand_next(it, start_dt, max_count: int = 10):
         int(max_count * interval * unit_days * safety_buffer)
     )
 
-    # ✅ FIX: Höheres Iterations-Limit
+    # Höheres Iterations-Limit
     hard_cap_days = 365 * 20  # Bis zu 20 Jahre
     hard_cap_iters = 15  # Mehr Iterationen erlauben
 
@@ -1433,7 +1441,7 @@ def _expand_next(it, start_dt, max_count: int = 10):
         if len(results) >= max_count:
             break
         
-        # ✅ FIX: Aggressivere Expansion bei wenigen Treffern
+        # Aggressivere Expansion bei wenigen Treffern
         if len(results) < max_count // 2:
             # Sehr wenige Treffer → 3x Multiplikator
             horizon_days = int(horizon_days * 3)

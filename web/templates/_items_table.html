@@ -1,27 +1,33 @@
 {# /web/templates/_items_table.html #}
 {% set type_colors = type_status_colors if type_status_colors is defined else {} %}
 {% set prio_labels = {0:'Keine',1:'Niedrig',2:'Normal',3:'Hoch',4:'Kritisch',5:'Blockierend'} %}
-{% set prio_colors = { 0:'#9ca3af', 1:'#60a5fa', 2:'#a3a3a3', 3:'#f59e0b', 4:'#ef4444', 5:'#7f1d1d' } %}
+
+{# Prioritätsfarben als CSS-Custom-Properties (in base.html definieren) #}
+{% set prio_color_vars = { 
+  0:'var(--prio-color-0, #9ca3af)', 
+  1:'var(--prio-color-1, #60a5fa)', 
+  2:'var(--prio-color-2, #a3a3a3)', 
+  3:'var(--prio-color-3, #f59e0b)', 
+  4:'var(--prio-color-4, #ef4444)', 
+  5:'var(--prio-color-5, #7f1d1d)' 
+} %}
 
 {# rows: (it, occs, disp_start, disp_end) #}
 {% for it, occs, disp_start, disp_end in rows %}
   <tr id="row-{{ it.id }}">
     <!-- Auswahl -->
     <td>
-      <input type="checkbox" class="sel-row" name="ids" value="{{ it.id }}">
+      <input type="checkbox" class="sel-row" name="ids" value="{{ it.id }}" aria-label="Auswählen">
     </td>
 
-    <!-- Typ -->
-    <td class="col-type">
+    <!-- Name (mit Typ-Icon) -->
+    <td class="col-name">
       {% set icon = "/static/icons/" ~ (it.type) ~ ".svg" %}
       {% set type_map = {'task':'Aufgabe','reminder':'Erinnerung','appointment':'Termin','event':'Ereignis'} %}
       {% set type_label = type_map.get(it.type, it.type) %}
-      <img src="{{ icon }}" alt="" aria-label="{{ type_label }}" title="{{ type_label }}">
-    </td>
-
-    <!-- Name -->
-    <td class="col-name">
+      
       <span class="name-wrap">
+        <img src="{{ icon }}" alt="" aria-label="{{ type_label }}" title="{{ type_label }}" class="type-icon-inline">
         <span class="name-label" data-for="{{ it.id }}">{{ it.name }}</span>
         <input id="name-{{ it.id }}" class="name-input hidden" type="text" name="name" value="{{ it.name }}"
                data-current="{{ it.name }}"
@@ -30,41 +36,38 @@
                hx-params="*"
                hx-include="#name-{{ it.id }}"
                hx-swap="none"
-               onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }" style="width:100%">
+               onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }">
       </span>
     </td>
 
     <!-- Status -->
     <td class="col-status">
-      {% set colmap = type_colors.get(it.type, {}) %}
+      {% set colmap = type_status_colors.get(it.type, {}) %}
       {% set opts = type_status_options.get(it.type, []) %}
 
-      <span class="status-wrap" style="display:inline-flex; align-items:center; gap:.35rem;">
+      <span class="status-wrap">
         <!-- Farbpunkt -->
-        <span class="status-dot"
-              style="display:inline-block; width:.6rem; height:.6rem; border-radius:50%; background: {{ colmap.get(it.status, '#bbb') }};">
-        </span>
+        <span class="status-dot" style="background: {{ colmap.get(it.status, '#bbb') }};"></span>
 
-        <!-- Sichtbares Badge (klickbar zum Umschalten) -->
+        <!-- Badge (klickbar) -->
         {% set cur_key = it.status %}
         {% set cur_label = (opts | selectattr(0,'equalto',cur_key) | map(attribute=1) | list | first) or cur_key %}
         <span class="status-badge"
               data-for="{{ it.id }}"
               tabindex="0"
-              onclick="const wrap=this.parentElement; const sel=wrap.querySelector('.status-select'); this.classList.add('hidden'); sel.classList.remove('hidden'); sel.style.display='inline-block'; sel.focus();"
-              style="display:inline-block; padding:.1rem .5rem; line-height:1.6; border-radius:.35rem; font-size:.85rem; background: var(--chip-bg); border:1px solid var(--color-border); cursor:pointer;">
+              role="button"
+              aria-label="Status ändern">
           {{ cur_label }}
         </span>
 
-        <!-- Versteckter Select -->
+        <!-- Select (versteckt) -->
         <select class="status-select hidden"
                 name="new_status"
                 data-current="{{ it.status }}"
                 hx-post="/items/{{ it.id }}/status"
                 hx-trigger="change"
                 hx-swap="none"
-                onblur="const wrap=this.parentElement; this.classList.add('hidden'); this.style.display='none'; const badge=wrap.querySelector('.status-badge'); badge && badge.classList.remove('hidden');"
-                style="display:none; max-width: 9.5rem;">
+                aria-label="Status auswählen">
           {% if opts and opts|length > 0 %}
             {% for key, label in opts %}
               {% set col = colmap.get(key) %}
@@ -83,27 +86,28 @@
     {% set pv = it.priority if it.priority is not none else 0 %}
     <td class="col-priority">
       <span class="prio-wrap">
-        <span class="prio-badge"
-              data-for="{{ it.id }}"
-              tabindex="0"
-              onclick="this.style.display='none'; this.nextElementSibling.style.display='inline-block'; this.nextElementSibling.focus();"
-              style="display:inline-block; padding:.1rem .5rem; line-height:1.6; border-radius:.35rem; font-size:.85rem; background: {{ prio_colors.get(pv, '#9ca3af') }}22; border:1px solid {{ prio_colors.get(pv, '#9ca3af') }}; cursor:pointer;">
+        <span class="prio-badge" 
+              data-for="{{ it.id }}" 
+              data-priority="{{ pv }}"
+              tabindex="0" 
+              role="button"
+              aria-label="Priorität ändern"
+              style="border-color: {{ prio_color_vars.get(pv, '#9ca3af') }}; background: {{ prio_color_vars.get(pv, '#9ca3af') }}22;">
           {{ prio_labels.get(pv, 'Keine') }}
         </span>
-        <select class="prio-select"
+        <select class="prio-select hidden"
                 name="priority"
-                hx-post="/items/{{ it.id }}/edit"
+                data-current="{{ pv }}"
+                hx-post="/items/{{ it.id }}/priority"
                 hx-trigger="change"
-                hx-target="#row-{{ it.id }}"
-                hx-swap="outerHTML"
-                onblur="this.style.display='none'; this.previousElementSibling.style.display='inline-block';"
-                style="display:none;">
-          <option value="0" {% if pv == 0 %}selected{% endif %}>Keine</option>
-          <option value="1" {% if pv == 1 %}selected{% endif %}>Niedrig</option>
-          <option value="2" {% if pv == 2 %}selected{% endif %}>Normal</option>
-          <option value="3" {% if pv == 3 %}selected{% endif %}>Hoch</option>
-          <option value="4" {% if pv == 4 %}selected{% endif %}>Kritisch</option>
-          <option value="5" {% if pv == 5 %}selected{% endif %}>Blockierend</option>
+                hx-swap="none"
+                aria-label="Priorität auswählen">
+          <option value="0" data-color="{{ prio_color_vars[0] }}" {% if pv == 0 %}selected{% endif %}>Keine</option>
+          <option value="1" data-color="{{ prio_color_vars[1] }}" {% if pv == 1 %}selected{% endif %}>Niedrig</option>
+          <option value="2" data-color="{{ prio_color_vars[2] }}" {% if pv == 2 %}selected{% endif %}>Normal</option>
+          <option value="3" data-color="{{ prio_color_vars[3] }}" {% if pv == 3 %}selected{% endif %}>Hoch</option>
+          <option value="4" data-color="{{ prio_color_vars[4] }}" {% if pv == 4 %}selected{% endif %}>Kritisch</option>
+          <option value="5" data-color="{{ prio_color_vars[5] }}" {% if pv == 5 %}selected{% endif %}>Blockierend</option>
         </select>
       </span>
     </td>
@@ -117,30 +121,32 @@
           <input class="fp-datetime time-input hidden" type="text" name="due" placeholder="dd.mm.yyyy hh:mm"
                 value="{{ due_text }}"
                 data-endpoint="/items/{{ it.id }}/due"
-                data-target="#occ-{{ it.id }}">
+                data-target="#occ-{{ it.id }}"
+                aria-label="Fälligkeitsdatum bearbeiten">
         </span>
 
       {% elif it.type in ('appointment','event') %}
-        {# Verwendung der Display-Zeiten disp_start/disp_end statt Original #}
         {% set start_text = (disp_start or it.start_utc) | format_local %}
         {% set end_text = (disp_end or it.end_utc) | format_local %}
         <span class="time-inline-pair">
           <span class="time-edit-wrap">
             <span class="time-label-inline" data-kind="start" data-for="{{ it.id }}">{{ start_text }}</span>
-            <input class="fp-datetime time-input hidden" type="text" name="start_local" placeholder="Start dd.mm.yyyy hh:mm"
+            <input class="fp-datetime time-input hidden" type="text" name="start_local" placeholder="Start"
                   value="{{ start_text }}"
                   data-endpoint="/items/{{ it.id }}/start_end"
                   data-param-name="start_local"
-                  data-target="#occ-{{ it.id }}">
+                  data-target="#occ-{{ it.id }}"
+                  aria-label="Startzeit bearbeiten">
           </span>
           <span>–</span>
           <span class="time-edit-wrap">
             <span class="time-label-inline" data-kind="end" data-for="{{ it.id }}">{{ end_text }}</span>
-            <input class="fp-datetime time-input hidden" type="text" name="end_local" placeholder="Ende dd.mm.yyyy hh:mm"
+            <input class="fp-datetime time-input hidden" type="text" name="end_local" placeholder="Ende"
                   value="{{ end_text }}"
                   data-endpoint="/items/{{ it.id }}/start_end"
                   data-param-name="end_local"
-                  data-target="#occ-{{ it.id }}">
+                  data-target="#occ-{{ it.id }}"
+                  aria-label="Endzeit bearbeiten">
           </span>
         </span>
 
@@ -152,11 +158,13 @@
                 value="{{ rem_text }}"
                 data-endpoint="/items/{{ it.id }}/snooze"
                 data-param-name="until_local"
-                data-target="#occ-{{ it.id }}">
+                data-target="#occ-{{ it.id }}"
+                aria-label="Erinnerungszeit bearbeiten">
         </span>
       {% endif %}
     </td>
 
+    <!-- Vorkommen -->
     <td class="col-occs" id="occ-{{ it.id }}">
       {% include "_occurrences.html" with context %}
     </td>
@@ -168,7 +176,7 @@
           {% for u in (it.links or []) %}
             <span class="link-row" data-url="{{ u }}">
               <a class="link-anchor" href="{{ u }}" target="_blank" rel="noopener noreferrer" title="{{ u }}">
-                <img class="link-favicon" data-url="{{ u }}" alt="">
+                <img class="link-favicon" data-url="{{ u }}" alt="" loading="lazy">
                 <span class="link-text">{{ u }}</span>
               </a>
               <button type="button"
@@ -187,7 +195,7 @@
 
         <div class="links-input-row">
           <input type="url" class="link-input" placeholder="https://example.com"
-                 inputmode="url" pattern="https?://.*" autocomplete="off">
+                 inputmode="url" pattern="https?://.*" autocomplete="off" aria-label="Link hinzufügen">
           <button type="button" class="btn btn-xs add-link">Hinzufügen</button>
         </div>
       </div>
@@ -218,7 +226,8 @@
                  hx-params="*"
                  hx-include="closest .tags .tag-input"
                  hx-target="next .tag-suggest"
-                 hx-swap="innerHTML">
+                 hx-swap="innerHTML"
+                 aria-label="Tag hinzufügen">
           <div class="tag-suggest" role="listbox" aria-label="Tag Vorschläge"></div>
         </div>
       </div>
@@ -226,16 +235,16 @@
 
     <!-- Aktionen -->
     <td class="col-action">
-      <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" class="icon-btn" title="Details" aria-label="Details" target="_blank" rel="noopener noreferrer">
+      <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" 
+         class="icon-btn" title="Details" aria-label="Details bearbeiten" target="_blank" rel="noopener noreferrer">
         <img src="/static/icons/details.svg" alt="" width="16" height="16">
       </a>
-      {# Zoom – Beschreibung in separatem Fenster anzeigen #}
-      <a href="/items/{{ it.id }}/zoom" class="icon-btn" title="Zoom" aria-label="Zoom" target="_blank" rel="noopener">
+      <a href="/items/{{ it.id }}/zoom" class="icon-btn" title="Zoom" aria-label="In neuem Fenster öffnen" target="_blank" rel="noopener">
         <img src="/static/icons/zoom.svg" alt="" width="16" height="16">
       </a>
 
       <span class="delete-wrap" data-id="{{ it.id }}">
-        <a href="javascript:void(0)" class="icon-btn delete-trigger" title="Löschen" aria-label="Löschen">
+        <a href="javascript:void(0)" class="icon-btn delete-trigger" title="Löschen" aria-label="Eintrag löschen">
           <img src="/static/icons/delete.svg" alt="" width="16" height="16" data-keep-color="true" class="no-invert">
         </a>
         <span class="delete-confirm hidden">
@@ -250,134 +259,211 @@
 {% endfor %}
 
 <script>
-  document.addEventListener('htmx:afterRequest', (e) => {
-    const el = e.target;
-
-    // Status-Select
-    if (el && el.matches && el.matches('select[name="new_status"]')) {
-      const tr   = el.closest('tr');
-      const wrap = tr?.querySelector('.status-wrap');
-      const dot  = wrap?.querySelector('.status-dot');
-      const badge= wrap?.querySelector('.status-badge');
-
-      // Nur bei erfolgreichem 204-Update UI umstellen
-      if (e.detail && e.detail.xhr && e.detail.xhr.status === 204) {
-        const selected = el.options[el.selectedIndex];
-        const color    = selected?.getAttribute('data-color') || '#bbb';
-        const label    = selected?.textContent || el.value;
-
-        // Dot-Farbe aktualisieren
-        if (dot) dot.style.background = color;
-
-        // Badge-Text aktualisieren
-        if (badge) badge.textContent = label;
-
-        // Sichtbarkeit Select -> Badge
-        el.classList.add('hidden');
-        el.style.display = 'none';
-        if (badge) badge.classList.remove('hidden');
-
-        // internen "current"-Wert setzen und selected-Attribut konsistent halten
-        el.setAttribute('data-current', el.value);
-        Array.from(el.options).forEach(o => o.removeAttribute('selected'));
-        if (selected) selected.setAttribute('selected', 'selected');
-      }
-
-      // Validierungsfehler: UI auf vorherigen Wert zurücksetzen und Alert anzeigen
-      if (e.detail && e.detail.xhr && e.detail.xhr.status === 422) {
-        const current = el.getAttribute('data-current');
-        if (current) el.value = current;
-
-        const alerts = document.getElementById('alerts') || document.body;
-        const wrapDiv = document.createElement('div');
-        wrapDiv.innerHTML = e.detail.xhr.responseText;
-        alerts.prepend(wrapDiv);
-
-        // Bei Fehler Select schließen und Badge wieder einblenden
-        const wrap2 = el.closest('.status-wrap');
-        const badge2 = wrap2?.querySelector('.status-badge');
-        el.classList.add('hidden');
-        el.style.display = 'none';
-        if (badge2) badge2.classList.remove('hidden');
-      }
-      return; // früh raus; andere Fälle nicht mitbehandeln
-    }
-
-    // Priority-Select
-    if (el.matches && el.matches('select.prio-select')) {
-      const tr = el.closest('tr');
-      const badge = tr?.querySelector('.prio-badge');
-      if (e.detail.xhr && e.detail.xhr.status === 204) {
-        const selected = el.options[el.selectedIndex];
-        const color = selected.getAttribute('data-color') || '#9ca3af';
-        const label = selected.textContent || 'Keine';
-        if (badge) {
-          badge.textContent = label;
-          badge.style.borderColor = color;
-          badge.style.background = color + '22';
-        }
-        el.setAttribute('data-current', el.value);
-        Array.from(el.options).forEach(o => o.removeAttribute('selected'));
-        selected.setAttribute('selected', 'selected');
-      }
-      if (e.detail.xhr && e.detail.xhr.status === 422) {
-        const current = el.getAttribute('data-current');
-        if (current) el.value = current;
-        const alerts = document.getElementById('alerts') || document.body;
-        const wrap = document.createElement('div');
-        wrap.innerHTML = e.detail.xhr.responseText;
-        alerts.prepend(wrap);
-      }
-    }
-
-    // Name-Input (htmx-Response handling)
-    if (el.matches && el.matches('input[name="name"]')) {
-      if (e.detail.xhr && e.detail.xhr.status === 204) {
-        el.setAttribute('data-current', el.value);
-      }
-      if (e.detail.xhr && e.detail.xhr.status === 422) {
-        const cur = el.getAttribute('data-current');
-        if (cur !== null) el.value = cur;
-        const alerts = document.getElementById('alerts') || document.body;
-        const wrap = document.createElement('div');
-        wrap.innerHTML = e.detail.xhr.responseText;
-        alerts.prepend(wrap);
-      }
-    }
-
-    // Delete (Ja)
-    if (el.classList && el.classList.contains('do-delete')) {
-      if (e.detail.xhr && (e.detail.xhr.status === 204 || e.detail.xhr.status === 200)) {
-        const tr = el.closest('tr');
-        if (tr) tr.remove();
-      }
-    }
-
-    // Tags: Entfernen nach Erfolg
-    if (el.classList && el.classList.contains('tag-x')) {
-      if (e.detail.xhr && e.detail.xhr.status === 204) {
-        const chip = el.closest('.tag-chip');
-        if (chip) chip.remove();
-      }
-    }
-
-    // Links: Entfernen (rotes X)
-    if (el.classList && el.classList.contains('link-del')) {
-      if (e.detail.xhr && e.detail.xhr.status === 204) {
-        const row = el.closest('.link-row');
-        if (row) row.remove();
-      }
-    }
-  });
-
-  // UI-Interaktion und Helfer
   (function(){
-    // Inline-Löschen: öffnen/schließen
+    // Guard: Verhindert mehrfache Bindung bei HTMX-Reloads
+    if (window.__itemsTableBound) return;
+    window.__itemsTableBound = true;
+
+    document.addEventListener('htmx:afterRequest', (e) => {
+      const el = e.target;
+
+      // Status-Select
+      if (el && el.matches && el.matches('select[name="new_status"]')) {
+        const wrap = el.closest('.status-wrap');
+        const dot  = wrap?.querySelector('.status-dot');
+        const badge= wrap?.querySelector('.status-badge');
+
+        if (e.detail && e.detail.xhr && e.detail.xhr.status === 204) {
+          const selected = el.options[el.selectedIndex];
+          const color    = selected?.getAttribute('data-color') || '#bbb';
+          const label    = selected?.textContent || el.value;
+
+          if (dot) dot.style.background = color;
+          if (badge) badge.textContent = label;
+
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+
+          el.setAttribute('data-current', el.value);
+          Array.from(el.options).forEach(o => o.removeAttribute('selected'));
+          if (selected) selected.setAttribute('selected', 'selected');
+        }
+
+        if (e.detail && e.detail.xhr && e.detail.xhr.status === 422) {
+          const current = el.getAttribute('data-current');
+          if (current) el.value = current;
+
+          const alerts = document.getElementById('alerts') || document.body;
+          const wrapDiv = document.createElement('div');
+          wrapDiv.innerHTML = e.detail.xhr.responseText;
+          alerts.prepend(wrapDiv);
+
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+        }
+        return;
+      }
+
+      // Priority-Select
+      if (el.matches && el.matches('select.prio-select')) {
+        const wrap = el.closest('.prio-wrap');
+        const badge = wrap?.querySelector('.prio-badge');
+        
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          const selected = el.options[el.selectedIndex];
+          const color = selected.getAttribute('data-color') || '#9ca3af';
+          const label = selected.textContent || 'Keine';
+          const prio = selected.value;
+          
+          if (badge) {
+            badge.textContent = label;
+            badge.style.borderColor = color;
+            badge.style.background = color + '22';
+            badge.setAttribute('data-priority', prio);
+          }
+          
+          el.setAttribute('data-current', el.value);
+          Array.from(el.options).forEach(o => o.removeAttribute('selected'));
+          selected.setAttribute('selected', 'selected');
+          
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+        }
+        
+        if (e.detail.xhr && e.detail.xhr.status === 422) {
+          const current = el.getAttribute('data-current');
+          if (current) el.value = current;
+          
+          const alerts = document.getElementById('alerts') || document.body;
+          const wrap = document.createElement('div');
+          wrap.innerHTML = e.detail.xhr.responseText;
+          alerts.prepend(wrap);
+          
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+        }
+      }
+
+      // Name-Input
+      if (el.matches && el.matches('input[name="name"]')) {
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          el.setAttribute('data-current', el.value);
+        }
+        if (e.detail.xhr && e.detail.xhr.status === 422) {
+          const cur = el.getAttribute('data-current');
+          if (cur !== null) el.value = cur;
+          const alerts = document.getElementById('alerts') || document.body;
+          const wrap = document.createElement('div');
+          wrap.innerHTML = e.detail.xhr.responseText;
+          alerts.prepend(wrap);
+        }
+      }
+
+      // Delete (Ja)
+      if (el.classList && el.classList.contains('do-delete')) {
+        if (e.detail.xhr && (e.detail.xhr.status === 204 || e.detail.xhr.status === 200)) {
+          const tr = el.closest('tr');
+          if (tr) tr.remove();
+        }
+      }
+
+      // Tags: Entfernen
+      if (el.classList && el.classList.contains('tag-x')) {
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          const chip = el.closest('.tag-chip');
+          if (chip) chip.remove();
+        }
+      }
+
+      // Links: Entfernen
+      if (el.classList && el.classList.contains('link-del')) {
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          const row = el.closest('.link-row');
+          if (row) row.remove();
+        }
+      }
+    });
+
+    // Status: Badge -> Select
+    document.addEventListener('click', (e) => {
+      const badge = e.target.closest('.status-badge');
+      if (!badge) return;
+      e.preventDefault();
+      const wrap = badge.closest('.status-wrap');
+      const sel = wrap?.querySelector('.status-select');
+      if (!sel) return;
+      badge.classList.add('hidden');
+      sel.classList.remove('hidden');
+      sel.style.display = 'inline-block';
+      sel.focus();
+    });
+
+    // Status: Select -> Badge (blur)
+    document.addEventListener('blur', (e) => {
+      const sel = e.target;
+      if (!(sel.classList && sel.classList.contains('status-select'))) return;
+      setTimeout(() => {
+        if (document.activeElement === sel) return;
+        const wrap = sel.closest('.status-wrap');
+        const badge = wrap?.querySelector('.status-badge');
+        sel.classList.add('hidden');
+        sel.style.display = 'none';
+        if (badge) badge.classList.remove('hidden');
+      }, 0);
+    }, true);
+
+    // Priority: Badge -> Select
+    document.addEventListener('click', (e) => {
+      const badge = e.target.closest('.prio-badge');
+      if (!badge) return;
+      e.preventDefault();
+      const wrap = badge.closest('.prio-wrap');
+      const sel = wrap?.querySelector('.prio-select');
+      if (!sel) return;
+      badge.classList.add('hidden');
+      sel.classList.remove('hidden');
+      sel.style.display = 'inline-block';
+      sel.focus();
+    });
+
+    // Priority: Select -> Badge (blur)
+    document.addEventListener('blur', (e) => {
+      const sel = e.target;
+      if (!(sel.classList && sel.classList.contains('prio-select'))) return;
+      setTimeout(() => {
+        if (document.activeElement === sel) return;
+        const wrap = sel.closest('.prio-wrap');
+        const badge = wrap?.querySelector('.prio-badge');
+        sel.classList.add('hidden');
+        sel.style.display = 'none';
+        if (badge) badge.classList.remove('hidden');
+      }, 0);
+    }, true);
+
+    // Status & Priority: Keyboard-Support (kombiniert)
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      
+      const statusBadge = e.target.closest('.status-badge');
+      if (statusBadge) {
+        e.preventDefault();
+        statusBadge.click();
+        return;
+      }
+      
+      const prioBadge = e.target.closest('.prio-badge');
+      if (prioBadge) {
+        e.preventDefault();
+        prioBadge.click();
+        return;
+      }
+    });
+
+    // Inline-Löschen
     document.addEventListener('click', (e) => {
       const trigger = e.target.closest('.delete-trigger');
       if (trigger) {
         e.preventDefault();
-        e.stopPropagation();
         const wrap = trigger.closest('.delete-wrap');
         wrap.querySelector('.delete-confirm')?.classList.remove('hidden');
         trigger.classList.add('hidden');
@@ -393,32 +479,30 @@
       }
     });
 
-    // Tag-Suggest in klickbare Liste umwandeln
+    // Tag-Suggest
     document.addEventListener('htmx:afterOnLoad', (e) => {
       const tgt = e.target;
-      if (tgt.classList && tgt.classList.contains('tag-suggest')) {
-        try {
-          const data = JSON.parse(e.detail.xhr.responseText);
-          tgt.innerHTML = '';
-          data.forEach(tag => {
-            const item = document.createElement('div');
-            item.className = 'tag-sugg-item';
-            item.tabIndex = 0;
-            item.textContent = tag;
-            item.addEventListener('mousedown', (ev) => {
-              ev.preventDefault();
-              addTagFromSuggest(tgt, tag);
-            });
-            item.addEventListener('keydown', (ev) => {
-              if (ev.key === 'Enter') { ev.preventDefault(); addTagFromSuggest(tgt, tag); }
-            });
-            tgt.appendChild(item);
+      if (!(tgt.classList && tgt.classList.contains('tag-suggest'))) return;
+      try {
+        const data = JSON.parse(e.detail.xhr.responseText);
+        tgt.innerHTML = '';
+        data.forEach(tag => {
+          const item = document.createElement('div');
+          item.className = 'tag-sugg-item';
+          item.tabIndex = 0;
+          item.textContent = tag;
+          item.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+            addTagFromSuggest(tgt, tag);
           });
-        } catch(_) {}
-      }
+          item.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') { ev.preventDefault(); addTagFromSuggest(tgt, tag); }
+          });
+          tgt.appendChild(item);
+        });
+      } catch(_) {}
     });
 
-    // Guard für Blur vs. Suggest-Klick
     let clickedSuggest = false;
     document.addEventListener('mousedown', (e) => {
       if (e.target && e.target.classList && e.target.classList.contains('tag-sugg-item')) {
@@ -426,7 +510,6 @@
       }
     });
 
-    // Blur: schließt Vorschläge, außer der Klick war auf einen Vorschlag
     document.addEventListener('blur', (e) => {
       const el = e.target;
       if (!(el.classList && el.classList.contains('tag-input'))) return;
@@ -466,7 +549,6 @@
       if (!tag) return;
       const wrap = el.closest('.tags');
 
-      // Duplikate prüfen
       if (Array.from(wrap.querySelectorAll('.tag-chip')).some(c => c.getAttribute('data-tag') === tag)) {
         el.value = '';
         const sugg = wrap.querySelector('.tag-suggest'); if (sugg) sugg.innerHTML = '';
@@ -485,7 +567,6 @@
       }
     });
 
-    // Helfer: Tag-Chip anhängen
     function appendTagChip(wrap, tag) {
       if (Array.from(wrap.querySelectorAll('.tag-chip')).some(c => c.getAttribute('data-tag') === tag)) return null;
       const chip = document.createElement('span');
@@ -523,19 +604,33 @@
       return chip;
     }
 
-    // Links: Favicons initial setzen
-    function domainFromUrl(u){
-      try { return new URL(u).hostname; } catch(_){ return ''; }
-    }
+    // Lazy Favicons (EINMAL via IntersectionObserver)
     function setFavicon(img, url){
-      const domain = domainFromUrl(url);
-      img.src = domain ? `https://www.google.com/s2/favicons?domain=${domain}` : '/static/icons/link.svg';
+      try {
+        const domain = new URL(url).hostname;
+        img.src = domain ? `https://www.google.com/s2/favicons?domain=${domain}` : '/static/icons/link.svg';
+      } catch(_){
+        img.src = '/static/icons/link.svg';
+      }
     }
-    document.querySelectorAll('img.link-favicon[data-url]').forEach(img=>{
-      setFavicon(img, img.dataset.url);
-    });
+    
+    const imgs = Array.from(document.querySelectorAll('img.link-favicon[data-url]'));
+    if (!('IntersectionObserver' in window)) {
+      imgs.forEach(img => setFavicon(img, img.dataset.url));
+    } else {
+      const io = new IntersectionObserver((entries, obs)=>{
+        entries.forEach(ent=>{
+          if (ent.isIntersecting) {
+            const img = ent.target;
+            setFavicon(img, img.dataset.url);
+            obs.unobserve(img);
+          }
+        });
+      }, {rootMargin: '200px 0px'});
+      imgs.forEach(img => io.observe(img));
+    }
 
-    // Link hinzufügen (Button)
+    // Link hinzufügen
     document.addEventListener('click', async (e) => {
       if (!(e.target && e.target.classList.contains('add-link'))) return;
       const btn = e.target;
@@ -555,7 +650,6 @@
       }
     });
 
-    // Link hinzufügen via Enter
     document.addEventListener('keydown', (e) => {
       const el = e.target;
       if (el.classList && el.classList.contains('link-input') && e.key === 'Enter') {
@@ -565,7 +659,6 @@
       }
     });
 
-    // Helfer: Link-Anker anhängen
     function appendLinkAnchor(wrap, url){
       const list = wrap.querySelector('.links-list');
       if (Array.from(list.querySelectorAll('.link-row')).some(r => (r.dataset.url||'') === url)) return;
@@ -579,7 +672,7 @@
       a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = url;
 
       const img = document.createElement('img');
-      img.className = 'link-favicon'; img.alt = '';
+      img.className = 'link-favicon'; img.alt = ''; img.loading = 'lazy';
       const domain = (()=>{
         try { return new URL(url).hostname; } catch(_){ return ''; }
       })();
@@ -612,50 +705,11 @@
       row.appendChild(hidden);
       list.appendChild(row);
     }
-  })();
 
-  // Lazy Favicons via IntersectionObserver
-  (function(){
-    function setFavicon(img, url){
-      try {
-        const domain = new URL(url).hostname;
-        img.src = domain ? `https://www.google.com/s2/favicons?domain=${domain}` : '/static/icons/link.svg';
-      } catch(_){
-        img.src = '/static/icons/link.svg';
-      }
-    }
-    const imgs = Array.from(document.querySelectorAll('img.link-favicon[data-url]'));
-    if (!('IntersectionObserver' in window)) {
-      imgs.forEach(img => setFavicon(img, img.dataset.url));
-      return;
-    }
-    const io = new IntersectionObserver((entries, obs)=>{
-      entries.forEach(ent=>{
-        if (ent.isIntersecting) {
-          const img = ent.target;
-          setFavicon(img, img.dataset.url);
-          obs.unobserve(img);
-        }
-      });
-    }, {rootMargin: '200px 0px'});
-    imgs.forEach(img => io.observe(img));
-  })();
-
-  // Name und Zeiten: Label->Input und Blur->Speichern
-  (function(){
-    function initPickerOnce(input){
-      if (!input || input._fp || !window.flatpickr) return;
-      input._fp = flatpickr(input, {
-        enableTime: true,
-        time_24hr: true,
-        dateFormat: "d.m.Y H:i",
-        locale: "de"
-      });
-    }
+    // Name und Zeiten: Label->Input
     function show(el){ el && el.classList.remove('hidden'); }
     function hide(el){ el && el.classList.add('hidden'); }
 
-    // Name: Klick auf Label -> Input
     document.addEventListener('click', (e) => {
       const lab = e.target.closest('.name-label');
       if (!lab) return;
@@ -667,7 +721,6 @@
       setTimeout(()=>input.focus(), 0);
     });
 
-    // Name: Blur -> speichern
     document.addEventListener('blur', async (e) => {
       const el = e.target;
       if (!(el.classList && el.classList.contains('name-input'))) return;
@@ -687,7 +740,6 @@
       }
     }, true);
 
-    // Zeiten: Klick auf Label -> passendes Input im selben Wrap zeigen
     document.addEventListener('click', (e) => {
       const lab = e.target.closest('.time-label-inline');
       if (!lab) return;
@@ -698,11 +750,9 @@
       const input = wrap.querySelector('input.time-input');
       if (!input) return;
 
-      // Label aus, Input an
       lab.classList.add('hidden');
       input.classList.remove('hidden');
 
-      // Flatpickr nur einmal initialisieren
       if (!input._fp && window.flatpickr) {
         input._fp = flatpickr(input, {
           enableTime: true,
@@ -712,11 +762,9 @@
         });
       }
 
-      // Fokus setzen
       setTimeout(() => input.focus(), 0);
     });
 
-    // Zeiten: Blur -> speichern
     document.addEventListener('blur', async (e) => {
       const el = e.target;
       if (!(el.classList && el.classList.contains('time-input'))) return;
@@ -732,10 +780,7 @@
 
       if (!val) {
         el.classList.add('hidden');
-        if (lab) {
-          lab.classList.remove('hidden');
-          // optional: lab.textContent = '—';
-        }
+        if (lab) lab.classList.remove('hidden');
         return;
       }
 
@@ -744,17 +789,16 @@
         await htmx.ajax('POST', endpoint, { values, target: targetSel || null, swap: targetSel ? 'innerHTML' : 'none' });
 
         if (lab) lab.textContent = val;
-          el.value = val;
-        } finally {
-          el.classList.add('hidden');
-          if (lab) lab.classList.remove('hidden');
-        }
+        el.value = val;
+      } finally {
+        el.classList.add('hidden');
+        if (lab) lab.classList.remove('hidden');
+      }
     }, true);
 
     document.addEventListener('htmx:afterOnLoad', (e) => {
-      const root = e.detail.elt; // oder e.target je nach HTMX-Version
+      const root = e.detail.elt;
       if (!root) return;
-      // Wenn Antwort einen #htmx-multi Container enthält:
       const multi = root.querySelector && root.querySelector('#htmx-multi');
       if (!multi) return;
       multi.querySelectorAll('template[data-target]').forEach(tpl => {
@@ -764,7 +808,6 @@
       });
     });
 
-    // ESC bricht ab
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       const inp = e.target;

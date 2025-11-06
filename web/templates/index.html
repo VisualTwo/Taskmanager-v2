@@ -128,14 +128,20 @@
         <div class="filter-row row-occurrence">
           <div class="field">
             <label>Vorkommen-Vorschau</label>
-            <div class="input" >
+            <div class="input">
               {% set cur_range = request.query_params.get('range','') %}
-              <div class="input">
-  {% set cur_range = request.query_params.get('range','') %}
-              <a class="btn btn-xs btn-primary preview-btn" {% if cur_range == 'heute' %}{% else %}href="{{ request.url.include_query_params(range='heute') }}"{% endif %} aria-current="{% if cur_range == 'heute' %}page{% else %}false{% endif %}">Heute</a>
-              <a class="btn btn-xs btn-primary preview-btn" {% if cur_range == 'woche' %}{% else %}href="{{ request.url.include_query_params(range='woche') }}"{% endif %} aria-current="{% if cur_range == 'woche' %}page{% else %}false{% endif %}">Diese Woche</a>
-              <a class="btn btn-xs btn-primary preview-btn" {% if cur_range == 'naechstewoche' %}{% else %}href="{{ request.url.include_query_params(range='naechstewoche') }}"{% endif %} aria-current="{% if cur_range == 'naechstewoche' %}page{% else %}false{% endif %}">Nächste Woche</a>
-              <a class="btn btn-xs btn-primary preview-btn" {% if not cur_range or cur_range == 'next3' %}{% else %}href="{{ request.url.include_query_params(range='next3') }}"{% endif %} aria-current="{% if not cur_range or cur_range == 'next3' %}page{% else %}false{% endif %}">Nächste 3</a>
+              <a class="btn btn-xs preview-btn{% if cur_range == 'heute' %} btn-active{% endif %}" 
+                 {% if cur_range != 'heute' %}href="{{ request.url.include_query_params(range='heute') }}"{% endif %} 
+                 aria-current="{% if cur_range == 'heute' %}page{% else %}false{% endif %}">Heute</a>
+              <a class="btn btn-xs preview-btn{% if cur_range == 'woche' %} btn-active{% endif %}" 
+                 {% if cur_range != 'woche' %}href="{{ request.url.include_query_params(range='woche') }}"{% endif %} 
+                 aria-current="{% if cur_range == 'woche' %}page{% else %}false{% endif %}">Diese Woche</a>
+              <a class="btn btn-xs preview-btn{% if cur_range == 'naechstewoche' %} btn-active{% endif %}" 
+                 {% if cur_range != 'naechstewoche' %}href="{{ request.url.include_query_params(range='naechstewoche') }}"{% endif %} 
+                 aria-current="{% if cur_range == 'naechstewoche' %}page{% else %}false{% endif %}">Nächste Woche</a>
+              <a class="btn btn-xs preview-btn{% if not cur_range or cur_range == 'next3' %} btn-active{% endif %}" 
+                 {% if cur_range and cur_range != 'next3' %}href="{{ request.url.include_query_params(range='next3') }}"{% endif %} 
+                 aria-current="{% if not cur_range or cur_range == 'next3' %}page{% else %}false{% endif %}">Nächste 3</a>
             </div>
           </div>
         </div>
@@ -148,16 +154,13 @@
           {% set sort = request.query_params.get('sort','') %}
           <select id="sort" name="sort" onchange="this.form.requestSubmit()">
             <option value="">–</option>
-            <option value="type"     {% if sort=='type' %}selected{% endif %}>Typ</option>
             <option value="name"     {% if sort=='name' %}selected{% endif %}>Name</option>
             <option value="status"   {% if sort=='status' %}selected{% endif %}>Status</option>
             <option value="start"    {% if sort=='start' %}selected{% endif %}>Start/Fällig</option>
             <option value="priority" {% if sort=='priority' %}selected{% endif %}>Priorität</option>
             <option value="tags"     {% if sort=='tags' %}selected{% endif %}>Tags-Anzahl</option>
             <option value="links"    {% if sort=='links' %}selected{% endif %}>Links-Anzahl</option>
-            <option value="changed"
-              {% if sort in ['last_modified_utc'] %}selected{% endif %}
-            >Geändert</option>
+            <option value="changed"  {% if sort in ['last_modified_utc','changed'] %}selected{% endif %}>Geändert</option>
           </select>
         </div>
         <div class="field">
@@ -177,8 +180,6 @@
 <div id="alerts"></div>
 
 <!-- Tabelle in voller Breite -->
-{% set sort = request.query_params.get('sort','') %}
-{% set dir  = request.query_params.get('dir','asc') %}
 {% macro sort_link(label, field) -%}
   {% set is_cur = (sort == field) %}
   {% set next_dir = 'desc' if (is_cur and dir=='asc') else 'asc' %}
@@ -191,7 +192,6 @@
   <thead>
     <tr>
       <th class="col-sel"><input type="checkbox" id="sel-all" aria-label="Alle auswählen"></th>
-      <th class="col-type">{{ sort_link('Typ','type') }}</th>
       <th class="col-name">{{ sort_link('Name','name') }}</th>
       <th class="col-status">{{ sort_link('Status','status') }}</th>
       <th class="col-priority">{{ sort_link('Priorität','priority') }}</th>
@@ -295,19 +295,15 @@
     // Suche: dirty-state für Button
     const q = form.querySelector('#q');
     const btnSearch = form.querySelector('#btn-search');
-    // Falls Button keine ID hat, fallback auf den ersten Submit-Button im Suche-Block
     const btn = btnSearch || form.querySelector('.row-search .input button[type="submit"]');
 
-    // Initialwerte bestimmen (Pageload und bestätigte Suche)
     let initialQ = '';
     let confirmedQ = '';
 
     if (q) {
-      // Werte aus URL (bereits in initial geschrieben), ansonsten aktueller Value
       initialQ = q.getAttribute('data-initial-q') ?? (q.value ?? '');
       confirmedQ = q.getAttribute('data-confirmed-q') ?? initialQ;
 
-      // Sicherstellen, dass data-* konsistent sind
       q.setAttribute('data-initial-q', initialQ);
       q.setAttribute('data-confirmed-q', confirmedQ);
     }
@@ -315,7 +311,6 @@
     function updateSearchButtonState() {
       if (!q || !btn) return;
       const cur = q.value ?? '';
-      // Dirty, wenn cur != confirmed und cur != initial
       const isDirty = (cur !== confirmedQ) && (cur !== initialQ);
       btn.classList.toggle('btn-dirty', isDirty);
     }
@@ -327,13 +322,11 @@
         if (e.key === 'Enter') {
           confirmedQ = q.value ?? '';
           q.setAttribute('data-confirmed-q', confirmedQ);
-          // Nach Enter nicht dirty
           btn && btn.classList.remove('btn-dirty');
         }
       });
     }
 
-    // Formular-Submit per Klick auf „Suchen“
     form.addEventListener('submit', () => {
       if (q) {
         confirmedQ = q.value ?? '';
@@ -342,7 +335,6 @@
       btn && btn.classList.remove('btn-dirty');
     });
 
-    // Initialer Zustand setzen (falls q bereits vorbefüllt ist)
     updateSearchButtonState();
 
     const url = new URL(window.location.href);
@@ -414,14 +406,14 @@
     });
   });
 
-  // Auswahl für Export (Seitenformular)
+  // Auswahl für Export
   (function(){
     const selAll = document.getElementById('sel-all');
     function allRowCbs(){ return Array.from(document.querySelectorAll('input.sel-row')); }
     selAll && selAll.addEventListener('change', () => {
       allRowCbs().forEach(cb => cb.checked = selAll.checked);
     });
-    const exportForm = document.getElementById('export-form'); // optional
+    const exportForm = document.getElementById('export-form');
     if (exportForm) {
       exportForm.addEventListener('submit', (e) => {
         Array.from(exportForm.querySelectorAll('input[name="ids"]')).forEach(n => n.remove());
@@ -436,7 +428,7 @@
     }
   })();
 
-  // HTMX Multi-Fragment: Antwort mit <template data-target="#selector">...</template>
+  // HTMX Multi-Fragment
   document.addEventListener('htmx:afterOnLoad', (e) => {
     const root = e.detail && (e.detail.elt || e.detail.target) ? (e.detail.elt || e.detail.target) : null;
     if (!root || !root.querySelector) return;
@@ -449,28 +441,80 @@
     });
   });
 
-  // Priorität Inline: Badge -> Select und zurück
+  // Status: Badge -> Select
   document.addEventListener('click', (e) => {
-    const badge = e.target.closest && e.target.closest('.prio-badge');
+    const badge = e.target.closest('.status-badge');
     if (!badge) return;
-    const wrap = badge.closest('.prio-wrap');
-    const sel  = wrap.querySelector('.prio-select');
+    e.preventDefault();
+    const wrap = badge.closest('.status-wrap');
+    const sel = wrap?.querySelector('.status-select');
+    if (!sel) return;
     badge.classList.add('hidden');
     sel.classList.remove('hidden');
+    sel.style.display = 'inline-block';  // ✅ WICHTIG: Überschreibt .hidden
     sel.focus();
   });
 
+  // Status: Select -> Badge (blur)
   document.addEventListener('blur', (e) => {
-    const sel = e.target && e.target.classList && e.target.classList.contains('prio-select') ? e.target : null;
+    const sel = e.target;
+    if (!(sel.classList && sel.classList.contains('status-select'))) return;
+    setTimeout(() => {
+      if (document.activeElement === sel) return;
+      const wrap = sel.closest('.status-wrap');
+      const badge = wrap?.querySelector('.status-badge');
+      sel.classList.add('hidden');
+      sel.style.display = 'none';  // ✅ WICHTIG: Versteckt explizit
+      if (badge) badge.classList.remove('hidden');
+    }, 0);
+  }, true);
+
+  // Status: Keyboard-Support
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const badge = e.target.closest('.status-badge');
+    if (!badge) return;
+    e.preventDefault();
+    badge.click();
+  });
+
+  // Priority: Badge -> Select
+  document.addEventListener('click', (e) => {
+    const badge = e.target.closest('.prio-badge');
+    if (!badge) return;
+    e.preventDefault();
+    const wrap = badge.closest('.prio-wrap');
+    const sel = wrap?.querySelector('.prio-select');
     if (!sel) return;
+    badge.classList.add('hidden');
+    sel.classList.remove('hidden');
+    sel.style.display = 'inline-block';  // ✅ WICHTIG: Überschreibt .hidden
+    sel.focus();
+  });
+
+  // Priority: Select -> Badge (blur)
+  document.addEventListener('blur', (e) => {
+    const sel = e.target;
+    if (!(sel.classList && sel.classList.contains('prio-select'))) return;
     setTimeout(() => {
       if (document.activeElement === sel) return;
       const wrap = sel.closest('.prio-wrap');
-      const badge = wrap.querySelector('.prio-badge');
+      const badge = wrap?.querySelector('.prio-badge');
       sel.classList.add('hidden');
-      badge && badge.classList.remove('hidden');
+      sel.style.display = 'none';  // ✅ WICHTIG: Versteckt explizit
+      if (badge) badge.classList.remove('hidden');
     }, 0);
   }, true);
+
+  // Priority: Keyboard-Support
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const badge = e.target.closest('.prio-badge');
+    if (!badge) return;
+    e.preventDefault();
+    badge.click();
+  });
+
 
   document.addEventListener('htmx:afterRequest', (e) => {
     const el = e.target;
@@ -483,6 +527,9 @@
       const label = opt.textContent || 'Keine';
       if (badge) {
         badge.textContent = label;
+        badge.style.borderColor = color;
+        badge.style.background = color + '22';
+        badge.setAttribute('data-priority', opt.value);
       }
       el.setAttribute('data-current', el.value);
       Array.from(el.options).forEach(o => o.removeAttribute('selected'));

@@ -41,16 +41,13 @@ def expand_item(item: BaseItem, win_start_utc: datetime, win_end_utc: datetime) 
                 0, 0, 0,
                 tzinfo=timezone.utc
             )
-            print(f"[RRULE-FIX] is_all_day: original={item.start_utc} → normalized={dtstart}")
         except Exception as e:
             print(f"[RRULE-FIX] Fehler bei Normalisierung: {e}")
             # Fallback: Verwende original dtstart
 
     # Variante A: expand_rrule mit dtstart-Argument
     try:
-        print(f"[RRULE-CALL] item={getattr(item,'name','?')} dtstart={dtstart} is_all_day={is_all_day} win=[{win_start_utc}..{win_end_utc})")
         seq_times = expand_rrule(item.recurrence, win_start_utc, win_end_utc, explicit_dtstart=dtstart)
-        print(f"[RRULE-RET] item={getattr(item,'name','?')} seq_times={seq_times}")
     except TypeError:
         # Variante B: Fallback
         r = getattr(item, "recurrence", None)

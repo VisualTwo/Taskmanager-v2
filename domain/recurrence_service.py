@@ -20,8 +20,6 @@ def expand_item(item: BaseItem, win_start_utc: datetime, win_end_utc: datetime) 
         if start is None or end is None:
             return False
         result = (start < win_end_utc) and (end > win_start_utc)
-        # DEBUG
-        print(f"[OVERLAPS] item={getattr(item, 'name', '?')} s={start} e={end} win=[{win_start_utc}..{win_end_utc}) => {result}")
         return result
    
     # Nicht-serielle Items
@@ -71,7 +69,6 @@ def expand_item(item: BaseItem, win_start_utc: datetime, win_end_utc: datetime) 
     out = []
     for s in seq_times:
         e = (s + dur) if dur else None
-        print(f"[OCC-CREATE] item={item.id[:8]} original_year={base_start.year} occ_year={s.year} s={s}")  # ← Debug
         if overlaps(s, e):
             out.append(Occurrence(item.id, itype, s, e, None, item.is_all_day, s.isoformat()))
     return out
