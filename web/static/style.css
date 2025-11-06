@@ -211,7 +211,7 @@ input[type="checkbox"] { width: auto; }
   border: 1px solid var(--color-border);
   border-radius: .5rem;
   background: var(--color-bg);
-  padding: .5rem .6rem;
+  padding: .45rem .6rem;
   margin: .5rem 0;
 }
 .filter-toolbar {
@@ -229,7 +229,7 @@ input[type="checkbox"] { width: auto; }
 .filter-group-left .filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: .75rem;
+  gap: .6rem;
   align-items: end;
   margin: 0;
 }
@@ -374,7 +374,7 @@ th, td { border: 1px solid var(--color-border); padding: .5rem; vertical-align: 
 tbody tr:nth-child(odd) { background: var(--color-bg-alt); }
 
 table.items { width:100%; border-collapse: collapse; margin-top:.35rem; }
-table.items th, table.items td { border-top:1px solid var(--color-border); padding:.45rem .55rem; vertical-align: top; }
+table.items th, table.items td { border-top:1px solid var(--color-border); padding:.3rem .5rem; vertical-align: top; }
 table.items thead th { position: sticky; top: 0; background: var(--color-bg); z-index: 1; }
 table.items tbody tr:hover { background: color-mix(in srgb, var(--color-bg-alt) 85%, #000 5%); }
 
@@ -450,7 +450,7 @@ td.col-priority { white-space: nowrap; }
 .prio-wrap { display: inline-flex; align-items: center; gap: 0; }
 .prio-badge {
   display: inline-block; 
-  padding: .1rem .5rem; 
+  padding: 0.1rem 0.35rem;
   border-radius: .35rem; 
   font-size: .85rem; 
   line-height: 1.6;
@@ -475,7 +475,7 @@ table.items.table--comfortable td.col-priority .prio-select { max-width: 6.6rem;
 .time-label-inline:hover { border-bottom-color: var(--color-border); }
 .time-edit-wrap .time-input { min-width: 12.5rem; }
 
-.col-occs .occ-row { display: flex; align-items: baseline; gap: .35rem; padding: .15rem 0; border-bottom: 1px dotted rgba(0,0,0,.15); }
+.col-occs .occ-row { display: flex; align-items: baseline; gap: .35rem; padding: .1rem 0; border-bottom: 1px dotted rgba(0,0,0,.15); }
 .col-occs .occ-row:last-child { border-bottom: none; }
 .col-occs time.occ-val { white-space: nowrap; }
 html[data-theme="dark"] .col-occs .occ-row { border-bottom-color: rgba(255,255,255,.15); }
@@ -545,7 +545,7 @@ html[data-theme="dark"] .col-occs .occ-row { border-bottom-color: rgba(255,255,2
 .calendar .cal-slot a:focus { background: color-mix(in srgb, var(--color-primary) 10%, transparent); }
 
 table.calendar { width: 100%; border-collapse: collapse; table-layout: fixed; }
-table.calendar th, table.calendar td { border: 1px solid var(--color-border); padding: .45rem .5rem; vertical-align: top; text-align: left; }
+table.calendar th, table.calendar td { border: 1px solid var(--color-border); padding: .35rem .45rem; vertical-align: top; text-align: left; }
 table.calendar thead th { font-weight: 600; text-align: center; color: var(--color-muted); font-size: .85em; text-transform: uppercase; letter-spacing: .02em; background: var(--color-bg-alt); }
 
 .cal-week-col { width: 50px; text-align: center; font-weight: 600; font-size: 0.75rem; color: var(--color-muted); }
@@ -624,13 +624,13 @@ html[data-theme="dark"] .cal-today { background: rgba(50, 184, 198, 0.12); }
 .card { border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-bg); margin: 0; }
 .card-title { font-weight: 600; color: var(--color-muted); padding: .35rem .6rem; }
 
-.card-body { padding: .6rem .75rem; }
+.card-body { padding: .4rem .6rem; }
 .card-body .item {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: baseline;
-  gap: .35rem .6rem;
-  padding: .15rem 0;
+  gap: .25rem .5rem;
+  padding: .1rem 0;
 }
 .card-body .item .when {
   color: var(--color-muted);
@@ -657,7 +657,7 @@ html[data-theme="dark"] .cal-today { background: rgba(50, 184, 198, 0.12); }
 .card-body .item .meta {
   grid-column: 1 / -1;
   font-size: .85em;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
 /* ====== Icon Theming (SVG) ====== */
