@@ -686,25 +686,98 @@ def index(
         now_cut = now_utc()
 
         def _is_future_or_active(it):
+            """
+            Gibt True zurück für Items, die NICHT als "vergangen" gelten.
+            
+            Spezialregeln für Tasks:
+            1. Nicht-wiederkehrende erledigte Tasks → ausblenden
+            2. Nicht-wiederkehrende nicht-erledigte Tasks → immer anzeigen
+            3. Wiederkehrende Tasks → immer anzeigen (nächstes Vorkommen)
+            
+            Für andere Typen (Reminder/Appointment/Event):
+            - Terminal-Status → ausblenden
+            - Wiederkehrend → Prüfe zukünftige Vorkommen
+            - Nicht-wiederkehrend → Prüfe Enddatum
+            """
             t = getattr(it, "type", None)
             st = getattr(it, "status", None)
-
-            # Tasks/Reminders: nur terminale Stati ausblenden
-            if t in ("task", "reminder"):
-                return not status_svc.is_terminal(st)
-
-            # Appointments/Events: nur ausblenden, wenn echter Endzeitpunkt vor jetzt
-            if t in ("appointment", "event"):
-                end_dt = getattr(it, "end_utc", None)
-                if end_dt is not None:
-                    return end_dt >= now_cut
-                # Kein Ende gesetzt -> nicht als vergangen werten
+            
+            # ===== SPEZIALBEHANDLUNG FÜR TASKS =====
+            if t == "task":
+                # Prüfe ob wiederkehrend
+                is_recurring = bool(
+                    getattr(it, "recurrence", None) or 
+                    getattr(it, "rrule_string", None)
+                )
+                
+                if is_recurring:
+                    # Regel 3: Wiederkehrende Tasks IMMER anzeigen (auch wenn erledigt)
+                    # Sie zeigen das nächste Fälligkeitsdatum
+                    return True
+                else:
+                    # Nicht-wiederkehrende Tasks
+                    is_done = status_svc.is_terminal(st)
+                    
+                    if is_done:
+                        # Regel 1: Erledigt → ausblenden (nur mit "Vergangene" sichtbar)
+                        return False
+                    else:
+                        # Regel 2: Nicht erledigt → IMMER anzeigen (auch überfällig)
+                        return True
+            
+            # ===== NORMALE BEHANDLUNG FÜR ANDERE TYPEN =====
+            
+            # 1. Terminal-Status: sofort ausblenden
+            if status_svc.is_terminal(st):
+                return False
+            
+            # 2. Prüfe ob wiederkehrend
+            is_recurring = bool(
+                getattr(it, "recurrence", None) or 
+                getattr(it, "rrule_string", None)
+            )
+            
+            if is_recurring:
+                # Für wiederkehrende Items: Prüfe ob mindestens ein zukünftiges Vorkommen existiert
+                try:
+                    future_occs = _expand_next(it, start_dt=now_cut, max_count=1)
+                    
+                    if future_occs and len(future_occs) > 0:
+                        first_occ = future_occs[0]
+                        occ_time = (
+                            getattr(first_occ, 'start_utc', None) or 
+                            getattr(first_occ, 'due_utc', None) or
+                            getattr(first_occ, 'reminder_utc', None)
+                        )
+                        if occ_time and occ_time >= now_cut:
+                            return True
+                    
+                    return False
+                    
+                except Exception as e:
+                    print(f"[include_past] Fehler bei Expansion von Item {getattr(it, 'id', '?')}: {e}")
+                    return True
+            
+            else:
+                # Für nicht-wiederkehrende Items: Prüfe Enddatum/Fälligkeitsdatum
+                
+                if t == "reminder":
+                    reminder_dt = getattr(it, "reminder_utc", None)
+                    if reminder_dt is not None:
+                        return reminder_dt >= now_cut
+                    return True
+                    
+                elif t in ("appointment", "event"):
+                    end_dt = getattr(it, "end_utc", None)
+                    if end_dt is not None:
+                        return end_dt >= now_cut
+                    return True
+                
+                # Andere/unbekannte Typen → als aktiv behandeln
                 return True
 
-            # Andere Typen bleiben sichtbar
-            return True
-
         items = [it for it in items if _is_future_or_active(it)]
+
 
     # ===== Sortierung (inkl. „Start/Fällig“ mit berechneten Anzeigezeiten) =====
     key = (sort or "").strip()
