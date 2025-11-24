@@ -141,16 +141,12 @@
         <div>
           <label for="start_local">Beginn</label>
           <input id="start_local" class="fp-datetime" type="text" name="start_local" value="{{ it.start_utc | format_local }}"
-                 placeholder="dd.mm.yyyy hh:mm"
-                 hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
-                 hx-include="[name='start_local']" hx-target="#occ" hx-swap="innerHTML">
+                 placeholder="dd.mm.yyyy hh:mm">
         </div>
         <div>
           <label for="end_local">Ende</label>
           <input id="end_local" class="fp-datetime" type="text" name="end_local" value="{{ it.end_utc | format_local }}"
-                 placeholder="dd.mm.yyyy hh:mm"
-                 hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
-                 hx-include="[name='end_local']" hx-target="#occ" hx-swap="innerHTML">
+                 placeholder="dd.mm.yyyy hh:mm">
         </div>
         <div class="full">
           <label class="inline" title="Ganztägiger Eintrag ohne Uhrzeiten">
@@ -329,9 +325,328 @@
       <div class="muted">Wochentage in Vorschau werden deutsch formatiert.</div>
     </div>
   </fieldset>
-</div>
+
+  <!-- Änderungsjournal -->
+  <fieldset class="card" id="change-journal-card">
+    <legend class="card-title" style="cursor: pointer; user-select: none;" id="journal-toggle">
+      <span id="journal-icon">▶</span> Änderungsjournal
+      <span class="muted" style="font-weight: normal; font-size: 0.9em;" id="journal-count">(0 Einträge)</span>
+    </legend>
+    <div class="card-body" id="journal-body" style="display: none;">
+      <div class="muted" style="margin-bottom: 1rem;">
+        Hier werden alle Änderungen dieser Sitzung protokolliert. Das Journal wird beim Schließen des Tabs gelöscht.
+      </div>
+      <ul id="journal-entries" class="list-plain" style="margin: 0; max-height: 400px; overflow-y: auto;">
+        <li class="muted" style="font-style: italic;">Noch keine Änderungen vorgenommen.</li>
+      </ul>
+      <div style="margin-top: 1rem;">
+        <button type="button" class="btn btn-xs" id="clear-journal">Journal leeren</button>
+      </div>
+    </div>
+  </fieldset>
+
+</div> <!-- Schließt edit-container -->
 
 <script>
+  // ===== 1. ÄNDERUNGSJOURNAL (ZUERST!) =====
+  (function(){
+    const journal = [];
+    const journalList = document.getElementById('journal-entries');
+    const journalCount = document.getElementById('journal-count');
+    const journalBody = document.getElementById('journal-body');
+    const journalIcon = document.getElementById('journal-icon');
+    const journalToggle = document.getElementById('journal-toggle');
+    const clearBtn = document.getElementById('clear-journal');
+
+    // Speichere aktuelle Werte aller Felder beim Laden
+    const initialValues = {};
+    
+    function captureInitialValues() {
+      // Text-Inputs und Textareas
+      document.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
+        const name = el.getAttribute('name');
+        if (name) {
+          if (el.type === 'checkbox') {
+            initialValues[name] = el.checked ? 'Ja' : 'Nein';
+          } else if (el.tagName === 'SELECT') {
+            const option = el.options[el.selectedIndex];
+            initialValues[name] = option ? option.textContent.trim() : el.value;
+          } else {
+            initialValues[name] = el.value;
+          }
+        }
+      });
+    }
+    
+    // Beim Laden Werte speichern
+    captureInitialValues();
+
+    // Mache initialValues global verfügbar für Start/End-Handler
+    window.journalInitialValues = initialValues;
+
+    // Deutsch formatierter Timestamp
+    function getTimestamp() {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      return `${day}.${month}.${year}, ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Feldname-Mapping (technisch → lesbar)
+    const fieldLabels = {
+      'name': 'Titel',
+      'description': 'Beschreibung',
+      'status_key': 'Status',
+      'priority': 'Priorität',
+      'is_private': 'Privatsphäre',
+      'is_all_day': 'Ganztägig',
+      'tags': 'Tags',
+      'due': 'Fälligkeit',
+      'start_local': 'Beginn',
+      'end_local': 'Ende',
+      'until_local': 'Erinnerung',
+      'rrule_line': 'Wiederholung',
+      'url': 'Link'
+    };
+
+    // Wert kürzen wenn zu lang
+    function truncateValue(val, maxLen = 50) {
+      if (!val) return '–';
+      const str = String(val).trim();
+      if (str.length > maxLen) {
+        return str.substring(0, maxLen) + '…';
+      }
+      return str;
+    }
+
+    // Aktuellen Wert eines Feldes ermitteln
+    function getCurrentValue(fieldName) {
+      const el = document.querySelector(`[name="${fieldName}"]`);
+      if (!el) return null;
+      
+      if (el.type === 'checkbox') {
+        return el.checked ? 'Ja' : 'Nein';
+      } else if (el.tagName === 'SELECT') {
+        const option = el.options[el.selectedIndex];
+        return option ? option.textContent.trim() : el.value;
+      } else {
+        return el.value;
+      }
+    }
+
+    // Eintrag zum Journal hinzufügen
+    function addEntry(field, action = 'geändert', oldVal = null, newVal = null) {
+      const timestamp = getTimestamp();
+      const label = fieldLabels[field] || field;
+      
+      // Falls alte/neue Werte nicht übergeben, versuche sie zu ermitteln
+      if (oldVal === null && field in initialValues) {
+        oldVal = initialValues[field];
+      }
+      if (newVal === null) {
+        newVal = getCurrentValue(field);
+      }
+
+      journal.push({ 
+        timestamp, 
+        field: label, 
+        action,
+        oldValue: truncateValue(oldVal),
+        newValue: truncateValue(newVal)
+      });
+
+      // Aktualisiere gespeicherten Wert
+      if (newVal !== null) {
+        initialValues[field] = newVal;
+      }
+
+      // Journal-Liste aktualisieren
+      renderJournal();
+    }
+
+    // Mache addEntry global verfügbar
+    window.addJournalEntry = addEntry;
+
+    // Journal neu rendern
+    function renderJournal() {
+      if (journal.length === 0) {
+        journalList.innerHTML = '<li class="muted" style="font-style: italic;">Noch keine Änderungen vorgenommen.</li>';
+        journalCount.textContent = '(0 Einträge)';
+        return;
+      }
+
+      // Neueste zuerst
+      const reversed = [...journal].reverse();
+      
+      journalList.innerHTML = reversed.map(entry => {
+        let changeText = '';
+        
+        if (entry.action === 'hinzugefügt') {
+          changeText = `<strong>${entry.field}</strong> ${entry.action}`;
+          if (entry.newValue && entry.newValue !== '–') {
+            changeText += `: ode style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1);); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+          }
+        } else if (entry.action === 'entfernt') {
+          changeText = `<strong>${entry.field}</strong> ${entry.action}`;
+          if (entry.oldValue && entry.oldValue !== '–') {
+            changeText += `: ode style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.oldValue}</code>`;
+          }
+        } else {
+          // geändert
+          changeText = `<strong>${entry.field}</strong> ${entry.action}`;
+          if (entry.oldValue !== entry.newValue && entry.oldValue !== '–' && entry.newValue !== '–') {
+            changeText += `: ode style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px; text-decoration: line-through;">${entry.oldValue}</code> → ode style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1); paddingng: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+          } else if (entry.newValue !== '–') {
+            changeText += `: ode style="background: rgba(var(--color-success-rgb, 33, 128, 141),), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+          }
+        }
+
+        return `
+          <li style="padding: 0.75rem; border-bottom: 1px solid var(--color-border, #e0e0e0); display: flex; flex-direction: column; gap: 0.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <span style="flex: 1;">${changeText}</span>
+              <span class="muted" style="font-size: 0.85em; white-space: nowrap; margin-left: 1rem;">${entry.timestamp}</span>
+            </div>
+          </li>
+        `;
+      }).join('');
+
+      journalCount.textContent = `(${journal.length} ${journal.length === 1 ? 'Eintrag' : 'Einträge'})`;
+    }
+
+    // Toggle Journal auf/zu
+    journalToggle.addEventListener('click', () => {
+      const isOpen = journalBody.style.display !== 'none';
+      journalBody.style.display = isOpen ? 'none' : 'block';
+      journalIcon.textContent = isOpen ? '▶' : '▼';
+    });
+
+    // Journal leeren
+    clearBtn.addEventListener('click', () => {
+      if (confirm('Möchten Sie das Journal wirklich leeren?')) {
+        journal.length = 0;
+        renderJournal();
+      }
+    });
+
+    // HTMX-Requests überwachen
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      const target = e.target;
+      const xhr = e.detail.xhr;
+
+      // Nur erfolgreiche Requests (200, 204)
+      if (xhr.status !== 200 && xhr.status !== 204) return;
+
+      // Feldname ermitteln
+      let fieldName = null;
+      let action = 'geändert';
+      let oldVal = null;
+      let newVal = null;
+
+      // 1. Input/Textarea/Select (aber NICHT #occ-n)
+      if (target.matches && (
+        target.matches('input[name]') || 
+        target.matches('textarea[name]') || 
+        target.matches('select[name]')
+      )) {
+        // Ignoriere das Occurrences-Select
+        if (target.id === 'occ-n') return;
+        
+        fieldName = target.getAttribute('name');
+        oldVal = initialValues[fieldName] || null;
+        newVal = getCurrentValue(fieldName);
+      }
+
+      // 2. Form mit URL-Pattern (nur für Tags, Links werden per Custom Event behandelt)
+      if (!fieldName && target.matches && target.matches('form')) {
+        const url = target.getAttribute('hx-post') || '';
+        
+        if (url.includes('/tags/add')) {
+          fieldName = 'tags';
+          action = 'hinzugefügt';
+        } else if (url.includes('/tags/remove')) {
+          fieldName = 'tags';
+          action = 'entfernt';
+        }
+      }
+
+      // 3. Button mit hx-post (z.B. Kopieren)
+      if (!fieldName && target.matches && target.matches('button[hx-post]')) {
+        const url = target.getAttribute('hx-post') || '';
+        if (url.includes('/copy')) {
+          fieldName = 'Item';
+          action = 'kopiert';
+        }
+      }
+
+      // Eintrag hinzufügen
+      if (fieldName) {
+        addEntry(fieldName, action, oldVal, newVal);
+        
+        // Journal automatisch öffnen beim ersten Eintrag
+        if (journal.length === 1 && journalBody.style.display === 'none') {
+          journalBody.style.display = 'block';
+          journalIcon.textContent = '▼';
+        }
+      }
+    });
+
+    // Höre auf links-updated Event
+    document.addEventListener('links-updated', (e) => {
+      const url = e.detail?.url || 'Link';
+      const action = e.detail?.action || 'geändert';
+      
+      addEntry('url', action, null, url);
+      
+      // Journal automatisch öffnen beim ersten Eintrag
+      if (journal.length === 1 && journalBody.style.display === 'none') {
+        journalBody.style.display = 'block';
+        journalIcon.textContent = '▼';
+      }
+    });
+
+    // Initial rendern
+    renderJournal();
+  })();
+
+  // ===== 2. FLATPICKR INITIALISIERUNG =====
+  (function(){
+    function initFlatpickr() {
+      if (!window.flatpickr) {
+        console.warn('Flatpickr nicht geladen!');
+        return;
+      }
+
+      // Alle Datums-/Zeit-Inputs initialisieren
+      const dateInputs = document.querySelectorAll('.fp-datetime');
+      dateInputs.forEach(input => {
+        // Zerstöre alte Instanz falls vorhanden
+        if (input._flatpickr) {
+          input._flatpickr.destroy();
+        }
+        
+        flatpickr(input, {
+          enableTime: true,
+          time_24hr: true,
+          dateFormat: "d.m.Y H:i",
+          locale: "de",
+          allowInput: true
+        });
+      });
+    }
+
+    // Initial
+    initFlatpickr();
+
+    // Nach jedem HTMX-Swap
+    document.body.addEventListener('htmx:afterSwap', initFlatpickr);
+  })();
+
+  // ===== 3. LINKS UPDATED EVENT =====
   (function(){
     function onLinksUpdated(){
       const alerts = document.getElementById('alerts');
@@ -342,6 +657,7 @@
     document.addEventListener('links-updated', onLinksUpdated);
   })();
 
+  // ===== 4. HTMX ERROR HANDLING =====
   document.addEventListener('htmx:afterRequest', (e) => {
     const t = e.target;
     if (e.detail.xhr.status === 422) {
@@ -368,6 +684,7 @@
     }
   });
 
+  // ===== 5. RECURRENCE EDITOR =====
   (function(){
     const type = "{{ it.type }}";
     if (!(type === "appointment" || type === "event" || type === "reminder")) return;
@@ -460,11 +777,11 @@
         if (untilEl && parts.UNTIL.endsWith('Z')) {
           try {
             const utcStr = parts.UNTIL.replace('Z', '');
-            const y = parseInt(utcStr.substr(0, 4), 10);
-            const m = parseInt(utcStr.substr(4, 2), 10);
-            const d = parseInt(utcStr.substr(6, 2), 10);
-            const H = parseInt(utcStr.substr(9, 2), 10);
-            const M = parseInt(utcStr.substr(11, 2), 10);
+            const y = parseInt(utcStr.substring(0, 4), 10);
+            const m = parseInt(utcStr.substring(4, 6), 10);
+            const d = parseInt(utcStr.substring(6, 8), 10);
+            const H = parseInt(utcStr.substring(9, 11), 10);
+            const M = parseInt(utcStr.substring(11, 13), 10);
             const utcDate = new Date(Date.UTC(y, m-1, d, H, M));
             const dd = String(utcDate.getDate()).padStart(2, '0');
             const MM = String(utcDate.getMonth() + 1).padStart(2, '0');
@@ -547,37 +864,30 @@
 
     function postRecurrence(rrule){
       const formValues = {
-        name: document.getElementById('name')?.value || "",
-        description: document.getElementById('description')?.value || "",
-        status_key: document.getElementById('status_key')?.value || "",
-        is_private: (document.getElementById('is_private')?.checked ? "1" : "0"),
-        tags: document.getElementById('tags')?.value || "",
-        dtstart_local: "",
-        rrule_line: rrule || "",
-        exdates_local: ""
+        rrule_line: rrule || ""
       };
-      htmx.ajax('POST', '/items/{{ it.id }}/edit', { values: formValues, target: '#occ', swap: 'innerHTML' })
-        .then(()=> {
-          const alerts = document.getElementById('alerts');
-          alerts.innerHTML = `<div class="alert alert-success">${rrule ? 'Wiederholung gespeichert.' : 'Wiederholung entfernt.'}</div>`;
-          setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
-        });
+      
+      htmx.ajax('POST', '/items/{{ it.id }}/edit', { 
+        values: formValues, 
+        target: '#occ', 
+        swap: 'innerHTML' 
+      }).then(()=> {
+        const alerts = document.getElementById('alerts');
+        alerts.innerHTML = `<div class="alert alert-success">${rrule ? 'Wiederholung gespeichert.' : 'Wiederholung entfernt.'}</div>`;
+        setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
+      }).catch(err => {
+        console.error('Fehler beim Speichern der Wiederholung:', err);
+        const alerts = document.getElementById('alerts');
+        alerts.innerHTML = '<div class="alert alert-error">Fehler beim Speichern der Wiederholung.</div>';
+        setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
+      });
     }
 
     document.getElementById('save_recurrence')?.addEventListener('click', () => postRecurrence(buildRRule()));
     document.getElementById('clear_recurrence')?.addEventListener('click', () => postRecurrence(""));
   })();
 
-  (function(){
-    const btn = document.getElementById('export-selected');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      const url = new URL('/export.ics', window.location.origin);
-      url.searchParams.append('ids', '{{ it.id }}');
-      window.open(url.toString(), '_blank');
-    });
-  })();
-
+  // ===== 6. START/END MIRROR LOGIC =====
   (function(){
     const type = "{{ it.type }}";
     if (!(type === "appointment" || type === "event")) return;
@@ -590,6 +900,45 @@
     let lastStart = startInput.value || "";
     let lastEnd   = endInput.value || "";
     let userTouchedEnd = false;
+    let changeTimeout = null;
+
+    // Beide Parameter zusammen senden + Journal-Eintrag
+    function sendStartEnd() {
+      clearTimeout(changeTimeout);
+      changeTimeout = setTimeout(() => {
+        const startVal = startInput.value.trim();
+        const endVal = endInput.value.trim();
+        
+        if (!startVal || !endVal) return;
+
+        // Speichere alte Werte für Journal
+        const oldStart = window.journalInitialValues['start_local'] || null;
+        const oldEnd = window.journalInitialValues['end_local'] || null;
+
+        htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
+          target: '#occ',
+          swap: 'innerHTML',
+          values: {
+            start_local: startVal,
+            end_local: endVal
+          }
+        }).then(() => {
+          // Journal-Einträge hinzufügen
+          if (window.addJournalEntry && oldStart !== startVal) {
+            window.addJournalEntry('start_local', 'geändert', oldStart, startVal);
+          }
+          if (window.addJournalEntry && oldEnd !== endVal) {
+            window.addJournalEntry('end_local', 'geändert', oldEnd, endVal);
+          }
+          
+          // Aktualisiere gespeicherte Werte
+          window.journalInitialValues['start_local'] = startVal;
+          window.journalInitialValues['end_local'] = endVal;
+        }).catch(err => {
+          console.error('Fehler beim Speichern von Start/End:', err);
+        });
+      }, 500); // Debounce 500ms
+    }
 
     function mirrorIfAppropriate() {
       const curStart = startInput.value.trim();
@@ -598,16 +947,9 @@
       
       if (shouldMirror && curStart.length) {
         endInput.value = curStart;
-        try {
-          if (window.htmx) {
-            htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
-              target: '#occ', swap: 'innerHTML', values: { end_local: curStart }
-            });
-          }
-        } catch (e) {}
+        lastEnd = curStart;
       }
       lastStart = curStart;
-      lastEnd   = endInput.value.trim();
     }
 
     function parseLocal(str) {
@@ -629,17 +971,6 @@
       return { startStr: fmtLocal(startDay), endStr: fmtLocal(endDay) };
     }
 
-    function postIsAllDay(val) {
-      try {
-        if (window.htmx) {
-          htmx.ajax('POST', '/items/{{ it.id }}/edit', {
-            swap: 'none',
-            values: { is_all_day: val ? "1" : "0" }
-          });
-        }
-      } catch (e) {}
-    }
-
     function applyAllDayOn() {
       const curStart = startInput.value.trim();
       if (!curStart) return;
@@ -656,35 +987,30 @@
         endInput.value = bounds.endStr;
       }
 
-      postIsAllDay(true);
-      try {
-        if (window.htmx) {
-          htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
-            target: '#occ',
-            swap: 'innerHTML',
-            values: { start_local: startInput.value, end_local: endInput.value }
-          });
-        }
-      } catch (e) {}
-
       lastStart = startInput.value.trim();
       lastEnd   = endInput.value.trim();
       userTouchedEnd = false;
+
+      // Sende beide Werte
+      sendStartEnd();
     }
 
     function applyAllDayOff() {
-      postIsAllDay(false);
+      htmx.ajax('POST', '/items/{{ it.id }}/edit', {
+        swap: 'none',
+        values: { is_all_day: "0" }
+      });
     }
 
-    startInput.addEventListener('change', mirrorIfAppropriate);
-    startInput.addEventListener('input', mirrorIfAppropriate);
-
-    endInput.addEventListener('input', () => { 
-      userTouchedEnd = true; 
+    startInput.addEventListener('change', () => {
+      mirrorIfAppropriate();
+      sendStartEnd();
     });
+
     endInput.addEventListener('change', () => { 
       lastEnd = endInput.value.trim(); 
-      userTouchedEnd = true; 
+      userTouchedEnd = true;
+      sendStartEnd();
     });
 
     alldayCb.addEventListener('change', () => {
@@ -693,31 +1019,20 @@
     });
   })();
 
+  // ===== 7. COPY BUTTON =====
   (function(){
-    const btn = document.getElementById('copy-item');
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      try {
-        const resp = await fetch('/items/{{ it.id }}/copy', { method: 'POST' });
-        if (resp.redirected) {
-          window.location.href = resp.url;
-        } else if (resp.status === 200 || resp.status === 204) {
-          const loc = resp.headers.get('Location');
-          if (loc) { window.location.href = loc; return; }
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      const t = e.target;
+      if (!t.matches || !t.matches('button[hx-post*="/copy"]')) return;
+      
+      if (e.detail.xhr.status === 200 || e.detail.xhr.status === 204) {
+        const loc = e.detail.xhr.getResponseHeader('Location');
+        if (loc) {
+          window.location.href = loc;
+        } else {
           const alerts = document.getElementById('alerts');
           if (alerts) alerts.innerHTML = '<div class="alert alert-success">Kopie erstellt.</div>';
-        } else {
-          const txt = await resp.text();
-          const alerts = document.getElementById('alerts') || document.body;
-          const wrap = document.createElement('div');
-          wrap.innerHTML = txt || '<div class="alert alert-danger">Kopieren fehlgeschlagen.</div>';
-          alerts.prepend(wrap);
         }
-      } catch (e) {
-        const alerts = document.getElementById('alerts') || document.body;
-        const wrap = document.createElement('div');
-        wrap.innerHTML = '<div class="alert alert-danger">Netzwerkfehler beim Kopieren.</div>';
-        alerts.prepend(wrap);
       }
     });
   })();

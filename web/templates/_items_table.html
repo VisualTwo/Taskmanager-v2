@@ -28,15 +28,40 @@
       
       <span class="name-wrap">
         <img src="{{ icon }}" alt="" aria-label="{{ type_label }}" title="{{ type_label }}" class="type-icon-inline">
-        <span class="name-label" data-for="{{ it.id }}">{{ it.name }}</span>
-        <input id="name-{{ it.id }}" class="name-input hidden" type="text" name="name" value="{{ it.name }}"
+        
+        <!-- ✅ NEU: Titel ist Link zur Edit-Ansicht (Hauptaktion) -->
+        <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" 
+           class="name-link" 
+           target="_blank" 
+           rel="noopener noreferrer"
+           title="Details bearbeiten">{{ it.name }}</a>
+        
+        <!-- ✅ NEU: Stift-Icon direkt daneben für Inline-Edit (Spezialfall) -->
+        <button type="button" 
+                class="inline-edit-btn" 
+                data-for="{{ it.id }}"
+                title="Nur Titel bearbeiten"
+                aria-label="Titel inline bearbeiten">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+        
+        <!-- Inline-Edit Input (versteckt) -->
+        <input id="name-{{ it.id }}" 
+               class="name-input hidden" 
+               type="text" 
+               name="name" 
+               value="{{ it.name }}"
                data-current="{{ it.name }}"
                hx-post="/items/{{ it.id }}/rename"
                hx-trigger="change"
                hx-params="*"
                hx-include="#name-{{ it.id }}"
                hx-swap="none"
-               onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }">
+               onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }"
+               aria-label="Titel bearbeiten">
       </span>
     </td>
 
@@ -235,10 +260,6 @@
 
     <!-- Aktionen -->
     <td class="col-action">
-      <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" 
-         class="icon-btn" title="Details" aria-label="Details bearbeiten" target="_blank" rel="noopener noreferrer">
-        <img src="/static/icons/details.svg" alt="" width="16" height="16">
-      </a>
       <a href="/items/{{ it.id }}/zoom" class="icon-btn" title="Zoom" aria-label="In neuem Fenster öffnen" target="_blank" rel="noopener">
         <img src="/static/icons/zoom.svg" alt="" width="16" height="16">
       </a>
@@ -457,6 +478,87 @@
         prioBadge.click();
         return;
       }
+    });
+
+    // ✅ NEU: Inline-Edit Button Handler
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.inline-edit-btn');
+      if (!btn) return;
+      
+      e.preventDefault();
+      e.stopPropagation(); // Verhindert dass Link ausgelöst wird
+      
+      const id = btn.getAttribute('data-for');
+      const wrap = btn.closest('.name-wrap');
+      const link = wrap.querySelector('.name-link');
+      const input = document.getElementById(`name-${id}`);
+      
+      if (!input) return;
+      
+      // Verstecke Link und Button
+      link.style.display = 'none';
+      btn.style.display = 'none';
+      
+      // Zeige Input
+      input.classList.remove('hidden');
+      setTimeout(() => {
+        input.focus();
+        input.select(); // Selektiert den Text für schnelles Überschreiben
+      }, 0);
+    });
+
+    // ✅ NEU: Name Input Blur Handler (aktualisiert)
+    document.addEventListener('blur', async (e) => {
+      const input = e.target;
+      if (!(input.classList && input.classList.contains('name-input'))) return;
+      
+      const val = input.value.trim();
+      const wrap = input.closest('.name-wrap');
+      const link = wrap?.querySelector('.name-link');
+      const btn = wrap?.querySelector('.inline-edit-btn');
+      
+      if (!val) {
+        input.value = input.getAttribute('data-current') || '';
+        input.classList.add('hidden');
+        if (link) link.style.display = '';
+        if (btn) btn.style.display = '';
+        return;
+      }
+      
+      try {
+        await htmx.ajax('POST', input.getAttribute('hx-post'), { 
+          values: { name: val }, 
+          swap: 'none' 
+        });
+        
+        input.setAttribute('data-current', val);
+        if (link) link.textContent = val;
+      } catch (err) {
+        console.error('Fehler beim Umbenennen:', err);
+      } finally {
+        input.classList.add('hidden');
+        if (link) link.style.display = '';
+        if (btn) btn.style.display = '';
+      }
+    }, true);
+
+    // ✅ NEU: ESC-Taste schließt Inline-Edit ohne Speichern
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      
+      const input = e.target;
+      if (!(input.classList && input.classList.contains('name-input'))) return;
+      
+      // Setze auf vorherigen Wert zurück
+      input.value = input.getAttribute('data-current') || '';
+      
+      const wrap = input.closest('.name-wrap');
+      const link = wrap?.querySelector('.name-link');
+      const btn = wrap?.querySelector('.inline-edit-btn');
+      
+      input.classList.add('hidden');
+      if (link) link.style.display = '';
+      if (btn) btn.style.display = '';
     });
 
     // Inline-Löschen
@@ -706,40 +808,7 @@
       list.appendChild(row);
     }
 
-    // Name und Zeiten: Label->Input
-    function show(el){ el && el.classList.remove('hidden'); }
-    function hide(el){ el && el.classList.add('hidden'); }
-
-    document.addEventListener('click', (e) => {
-      const lab = e.target.closest('.name-label');
-      if (!lab) return;
-      const id = lab.getAttribute('data-for');
-      const input = document.getElementById(`name-${id}`);
-      if (!input) return;
-      hide(lab);
-      show(input);
-      setTimeout(()=>input.focus(), 0);
-    });
-
-    document.addEventListener('blur', async (e) => {
-      const el = e.target;
-      if (!(el.classList && el.classList.contains('name-input'))) return;
-      const val = el.value.trim();
-      const wrap = el.closest('.name-wrap');
-      const lab = wrap?.querySelector('.name-label');
-      if (!val) {
-        el.value = el.getAttribute('data-current') || '';
-        hide(el); show(lab); return;
-      }
-      try {
-        await htmx.ajax('POST', el.getAttribute('hx-post'), { values: { name: val }, swap: 'none' });
-        el.setAttribute('data-current', val);
-        if (lab) lab.textContent = val;
-      } finally {
-        hide(el); show(lab);
-      }
-    }, true);
-
+    // Zeit-Inputs: Label->Input
     document.addEventListener('click', (e) => {
       const lab = e.target.closest('.time-label-inline');
       if (!lab) return;
@@ -753,48 +822,103 @@
       lab.classList.add('hidden');
       input.classList.remove('hidden');
 
-      if (!input._fp && window.flatpickr) {
+      // Flatpickr initialisieren (einmalig pro Input)
+      if (window.flatpickr) {
+        // Alte Instanz zerstören falls vorhanden
+        if (input._fp) {
+          input._fp.destroy();
+        }
+        
+        const endpoint = input.getAttribute('data-endpoint');
+        const paramName = input.getAttribute('data-param-name') || input.getAttribute('name');
+        const targetSel = input.getAttribute('data-target');
+
         input._fp = flatpickr(input, {
           enableTime: true,
           time_24hr: true,
           dateFormat: "d.m.Y H:i",
-          locale: "de"
+          locale: "de",
+          clickOpens: true,
+          
+          // Beim Schließen: Wert speichern
+          onClose: async function(selectedDates, dateStr, instance) {
+            const val = dateStr.trim();
+            if (!val) {
+              input.classList.add('hidden');
+              lab.classList.remove('hidden');
+              return;
+            }
+
+            const isAppointmentOrEvent = wrap.closest('.time-inline-pair') !== null;
+            
+            try {
+              if (isAppointmentOrEvent) {
+                // Finde beide Inputs (start und end)
+                const pair = wrap.closest('.time-inline-pair');
+                const startInput = pair.querySelector('input[data-param-name="start_local"]');
+                const endInput = pair.querySelector('input[data-param-name="end_local"]');
+                
+                const values = {
+                  start_local: startInput?.value || '',
+                  end_local: endInput?.value || ''
+                };
+                
+                await htmx.ajax('POST', endpoint, {
+                  values: values,
+                  target: targetSel || null,
+                  swap: targetSel ? 'innerHTML' : 'none'
+                });
+              } else {
+                // Tasks/Reminders: Einzelner Wert
+                const values = {};
+                values[paramName] = val;
+                
+                await htmx.ajax('POST', endpoint, {
+                  values: values,
+                  target: targetSel || null,
+                  swap: targetSel ? 'innerHTML' : 'none'
+                });
+              }
+
+              lab.textContent = val;
+              input.value = val;
+            } catch (err) {
+              console.error('Fehler beim Speichern:', err);
+            } finally {
+              input.classList.add('hidden');
+              lab.classList.remove('hidden');
+            }
+          }
         });
       }
 
-      setTimeout(() => input.focus(), 0);
+      // Flatpickr öffnen
+      if (input._fp) {
+        setTimeout(() => input._fp.open(), 10);
+      } else {
+        // Fallback: normaler Focus (falls Flatpickr nicht geladen)
+        setTimeout(() => input.focus(), 0);
+      }
     });
 
-    document.addEventListener('blur', async (e) => {
-      const el = e.target;
-      if (!(el.classList && el.classList.contains('time-input'))) return;
-
-      const wrap = el.closest('.time-edit-wrap');
-      if (!wrap) return;
-
-      const lab = wrap.querySelector('.time-label-inline');
-      const endpoint = el.getAttribute('data-endpoint');
-      const paramName = el.getAttribute('data-param-name') || el.getAttribute('name');
-      const targetSel = el.getAttribute('data-target');
-      const val = (el.value || '').trim();
-
-      if (!val) {
-        el.classList.add('hidden');
-        if (lab) lab.classList.remove('hidden');
-        return;
+    // ESC schließt Zeit-Input
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      
+      const inp = e.target;
+      if (!(inp.classList && inp.classList.contains('time-input'))) return;
+      
+      // Flatpickr schließen
+      if (inp._fp) {
+        inp._fp.close();
       }
-
-      try {
-        const values = {}; values[paramName] = val;
-        await htmx.ajax('POST', endpoint, { values, target: targetSel || null, swap: targetSel ? 'innerHTML' : 'none' });
-
-        if (lab) lab.textContent = val;
-        el.value = val;
-      } finally {
-        el.classList.add('hidden');
-        if (lab) lab.classList.remove('hidden');
-      }
-    }, true);
+      
+      const wrap = inp.closest('.time-edit-wrap');
+      const lab = wrap?.querySelector('.time-label-inline');
+      
+      inp.classList.add('hidden');
+      if (lab) lab.classList.remove('hidden');
+    });
 
     document.addEventListener('htmx:afterOnLoad', (e) => {
       const root = e.detail.elt;
@@ -806,16 +930,6 @@
         const tgt = document.querySelector(sel);
         if (tgt) tgt.innerHTML = tpl.innerHTML;
       });
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      const inp = e.target;
-      if (!(inp.classList && (inp.classList.contains('name-input') || inp.classList.contains('time-input')))) return;
-      const td = inp.closest('td');
-      hide(inp);
-      const lab = td && td.querySelector('.name-label, .time-label-inline');
-      show(lab);
     });
   })();
 </script>
