@@ -488,20 +488,20 @@
         if (entry.action === 'hinzugefügt') {
           changeText = `<strong>${entry.field}</strong> ${entry.action}`;
           if (entry.newValue && entry.newValue !== '–') {
-            changeText += `: ode style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1);); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+            changeText += `: <code style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1);); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
           }
         } else if (entry.action === 'entfernt') {
           changeText = `<strong>${entry.field}</strong> ${entry.action}`;
           if (entry.oldValue && entry.oldValue !== '–') {
-            changeText += `: ode style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.oldValue}</code>`;
+            changeText += `: <code style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.oldValue}</code>`;
           }
         } else {
           // geändert
           changeText = `<strong>${entry.field}</strong> ${entry.action}`;
           if (entry.oldValue !== entry.newValue && entry.oldValue !== '–' && entry.newValue !== '–') {
-            changeText += `: ode style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px; text-decoration: line-through;">${entry.oldValue}</code> → ode style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1); paddingng: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+            changeText += `: <code style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px; text-decoration: line-through;">${entry.oldValue}</code> → <code style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1); paddingng: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
           } else if (entry.newValue !== '–') {
-            changeText += `: ode style="background: rgba(var(--color-success-rgb, 33, 128, 141),), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+            changeText += `: <code style="background: rgba(var(--color-success-rgb, 33, 128, 141),), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
           }
         }
 

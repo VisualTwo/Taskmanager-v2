@@ -709,7 +709,7 @@ table.items th.col-action,
 table.items td.col-action {
   width: 6rem;
   text-align: center;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 th.col-status, td.col-status { width: 10rem; }
@@ -725,6 +725,7 @@ table.items th.col-action {
   right: 0;
   background: var(--color-bg);
   z-index: 2;
+  vertical-align: top;
 }
 
 th {
@@ -947,8 +948,9 @@ table.items.table--comfortable td.col-priority .prio-select {
   display: flex;
   align-items: baseline;
   gap: 0.35rem;
-  padding: 0.1rem 0;
+  padding: 0.05rem 0;
   border-bottom: 1px dotted rgba(0, 0, 0, 0.15);
+  line-height: 1.3;
 }
 
 .col-occs .occ-row:last-child {
@@ -1300,36 +1302,38 @@ html[data-theme="dark"] .cal-today {
 
 .col-action {
   text-align: center;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 .delete-wrap {
   position: relative;
   display: inline-block;
+  vertical-align: top;
 }
 
 .delete-confirm {
   display: inline-flex;
-  gap: var(--space-4);
+  gap: var(--space-2);
   align-items: center;
-  margin-left: var(--space-4);
+  margin-left: var(--space-2);
 }
 
 .confirm-text {
   font-weight: 600;
+  font-size: var(--font-size-xs);
 }
 
 /* ====== Tags ====== */
 .col-tags .tags {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 0.25rem;
 }
 
 .tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: 0.25rem;
   align-items: center;
 }
 
@@ -1341,6 +1345,7 @@ html[data-theme="dark"] .cal-today {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
+  line-height: 1.3;
 }
 
 .tag-text {
@@ -1363,6 +1368,7 @@ html[data-theme="dark"] .cal-today {
   align-items: center;
   gap: var(--space-4);
   position: relative;
+  margin-top: 0.25rem;
 }
 
 .tag-input {
@@ -1403,7 +1409,7 @@ html[data-theme="dark"] .cal-today {
 .links {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 0.25rem;
 }
 
 .links-list {
@@ -1416,7 +1422,7 @@ html[data-theme="dark"] .cal-today {
 .link-row {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2);
 }
 
 .link-anchor {
@@ -1424,11 +1430,12 @@ html[data-theme="dark"] .cal-today {
   align-items: center;
   gap: var(--space-4);
   max-width: 22rem;
-  padding: var(--space-1) 0.25rem;
+  padding: 0.15rem var(--space-2);
   border-radius: var(--radius);
   text-decoration: none;
   color: inherit;
   background: transparent;
+  line-height: 1.3;
 }
 
 .link-anchor:hover {
@@ -1468,7 +1475,7 @@ html[data-theme="dark"] .cal-today {
   color: var(--color-danger);
   font-weight: bold;
   line-height: 1;
-  padding: 0 0.3rem;
+  padding: 0.15rem;
   border-radius: var(--radius);
   cursor: pointer;
 }
@@ -1866,6 +1873,7 @@ html[data-theme="dark"] .cards-grid img[src$=".svg"] {
     flex-direction: column;
     align-items: stretch;
     gap: 0.5rem;
+    margin-top: 0.25rem;
   }
 
   .link-input {
