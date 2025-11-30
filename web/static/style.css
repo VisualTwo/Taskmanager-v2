@@ -2251,3 +2251,203 @@ html[data-theme="dark"] .cards-grid img[src$=".svg"] {
     font-size: 20px;
   }
 }
+
+/* ====== MOBILE REVISION (Final & Robust) ====== */
+@media (max-width: 768px) {
+
+  /* --- 1. Global & Layout --- */
+  body {
+    padding: 0.5rem;
+    overflow-x: hidden;
+  }
+
+  /* --- 2. Filter-Bereich (Oben) --- */
+  .filter-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* Linke Gruppe */
+  .filter-group-left, .filter-row {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  /* Rechte Gruppe (Sortierung) -> SICHTBAR */
+  .filter-group-right {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr; /* Name & Richtung nebeneinander */
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  /* Zeit-Auswahl-Buttons (Heute/Woche...) -> WEG */
+  .row-occurrence {
+    display: none !important;
+  }
+
+  /* Tag-Input schmaler */
+  .filterbar input[type="text"] {
+    width: 100%;
+    max-width: 200px; 
+  }
+
+  /* Labels sichtbar machen (Override sr-only) */
+  .filterbar label, 
+  .table-toolbar label {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    clip: auto !important;
+    overflow: visible !important;
+    margin-bottom: 0.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  /* Checkboxen (Private / Vergangene) nebeneinander */
+  .filter-row:has(input[type="checkbox"]) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .field:has(input[type="checkbox"]) {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+  }
+
+  .field:has(input[type="checkbox"]) label {
+    margin-bottom: 0;
+    margin-left: 0.4rem;
+    order: 2;
+    font-weight: normal;
+    color: var(--color-fg);
+  }
+
+  .field:has(input[type="checkbox"]) input {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    order: 1;
+  }
+
+  /* Sortierung: Labels rechtsbündig/sichtbar */
+  .table-toolbar {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+
+
+  /* --- 3. TABELLE (Index-basierte Spaltenkontrolle) --- */
+  
+  /* Basis-Reset: Es ist eine Tabelle! */
+  table.items {
+    display: table !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+  table.items thead, table.items tbody {
+    display: table-row-group !important;
+  }
+  table.items tr {
+    display: table-row !important;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+  
+  /* WICHTIG: Spalten via INDEX ausblenden (Header UND Body) */
+  /* Spalten-Index (1-basiert):
+     1: Checkbox (WEG)
+     2: Name (DA)
+     3: Status (WEG)
+     4: Prio (DA)
+     5: Zeiten (WEG)
+     6: Vorkommen (DA)
+     7: Links (WEG)
+     8: Tags (WEG)
+     9: Aktion (DA)
+  */
+  
+  /* Die VERSTECKTEN Spalten */
+  table.items tr > *:nth-child(1), /* Checkbox */
+  table.items tr > *:nth-child(3), /* Status */
+  table.items tr > *:nth-child(5), /* Zeiten */
+  table.items tr > *:nth-child(7), /* Links */
+  table.items tr > *:nth-child(8)  /* Tags */
+  {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  /* Die SICHTBAREN Spalten stylen */
+  
+  /* Spalte 2: NAME */
+  table.items tr > *:nth-child(2) {
+    display: table-cell !important;
+    width: auto !important; /* Nimmt den Restplatz */
+    padding: 0.5rem !important;
+    font-weight: 500;
+    font-size: 0.95rem;
+    white-space: normal;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Link im Namen styling */
+  table.items tr > *:nth-child(2) a {
+    color: var(--color-fg);
+    text-decoration: none;
+    display: block;
+  }
+  table.items tr > *:nth-child(2) .inline-edit-btn { display: none; }
+
+  /* Spalte 4: PRIORITÄT */
+  table.items tr > *:nth-child(4) {
+    display: table-cell !important;
+    width: 40px !important;
+    white-space: nowrap;
+    padding: 0.25rem !important;
+    text-align: center;
+  }
+  /* Prio-Select ausblenden, nur Badge zeigen */
+  table.items tr > *:nth-child(4) select { display: none !important; }
+  table.items tr > *:nth-child(4) .prio-badge { display: inline-block !important; font-size: 0.7rem; padding: 0.1rem 0.3rem; }
+
+  /* Spalte 6: VORKOMMEN */
+  table.items tr > *:nth-child(6) {
+    display: table-cell !important;
+    width: 80px !important;
+    max-width: 80px;
+    padding: 0.5rem !important;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Spalte 9: AKTION */
+  table.items tr > *:nth-child(9) {
+    display: table-cell !important;
+    width: 40px !important;
+    padding: 0.5rem 0 !important;
+    text-align: right;
+    white-space: nowrap;
+  }
+  table.items tr > *:nth-child(9) .icon-btn {
+    padding: 0.3rem;
+  }
+
+}

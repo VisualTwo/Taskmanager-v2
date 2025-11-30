@@ -23,16 +23,16 @@
       <option value="event">Ereignis</option>
     </select>
 
-    <button type="submit" class="preview-btn">Anlegen</button>
+    <button type="submit" class="btn btn-primary">Anlegen</button>
   </form>
 </div>
 
 <div class="table-toolbar" style="display:flex; justify-content:flex-end; gap:.5rem; margin:.5rem 0;">
-  <a class="preview-btn"
+  <a class="btn btn-xs"
      href="/dashboard/export.xlsx?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ cal_weeks }}&show_private={{ show_private }}&q={{ q|urlencode }}&types={{ types|urlencode }}&status={{ status|urlencode }}&tags={{ tags|urlencode }}"
      download="kalender_kw{{ calendar_week.weeks[0].week_number if calendar_week and calendar_week.weeks else '' }}.xlsx"
      title="Kalender in Excel exportieren">
-    Kalender exportieren (Excel)
+    📥 Kalender exportieren (Excel)
   </a>
 </div>
 
@@ -40,18 +40,23 @@
 
   <!-- Zeile 1: Überfällig + Heute + Ohne Termin -->
   <div class="card">
-    <div class="card-title">Überfällig</div>
+    <div class="card-title">
+      <span>⚠️ Überfällig</span>
+      {% if overdue %}
+      <span class="badge-count badge-count--danger">{{ overdue|length }}</span>
+      {% endif %}
+    </div>
     <div class="card-body">
       {% set L = overdue if overdue is defined else [] %}
       {% if L %}
-        <ul class="list-plain">
+        <ul class="list-plain dashboard-list">
           {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} overdue">
-              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
+            <li class="dashboard-item {{ get_priority_class(it) }} overdue">
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="item-type-icon">
+              <a class="item-link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
-              <span class="muted">
+              <span class="item-time muted">
                 {% if it.type in ('task','reminder') %}
                   {{ format_dashboard_time(it.due_utc or it.reminder_utc, "next_events", berlin_tz) }}
                 {% endif %}
@@ -60,25 +65,30 @@
           {% endfor %}
         </ul>
       {% else %}
-        <div class="muted">Nichts überfällig.</div>
+        <div class="card-empty">✓ Nichts überfällig</div>
       {% endif %}
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Heute</div>
+    <div class="card-title">
+      <span>📅 Heute</span>
+      {% if upcoming_today %}
+      <span class="badge-count badge-count--warning">{{ upcoming_today|length }}</span>
+      {% endif %}
+    </div>
     <div class="card-body">
       {% set L = upcoming_today if upcoming_today is defined else [] %}
       {% if L %}
-        <ul class="list-plain">
+        <ul class="list-plain dashboard-list">
           {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} {% if is_overdue_item(it, today) %}overdue{% endif %}">
-              {% if is_birthday(it) %}<img src="static/icons/birthday.svg" alt="🎂" class="birthday-icon">{% endif %}
-              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
+            <li class="dashboard-item {{ get_priority_class(it) }} {% if is_overdue_item(it, today) %}overdue{% endif %}">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="item-type-icon birthday-icon">{% endif %}
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="item-type-icon">
+              <a class="item-link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
-              <span class="muted">
+              <span class="item-time muted">
                 {% if it.type in ('appointment','event') %}
                   {{ format_dashboard_time(it.start_utc, "today", berlin_tz) }}
                 {% else %}
@@ -95,21 +105,26 @@
           {% endfor %}
         </ul>
       {% else %}
-        <div class="muted">Keine heutigen Einträge.</div>
+        <div class="card-empty">📭 Keine heutigen Einträge</div>
       {% endif %}
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Ohne Termin</div>
+    <div class="card-title">
+      <span>📝 Ohne Termin</span>
+      {% if without_date %}
+      <span class="badge-count">{{ without_date|length }}</span>
+      {% endif %}
+    </div>
     <div class="card-body">
       {% set L = without_date if without_date is defined else [] %}
       {% if L %}
-        <ul class="list-plain">
+        <ul class="list-plain dashboard-list">
           {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
+            <li class="dashboard-item {{ get_priority_class(it) }}">
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="item-type-icon">
+              <a class="item-link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
               {% if not is_birthday(it) %}
@@ -119,34 +134,39 @@
               </span>
               {% endif %}
               {% if it.last_modified_utc %}
-                <span class="muted">{{ format_dashboard_time(it.last_modified_utc, "no_date", berlin_tz) }}</span>
+                <span class="item-time muted">{{ format_dashboard_time(it.last_modified_utc, "no_date", berlin_tz) }}</span>
               {% endif %}
             </li>
           {% endfor %}
         </ul>
       {% else %}
-        <div class="muted">Alle Einträge sind terminiert.</div>
+        <div class="card-empty">✓ Alle Einträge terminiert</div>
       {% endif %}
     </div>
   </div>
 
   <!-- Zeile 2: Nächste 7 Tage + Nächste Ereignisse + Serien aktiv -->
   <div class="card">
-    <div class="card-title">Nächste 7 Tage</div>
+    <div class="card-title">
+      <span>📆 Nächste 7 Tage</span>
+      {% if upcoming_next7 %}
+      <span class="badge-count badge-count--info">{{ upcoming_next7|length }}</span>
+      {% endif %}
+    </div>
     <div class="card-body">
       {% set L = upcoming_next7 if upcoming_next7 is defined else [] %}
       {% if L %}
-        <ul class="list-plain">
+        <ul class="list-plain dashboard-list">
           {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
+            <li class="dashboard-item {{ get_priority_class(it) }}">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" width="20" height="20" title="Birthday" class="item-type-icon birthday-icon">
               {% else %}
-              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="icon-btn">
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="item-type-icon">
               {% endif %}
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
+              <a class="item-link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
-              <span class="muted">
+              <span class="item-time muted">
                 {% if it.type in ('appointment','event') %}
                   {{ format_dashboard_time(it.start_utc, "next_7d", berlin_tz) }}
                 {% else %}
@@ -163,37 +183,39 @@
           {% endfor %}
         </ul>
       {% else %}
-        <div class="muted">Keine Einträge in den nächsten 7 Tagen.</div>
+        <div class="card-empty">📭 Keine Einträge in den nächsten 7 Tagen</div>
       {% endif %}
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Nächste Ereignisse</div>
+    <div class="card-title">
+      <span>🎉 Nächste Ereignisse</span>
+      {% if events_next2m %}
+      <span class="badge-count">{{ events_next2m[:20]|length }}</span>
+      {% endif %}
+    </div>
     <div class="card-body">
       {% set L = (events_next2m if events_next2m is defined else [])[:20] %}
       {% if L %}
-        <ul class="list-plain">
+        <ul class="list-plain dashboard-list">
           {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" width="20" height="20" title="Birthday" class="icon-btn">
+            <li class="dashboard-item {{ get_priority_class(it) }}">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" width="20" height="20" title="Birthday" class="item-type-icon birthday-icon">
               {% else %}
-              <img src="/static/icons/event.svg" alt="" width="20" height="20" title="Event" class="icon-btn">
+              <img src="/static/icons/event.svg" alt="" width="20" height="20" title="Event" class="item-type-icon">
               {% endif %}
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
+              <a class="item-link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
-              <span class="muted">
+              <span class="item-time muted">
                   {% if it.start_utc %}
-                    {# Prüfe ob ganztägig: Versuche is_all_day zu lesen, fallback false #}
                     {% set is_allday_flag = it.is_all_day | default(false) %}
                     {% set is_allday = is_allday_flag or is_birthday(it) %}
                     
                     {% if is_allday %}
-                      {# Ganztägig: Nur Datum + Hinweis #}
                       {{ it.start_utc.astimezone(berlin_tz).strftime('%d.%m.') }} (Ganztägig)
                     {% else %}
-                      {# Mit Uhrzeit: Normal formatieren #}
                       {{ format_dashboard_time(it.start_utc, "next_events", berlin_tz) }}
                     {% endif %}
                   {% endif %}
@@ -208,24 +230,30 @@
           {% endfor %}
         </ul>
       {% else %}
-        <div class="muted">Keine Ereignisse in den nächsten 2 Monaten.</div>
+        <div class="card-empty">📭 Keine Ereignisse in den nächsten 2 Monaten</div>
       {% endif %}
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Serien aktiv</div>
+    <div class="card-title">
+      <span>🔁 Serien aktiv</span>
+      {% if recurring_items %}
+      <span class="badge-count">{{ recurring_items|length }}</span>
+      {% endif %}
+    </div>
     <div class="card-body">
       {% set L = recurring_items if recurring_items is defined else [] %}
       {% if L %}
-        <ul class="list-plain">
+        <ul class="list-plain dashboard-list">
           {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">{% endif %}
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
+            <li class="dashboard-item {{ get_priority_class(it) }}">
+              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="item-type-icon birthday-icon">{% endif %}
+              <img src="/static/icons/{{ it.type }}.svg" alt="" width="20" height="20" title="{{ it.type }}" class="item-type-icon">
+              <a class="item-link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" target="_blank" rel="noopener noreferrer">
                 {{ it.name }}
               </a>
-              <span class="muted">
+              <span class="item-time muted">
                 {% if it.type in ('appointment','event') and it.start_utc %}
                   {{ format_dashboard_time(it.start_utc, "series", berlin_tz) }}
                 {% endif %}
@@ -240,7 +268,7 @@
           {% endfor %}
         </ul>
       {% else %}
-        <div class="muted">Keine aktiven Serien.</div>
+        <div class="card-empty">⏸️ Keine aktiven Serien</div>
       {% endif %}
     </div>
   </div>
@@ -276,7 +304,7 @@
         {% for k in [1,2,3,4] %}
         <a
           href="?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ k }}&show_private={{ request.query_params.get('show_private','0') }}"
-          class="cal-nav-btn {% if cal_weeks|int == k %}cal-nav-btn--active{% endif %}"
+          class="cal-nav-btn {% if cal_weeks|int == k %}cal-nav-btn--primary{% endif %}"
           title="{{ k }} Kalenderwochen anzeigen"
         >{{ k }}</a>
         {% endfor %}
@@ -352,9 +380,34 @@
       </tbody>
     </table>
     {% else %}
-    <div class="muted" style="padding: 1rem;">Kalender nicht verfügbar.</div>
+    <div class="card-empty" style="padding: 1rem;">📅 Kalender nicht verfügbar</div>
     {% endif %}
   </div>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Scroll-Position speichern vor Navigation
+  const calNavLinks = document.querySelectorAll('.cal-nav a');
+  
+  calNavLinks.forEach(link => {
+    link.addEventListener('click', function(e) {
+      // Speichere aktuelle Scroll-Position
+      sessionStorage.setItem('dashboardScrollY', window.scrollY.toString());
+    });
+  });
+  
+  // Scroll-Position nach Page-Load wiederherstellen
+  const savedScrollY = sessionStorage.getItem('dashboardScrollY');
+  if (savedScrollY !== null) {
+    // Warte kurz, damit die Seite vollständig geladen ist
+    requestAnimationFrame(() => {
+      window.scrollTo(0, parseInt(savedScrollY));
+      // Cleanup: Scroll-Position nach Wiederherstellung löschen
+      sessionStorage.removeItem('dashboardScrollY');
+    });
+  }
+});
+</script>
 
 {% endblock %}
