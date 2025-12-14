@@ -1096,6 +1096,18 @@ html[data-theme="dark"] .col-occs .occ-row {
   text-decoration: none;
 }
 
+.cards-grid ul,
+.card ul {
+  list-style: none;      /* Entfernt den Punkt */
+  padding-left: 0;       /* Entfernt die Einrückung */
+  margin: 0;
+}
+
+.cards-grid li,
+.card li {
+  margin-left: 0;
+}
+
 .cards-grid a:hover,
 .cards-grid a:focus {
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
@@ -2347,13 +2359,12 @@ html[data-theme="dark"] .cards-grid img[src$=".svg"] {
   }
 
 
-  /* --- 3. TABELLE (Index-basierte Spaltenkontrolle) --- */
+    /* --- 3. TABELLE (Finales Layout) --- */
   
-  /* Basis-Reset: Es ist eine Tabelle! */
   table.items {
     display: table !important;
     width: 100% !important;
-    table-layout: fixed !important;
+    table-layout: auto !important; /* Automatische Breite je nach Inhalt */
   }
   table.items thead, table.items tbody {
     display: table-row-group !important;
@@ -2363,21 +2374,26 @@ html[data-theme="dark"] .cards-grid img[src$=".svg"] {
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
   }
-  
-  /* WICHTIG: Spalten via INDEX ausblenden (Header UND Body) */
-  /* Spalten-Index (1-basiert):
-     1: Checkbox (WEG)
-     2: Name (DA)
-     3: Status (WEG)
-     4: Prio (DA)
-     5: Zeiten (WEG)
-     6: Vorkommen (DA)
-     7: Links (WEG)
-     8: Tags (WEG)
-     9: Aktion (DA)
-  */
-  
-  /* Die VERSTECKTEN Spalten */
+
+  /* --- HEADER FORMATIERUNG (Einheitlich) --- */
+  /* Zielt auf alle SICHTBAREN Spaltenköpfe (2, 4, 6, 9) */
+  table.items thead tr > *:nth-child(2),
+  table.items thead tr > *:nth-child(4),
+  table.items thead tr > *:nth-child(6),
+  table.items thead tr > *:nth-child(9) {
+    font-size: 0.75rem !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em !important;
+    color: var(--color-muted) !important;
+    padding: 0.5rem 0.25rem !important;
+    border-bottom: 1px solid var(--color-border) !important;
+    vertical-align: bottom !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+  }
+
+  /* --- VERSTECKTE SPALTEN (1, 3, 5, 7, 8) --- */
   table.items tr > *:nth-child(1), /* Checkbox */
   table.items tr > *:nth-child(3), /* Status */
   table.items tr > *:nth-child(5), /* Zeiten */
@@ -2390,64 +2406,91 @@ html[data-theme="dark"] .cards-grid img[src$=".svg"] {
     border: none !important;
   }
 
-  /* Die SICHTBAREN Spalten stylen */
+  /* --- SICHTBARE SPALTEN (Body & Header Ausrichtung) --- */
   
-  /* Spalte 2: NAME */
+  /* Spalte 2: NAME (Links) */
   table.items tr > *:nth-child(2) {
     display: table-cell !important;
-    width: auto !important; /* Nimmt den Restplatz */
+    width: auto !important; 
     padding: 0.5rem !important;
+    text-align: left !important;
     font-weight: 500;
     font-size: 0.95rem;
     white-space: normal;
-    text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* Link im Namen styling */
+  /* Link Styling */
   table.items tr > *:nth-child(2) a {
     color: var(--color-fg);
     text-decoration: none;
     display: block;
   }
+  /* Inline-Edit Buttons ausblenden */
   table.items tr > *:nth-child(2) .inline-edit-btn { display: none; }
 
-  /* Spalte 4: PRIORITÄT */
+
+  /* Spalte 4: PRIORITÄT (Zentriert) */
   table.items tr > *:nth-child(4) {
     display: table-cell !important;
-    width: 40px !important;
+    width: 1% !important; /* Minimalbreite */
     white-space: nowrap;
-    padding: 0.25rem !important;
-    text-align: center;
+    padding: 0.5rem 0.25rem !important;
+    text-align: center !important;
+    vertical-align: middle !important;
   }
-  /* Prio-Select ausblenden, nur Badge zeigen */
   table.items tr > *:nth-child(4) select { display: none !important; }
-  table.items tr > *:nth-child(4) .prio-badge { display: inline-block !important; font-size: 0.7rem; padding: 0.1rem 0.3rem; }
+  table.items tr > *:nth-child(4) .prio-badge { 
+    display: inline-block !important; 
+    font-size: 0.7rem; 
+    padding: 0.1rem 0.3rem; 
+  }
 
-  /* Spalte 6: VORKOMMEN */
+
+  /* Spalte 6: VORKOMMEN (Rechts) */
   table.items tr > *:nth-child(6) {
     display: table-cell !important;
-    width: 80px !important;
+    width: 20% !important;
     max-width: 80px;
     padding: 0.5rem !important;
+    text-align: right !important;
+    vertical-align: middle !important;
     font-size: 0.8rem;
     color: var(--color-muted);
-    text-align: right;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  /* Spalte 9: AKTION */
+
+  /* Spalte 9: AKTION (Rechts & Nebeneinander) */
   table.items tr > *:nth-child(9) {
     display: table-cell !important;
-    width: 40px !important;
+    width: 1% !important; /* Minimalbreite, wächst mit Inhalt */
+    white-space: nowrap !important; /* Verhindert Umbruch */
     padding: 0.5rem 0 !important;
-    text-align: right;
-    white-space: nowrap;
+    text-align: right !important;
+    vertical-align: middle !important;
   }
+  
+  /* Container für Löschen-Button */
+  table.items tr > *:nth-child(9) .delete-wrap {
+    display: inline-block !important;
+    vertical-align: middle !important;
+  }
+  
+  /* Icon Buttons */
   table.items tr > *:nth-child(9) .icon-btn {
-    padding: 0.3rem;
+    display: inline-flex !important; /* Wichtig für SVG Ausrichtung */
+    vertical-align: middle !important;
+    padding: 0.3rem !important;
+    margin-left: 0.25rem; /* Kleiner Abstand zwischen den Icons */
   }
+  
+  /* Header Ausrichtung explizit setzen */
+  table.items thead tr > *:nth-child(2) { text-align: left !important; }
+  table.items thead tr > *:nth-child(4) { text-align: center !important; }
+  table.items thead tr > *:nth-child(6) { text-align: right !important; }
+  table.items thead tr > *:nth-child(9) { text-align: right !important; }
 
 }
