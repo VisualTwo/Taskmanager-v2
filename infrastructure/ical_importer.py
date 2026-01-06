@@ -223,6 +223,7 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         last_mod = _read_last_modified(block) or _read_dtstamp(block)
         priority_ics = _read_priority(block)
         x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip().upper()
+        x_app_type = (_read_prop(block, "X-APP-TYPE") or "").strip().lower()
         status_key = x_app_status if x_app_status else _status_for_task(ical_status)
 
         if not uid:
@@ -233,8 +234,8 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         links = _extract_links(desc)
         is_private = 0  # CLASS wird im Export nicht gesetzt; 0 als Default
 
-        # Reminder-Heuristik: Präfix, Tag "reminder" oder Kategorienhinweis
-        is_reminder = name.lower().startswith("[reminder]")
+        # Reminder-Heuristik: Präfix, X-APP-TYPE oder Tag "reminder" oder Kategorienhinweis
+        is_reminder = name.lower().startswith("[reminder]") or x_app_type == "reminder"
 
         base_kwargs = dict(
             id=uid,

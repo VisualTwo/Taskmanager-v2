@@ -45,6 +45,7 @@ def _status_task_to_ics(key: Optional[str]) -> Optional[str]:
         return None
     # VTODO STATUS: NEEDS-ACTION | IN-PROCESS | COMPLETED | CANCELLED
     mapping = {
+        "TASK_SOMEDAY": "NEEDS-ACTION",
         "TASK_OPEN": "NEEDS-ACTION",
         "TASK_IN_PROGRESS": "IN-PROCESS",
         "TASK_BLOCKED": "NEEDS-ACTION",
@@ -151,6 +152,9 @@ def task_to_ics(t: Task, *, alarm_min: int = 10) -> str:
     m = _fmt_z(getattr(t, "last_modified_utc", None))
     if c: lines.append(f"CREATED:{c}")
     if m: lines.append(f"LAST-MODIFIED:{m}")
+    if getattr(t, "status", None):
+        lines.append(f"X-APP-STATUS:{getattr(t, 'status')}")
+    lines.append("X-APP-TYPE:task")
     lines.append("END:VTODO")
     return "\n".join(lines)
 
@@ -177,6 +181,9 @@ def reminder_to_ics(r: Reminder, *, alarm_min: int = 10) -> str:
     m = _fmt_z(getattr(r, "last_modified_utc", None))
     if c: lines.append(f"CREATED:{c}")
     if m: lines.append(f"LAST-MODIFIED:{m}")
+    if getattr(r, "status", None):
+        lines.append(f"X-APP-STATUS:{getattr(r, 'status')}")
+    lines.append("X-APP-TYPE:reminder")
     lines.append("END:VTODO")
     return "\n".join(lines)
 

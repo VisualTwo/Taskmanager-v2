@@ -46,6 +46,7 @@ Thumbs.db
 
 # Distribution / packaging
 .Python
+backup/
 build/
 develop-eggs/
 dist/

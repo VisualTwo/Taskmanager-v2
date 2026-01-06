@@ -562,17 +562,21 @@ def index(
     q: Optional[str] = None,
     types: Optional[str] = None,
     status_keys: Optional[str] = None,   # CSV optional
-    status: Optional[str] = None,        # EINZELNER Status aus dem Dropdown (UI sendet name="status")
+    status: Optional[str] = None,        # EINZELNER Status aus dem Dropdown
     show_private: int = 0,
     include_past: int = 0,
     tags: Optional[str] = None,
     sort: Optional[str] = None,
     dir: str = "asc",
+    range: Optional[str] = None,         # range Parameter explizit aufgenommen
     repo: DbRepository = Depends(get_repo),
 ):
+    # 1. Daten laden
     items = repo.list_all()
+    now_dt = now_utc()
 
-    # ===== Status-Autokorrektur + Auto-Finalisierung (defensiv, typstrikt) =====
+    # ====== PIPELINE SCHRITT 1: Status-Mutation & Autokorrektur ======
+    # (Dieser Block muss ganz am Anfang stehen, damit Filter auf korrekten Daten arbeiten)
     changed = False
     updated = []
 
@@ -585,10 +589,8 @@ def index(
         allowed_keys = [sd.key for sd in opts] if opts else []
 
         cur = getattr(it, "status", "") or ""
-        # Typstrikte Normalisierung: gibt originalen String zurück, wenn nicht passend
         norm = status_svc.normalize_input(cur, it_type) if cur else ""
 
-        # Typstrikter Check: nur akzeptieren, wenn Präfix passt
         def _prefix_ok(t, key):
             return (t == "task" and key.startswith("TASK_")) or \
                 (t == "appointment" and key.startswith("APPOINTMENT_")) or \
@@ -598,37 +600,32 @@ def index(
         if _prefix_ok(it_type, cur) and (cur in allowed_keys):
             norm = cur
         else:
-            # Nur wenn norm typgültig ist, übernehmen
             if norm in allowed_keys:
-                pass  # norm bleibt
+                pass
             else:
-                # Nur bei leerem/oder fremdem Status minimal auf Typ-Default setzen
                 if allowed_keys:
-                    # Erster nicht-terminaler Eintrag als Default, sonst erster Eintrag
                     default_key = next((sd.key for sd in opts if not sd.is_terminal), allowed_keys[0])
                     norm = default_key
                 else:
-                    norm = cur  # keine Optionen bekannt -> nichts tun
+                    norm = cur # keine Optionen bekannt -> nichts tun
 
-        # Auto-Finalisierung nur für appointment/event mit vorhandenem Ende
+        # Auto-Finalisierung
         if it_type in ("appointment", "event"):
             payload = {}
             end_val = getattr(it, "end_utc", None) or getattr(it, "end_dt", None) or getattr(it, "end_time", None) or getattr(it, "until", None)
-            if end_val:
-                payload["end"] = end_val
             start_val = getattr(it, "start_utc", None)
-            if start_val:
-                payload["start"] = start_val
+            
+            if end_val: payload["end"] = end_val
+            if start_val: payload["start"] = start_val
 
             if payload:
-                suggested = status_svc.auto_adjust_appointment_status(payload, now=now_utc())
-
-                # Geburtstags-Guard für Events
+                suggested = status_svc.auto_adjust_appointment_status(payload, now=now_dt)
+                
+                # Geburtstags-Guard
                 if it_type == "event" and suggested in {"EVENT_DONE", "EVENT_CANCELLED"}:
                     if is_birthday(it):
-                        suggested = None  # Finalisierung unterdrücken
+                        suggested = None
 
-                # Vorschlag nur übernehmen, wenn für DIESEN Typ erlaubt
                 if suggested and suggested in allowed_keys:
                     norm = suggested
 
@@ -645,16 +642,15 @@ def index(
             idmap[it2.id] = it2
         items = list(idmap.values())
 
-
-
-    # ===== Filter vorbereiten =====
+    # ====== PIPELINE SCHRITT 2: Statische Filterung (DB-Attribute) ======
+    
+    # Parameter vorbereiten
     types_list = types.split(",") if types else None
     status_list = [s.strip() for s in status_keys.split(",")] if status_keys else None
     sel_status = (status or "").strip()
     if sel_status:
         status_list = [sel_status]
 
-    # Tags: CSV und Mehrfach-Parameter zusammenführen
     tags_multi = [t.strip() for t in request.query_params.getlist("tags") if t.strip()]
     csv_raw = request.query_params.get("tags")
     tags_csv = [t.strip() for t in csv_raw.split(",")] if csv_raw else []
@@ -663,380 +659,323 @@ def index(
     prio = request.query_params.get("prio")
     min_prio = int(prio) if prio not in (None, "") else None
 
-    # ===== Basisfilter anwenden =====
-    # Im Index-Handler, nach dem Holen aller Items
+    # Statisch filtern (alles was nicht Zeit/Logik betrifft)
+    # Nutzt den importierten filter_items service
     try:
         items = filter_items(
             items=items,
-            text=q,  # Freitextsuche
-            types=types_list if types else None,
-            status_keys=status_list if status_list else None,
+            text=q,
+            types=types_list,
+            status_keys=status_list,
             include_private=bool(int(show_private or 0)), 
             tags=tags_list, 
             min_priority=min_prio,
         )
     except Exception as e:
-        # Fallback: nur minimal nach q filtern
-        q_norm = (q or "").strip().lower()
-        if q_norm:
+        print(f"Filter error fallback: {e}")
+        if q:
+            q_norm = q.strip().lower()
             items = [it for it in items if q_norm in (getattr(it, "name", "") or "").lower()]
 
-    # ===== include_past anwenden =====
-    if not bool(int(include_past or 0)):
-        now_cut = now_utc()
 
-        def _is_future_or_active(it):
-            """
-            Gibt True zurück für Items, die NICHT als "vergangen" gelten.
-            
-            Spezialregeln für Tasks:
-            1. Nicht-wiederkehrende erledigte Tasks → ausblenden
-            2. Nicht-wiederkehrende nicht-erledigte Tasks → immer anzeigen
-            3. Wiederkehrende Tasks → immer anzeigen (nächstes Vorkommen)
-            
-            Für andere Typen (Reminder/Appointment/Event):
-            - Terminal-Status → ausblenden
-            - Wiederkehrend → Prüfe zukünftige Vorkommen
-            - Nicht-wiederkehrend → Prüfe Enddatum
-            """
-            t = getattr(it, "type", None)
-            st = getattr(it, "status", None)
-            
-            # ===== SPEZIALBEHANDLUNG FÜR TASKS =====
-            if t == "task":
-                # Prüfe ob wiederkehrend
-                is_recurring = bool(
-                    getattr(it, "recurrence", None) or 
-                    getattr(it, "rrule_string", None)
-                )
-                
-                if is_recurring:
-                    # Regel 3: Wiederkehrende Tasks IMMER anzeigen (auch wenn erledigt)
-                    # Sie zeigen das nächste Fälligkeitsdatum
-                    return True
-                else:
-                    # Nicht-wiederkehrende Tasks
-                    is_done = status_svc.is_terminal(st)
-                    
-                    if is_done:
-                        # Regel 1: Erledigt → ausblenden (nur mit "Vergangene" sichtbar)
-                        return False
-                    else:
-                        # Regel 2: Nicht erledigt → IMMER anzeigen (auch überfällig)
-                        return True
-            
-            # ===== NORMALE BEHANDLUNG FÜR ANDERE TYPEN =====
-            
-            # 1. Terminal-Status: sofort ausblenden
-            if status_svc.is_terminal(st):
-                return False
-            
-            # 2. Prüfe ob wiederkehrend
-            is_recurring = bool(
-                getattr(it, "recurrence", None) or 
-                getattr(it, "rrule_string", None)
-            )
-            
-            if is_recurring:
-                # Für wiederkehrende Items: Prüfe ob mindestens ein zukünftiges Vorkommen existiert
-                try:
-                    future_occs = _expand_next(it, start_dt=now_cut, max_count=1)
-                    
-                    if future_occs and len(future_occs) > 0:
-                        first_occ = future_occs[0]
-                        occ_time = (
-                            getattr(first_occ, 'start_utc', None) or 
-                            getattr(first_occ, 'due_utc', None) or
-                            getattr(first_occ, 'reminder_utc', None)
-                        )
-                        if occ_time and occ_time >= now_cut:
-                            return True
-                    
-                    return False
-                    
-                except Exception as e:
-                    print(f"[include_past] Fehler bei Expansion von Item {getattr(it, 'id', '?')}: {e}")
-                    return True
-            
-            else:
-                # Für nicht-wiederkehrende Items: Prüfe Enddatum/Fälligkeitsdatum
-                
-                if t == "reminder":
-                    reminder_dt = getattr(it, "reminder_utc", None)
-                    if reminder_dt is not None:
-                        return reminder_dt >= now_cut
-                    return True
-                    
-                elif t in ("appointment", "event"):
-                    end_dt = getattr(it, "end_utc", None)
-                    if end_dt is not None:
-                        return end_dt >= now_cut
-                    return True
-                
-                # Andere/unbekannte Typen → als aktiv behandeln
-                return True
-
-        items = [it for it in items if _is_future_or_active(it)]
-
-
-    # ===== Sortierung (inkl. „Start/Fällig“ mit berechneten Anzeigezeiten) =====
-    key = (sort or "").strip()
-    reverse = (dir or "asc").lower() == "desc"
-    key_norm = key.lower()
-
-    def _utc_aware(dt):
-        if not dt:
-            return None
-        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-
-    # 1) rows bauen    
-    rows = []
-    now_dt = datetime.now(timezone.utc)
-    for it in items:
-        if getattr(it, "type", "") in ("appointment","event"):
-            ds, de = next_or_display_occurrence(it, now=now_dt)
-            disp_start = _aware(ds)
-            disp_end   = _aware(de)
-        else:
-            disp_start = _aware(getattr(it, "due_utc", None) or getattr(it, "start_utc", None))
-            disp_end   = _aware(getattr(it, "end_utc", None) or getattr(it, "reminder_utc", None))
-
-        rows.append((it, [], disp_start, disp_end))
+    # ====== PIPELINE SCHRITT 3: Zeitfenster & Occurrences Berechnen ======
     
-    # 2) rows sortieren nach key_norm
-    if key:
-        key_norm = key.lower()
+    rng = (range or request.query_params.get("range") or "").strip().lower()
+    local_tz = ZoneInfo("Europe/Berlin") # TODO: User preference
+    
+    # 3a. Zeitfenster definieren
+    win_start, win_end = None, None
+    
+    if rng == "heute":
+        now_local = datetime.now(local_tz)
+        day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        win_start = day_start.astimezone(timezone.utc)
+        win_end = (day_start + timedelta(days=1)).astimezone(timezone.utc)
         
-        try:
-            if key_norm == "type":
-                rows.sort(key=lambda r: (getattr(r[0], "type", "") or "").lower(), reverse=reverse)
-            elif key_norm == "name":
-                rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower(), reverse=reverse)
-            elif key_norm == "status":
-                rows.sort(key=lambda r: (getattr(r[0], "status", "") or "").lower(), reverse=reverse)
-            elif key_norm == "priority":
-                def rk(r):
-                    it, occs, ds, de = r
-                    t = getattr(it, "type", "")
-                    if t in ("appointment","event"):
-                        dt = ds or de
-                    else:
-                        dt = _utc_aware(
-                            getattr(it, "due_utc", None)
-                            or getattr(it, "reminder_utc", None)
-                            or getattr(it, "start_utc", None)
-                        )
-                    has_date = 0 if dt is not None else 1
-                    dt_key = dt or datetime.max.replace(tzinfo=timezone.utc)
-                    p = getattr(it, "priority", None)
-                    prio_key = 999 if p is None else p  # None sortiert ans Ende
-                    return (prio_key, has_date, dt_key, (getattr(it, "name","") or "").lower())
+    elif rng == "woche":
+        now_local = datetime.now(local_tz)
+        today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        days_until_sunday = (7 - today_start.isoweekday()) % 7
+        if days_until_sunday == 0: days_until_sunday = 0 # Heute ist Sonntag
+        win_start = today_start.astimezone(timezone.utc)
+        win_end = (today_start + timedelta(days=days_until_sunday + 1)).astimezone(timezone.utc)
+        
+    elif rng == "naechstewoche":
+        now_local = datetime.now(local_tz)
+        today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        days_until_monday = (8 - today_start.isoweekday()) % 7
+        if days_until_monday == 0: days_until_monday = 7
+        next_monday = today_start + timedelta(days=days_until_monday)
+        win_start = next_monday.astimezone(timezone.utc)
+        win_end = (next_monday + timedelta(days=7)).astimezone(timezone.utc)
 
-                rows.sort(key=rk, reverse=reverse)
-            elif key_norm == "tags":
-                rows.sort(key=lambda r: len(getattr(r[0], "tags", []) or []), reverse=reverse)
-            elif key_norm == "links":
-                rows.sort(key=lambda r: len(getattr(r[0], "links", []) or []), reverse=reverse)
-            elif key_norm == "occ":
-                # Optional: occ-count in rows 3. Element steckt nicht; ggf. separat berechnen
-                rows.sort(key=lambda r: len(r[1] or []), reverse=reverse)
-            elif key_norm.startswith("start") or key_norm in ("due","fällig","faellig","start/fällig","start_faellig"):
-                def rk_start(r):
-                    it, occs, ds, de = r
-                    t = getattr(it, "type", "")
-                    if t in ("appointment","event"):
-                        dt = ds or de
-                    elif t in ("task","reminder"):
-                        dt = _utc_aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None))
-                    else:
-                        dt = None
-                    has_date = 0 if dt is not None else 1
-                    dt_key = dt or datetime.max.replace(tzinfo=timezone.utc)
-                    # Sekundär: Name für stabile Sortierung
-                    name_key = (getattr(it, "name", "") or "").lower()
-                    return (has_date, dt_key, name_key)
-
-                try:
-                    rows.sort(key=rk_start, reverse=reverse)
-
-                except Exception as ex:
-                    # absolut sicherer Fallback-Schlüssel:
-                    rows.sort(key=lambda r: datetime.max.replace(tzinfo=timezone.utc), reverse=reverse)
-            elif key_norm in ("changed"):
-                def rk_changed(r):
-                    it, occs, ds, de = r
-                    ch = getattr(it, "last_modified_utc", None)
-                    ch = _utc_aware(ch)
-                    # Items ohne Timestamp ans Ende schieben, sekundär Name für Stabilität
-                    has_changed = 0 if ch is not None else 1
-                    ch_key = ch or datetime.min.replace(tzinfo=timezone.utc)
-                    name_key = (getattr(it, "name", "") or "").lower()
-                    return (has_changed, ch_key, name_key)
-                rows.sort(key=rk_changed, reverse=reverse)
-
-            else:
-                print("Unknown sort key:", key_norm)
-                rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower(), reverse=reverse)
-                bad = [i for i,r in enumerate(rows) if not (isinstance(r, tuple) and len(r)==4)]
-                print("rows bad tuples idx:", bad[:10])
-                bad2 = [i for i,r in enumerate(rows) if not hasattr(r[0], "id")]
-                print("rows bad head idx:", bad2[:10], "types:", [type(rows[i][0]).__name__ for i in bad2[:5]])
-                for i in bad2[:5]:
-                    print("ROW BAD SAMPLE", i, rows[i])
-
-        except Exception as ex:
-            print("Row sort fallback in branch", key_norm, "due to:", repr(ex))
-            safe = []
-            for r in rows:
-                it0 = r[0] if isinstance(r, tuple) and len(r) >= 1 else None
-                nm = (getattr(it0, "name", "") or "") if it0 else ""
-                safe.append((nm.lower(), r))
-            safe.sort(key=lambda x: x[0], reverse=reverse)
-            rows = [r for _, r in safe]
-
-    now_dt = now_utc()
-
-    # ===== Vorkommen-Vorschau: Zeitfenster oder "nächste 3" =====
-    rng = (request.query_params.get("range") or "").strip().lower()
-    now_dt = now_utc()
-    local_tz = ZoneInfo("Europe/Berlin")  # TODO: dynamisch je Benutzer
-
-    # Hilfsfunktionen für Überlappung/Fensterprüfung
-    def overlaps_window(occ_start, occ_end, win_start, win_end):
-        """Prüft ob Occurrence-Zeitraum das Fenster überlappt"""
-        if occ_start is None or occ_end is None:
-            return False
-        return (occ_start < win_end) and (occ_end > win_start)
-
-    def in_window(dt, win_start, win_end):
-        """Prüft ob Zeitpunkt im Fenster liegt"""
-        return (dt is not None) and (win_start <= dt < win_end)
-
-    def filter_occurrences(occs, win_start, win_end):
+    # Hilfsfunktionen für Fenster-Logik (lokal definiert für Zugriff auf Scope)
+    def filter_occurrences(occs, ws, we):
         """Filtert Occurrences nach Fenster-Überlappung"""
         filtered = []
         for occ in occs:
             if occ.item_type in ('task', 'reminder'):
                 # Tasks/Reminders: due_utc muss im Fenster liegen
-                if in_window(occ.due_utc, win_start, win_end):
+                # Achtung: occ.due_utc oder occ.reminder_utc nutzen
+                dt = getattr(occ, 'due_utc', None) or getattr(occ, 'reminder_utc', None)
+                if in_window(dt, ws, we):
                     filtered.append(occ)
             else:
                 # Appointments/Events: muss Fenster überlappen
-                if overlaps_window(occ.start_utc, occ.end_utc, win_start, win_end):
+                if overlaps_window(occ.start_utc, occ.end_utc, ws, we):
                     filtered.append(occ)
         return filtered
 
-    def expand_window_safe(it, win_start, win_end):
+    def expand_window_safe(it, ws, we):
         """Expandiert Item im Zeitfenster mit Überlappungsfilter"""
-        raw_occs = expand_item(it, win_start, win_end) or []
+        # expand_item muss importiert sein (aus recurrence_service)
+        raw_occs = expand_item(it, ws, we) or []
         
-        # Markiere alle Occurrences dieses Items als Geburtstag
-        # Verwende object.__setattr__() weil Occurrence frozen ist
+        # Markiere alle Occurrences dieses Items als Geburtstag (falls zutreffend)
         if is_birthday(it):
             for occ in raw_occs:
-                object.__setattr__(occ, 'is_birthday', True)
+                # Hack für Frozen Dataclass/Objekt, falls nötig
+                try:
+                    object.__setattr__(occ, 'is_birthday', True)
+                except:
+                    pass 
         
-        # Filtere normal
-        filtered_occs = filter_occurrences(raw_occs, win_start, win_end)
-        
-        return filtered_occs
+        return filter_occurrences(raw_occs, ws, we)
 
-    # Zeitfenster bestimmen
-    if rng == "heute":
-        now_local = datetime.now(local_tz)
-        day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        day_end_local = day_start_local + timedelta(days=1)
-        win_start = day_start_local.astimezone(timezone.utc)
-        win_end = day_end_local.astimezone(timezone.utc)
-        
-    elif rng == "woche":
-        # "Diese Woche": Von heute bis einschließlich Sonntag
-        now_local = datetime.now(local_tz)
-        today_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        # Berechne nächsten Sonntag (ISO weekday: 7 = Sonntag)
-        days_until_sunday = (7 - today_start_local.isoweekday()) % 7
-        # Wenn heute Sonntag ist, nimm heute als Ende
-        if days_until_sunday == 0:
-            days_until_sunday = 0
-        
-        sunday_end_local = today_start_local + timedelta(days=days_until_sunday, hours=24)
-        
-        win_start = today_start_local.astimezone(timezone.utc)
-        win_end = sunday_end_local.astimezone(timezone.utc)
+    def in_window(dt, s, e):
+        return (dt is not None) and (s <= dt < e)
 
-    elif rng == "naechstewoche":
-        # "Nächste Woche": Vom nächsten Montag bis darauf folgenden Sonntag
-        now_local = datetime.now(local_tz)
-        today_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        # Berechne nächsten Montag (ISO weekday: 1 = Montag)
-        current_weekday = today_start_local.isoweekday()
-        days_until_monday = (8 - current_weekday) % 7
-        if days_until_monday == 0:  # Wenn heute Montag ist
-            days_until_monday = 7  # Nächste Woche
-        
-        next_monday_local = today_start_local + timedelta(days=days_until_monday)
-        next_sunday_local = next_monday_local + timedelta(days=6, hours=24)
-        
-        win_start = next_monday_local.astimezone(timezone.utc)
-        win_end = next_sunday_local.astimezone(timezone.utc)
+    def overlaps_window(s, e, ws, we):
+        if s is None or e is None: return False
+        return (s < we) and (e > ws)
 
-    else:
-        # "Nächste 3" oder default
-        pass
+    def _utc_aware(dt):
+        if not dt: return None
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    
+    def _aware(dt): return _utc_aware(dt) # Alias
 
-    # Expandiere Occurrences
-    for idx, (it, _, ds, de) in enumerate(rows):
-        if rng in ("heute", "woche", "naechstewoche"):
-            occs = expand_window_safe(it, win_start, win_end)
+    # 3b. Rows aufbauen (Berechnung & Zeit-Filterung)
+    rows = []
+    
+    show_past_bool = bool(int(include_past or 0))
+    
+    for it in items:
+        occs = []
+        disp_start = None
+        disp_end = None
+        keep_item = False
+
+        # Fall A: Expliziter Zeitraum gewählt (Heute/Woche...)
+        if win_start and win_end:
+            # Nutze expand_window_safe (inkl. Birthday-Fix)
+            # Hinweis: expand_window_safe muss im Scope verfügbar sein (s.u. oder importiert)
+            raw_occs = expand_window_safe(it, win_start, win_end)
+            if raw_occs:
+                keep_item = True
+                occs = raw_occs
+                # Display Time vom ERSTEN Treffer im Fenster
+                first = occs[0]
+                if getattr(it, 'type', '') in ('task', 'reminder'):
+                    disp_start = getattr(first, 'due_utc', None) or getattr(first, 'reminder_utc', None)
+                else:
+                    disp_start = getattr(first, 'start_utc', None)
+                    disp_end = getattr(first, 'end_utc', None)
+
+        # Fall B: Kein Zeitraum (Default View / "Alles")
         else:
-            occs = _expand_next(it, start_dt=now_dt, max_count=3)
-        
-        # Update display_start/display_end basierend auf erstem Occurrence
-        new_ds, new_de = ds, de
-        if occs:
-            first_occ = occs[0]
-            if getattr(it, 'type', '') in ('appointment', 'event'):
-                new_ds = getattr(first_occ, 'start_utc', None)
-                new_de = getattr(first_occ, 'end_utc', None)
-            elif getattr(it, 'type', '') in ('task', 'reminder'):
-                new_ds = getattr(first_occ, 'due_utc', None) or getattr(first_occ, 'reminder_utc', None)
-        
-        # Fallback: Wenn new_ds immer noch None, verwende ursprüngliche Werte
-        if new_ds is None:
-            new_ds = ds
-        if new_de is None:
-            new_de = de
-        
-        rows[idx] = (it, occs, _aware(new_ds), _aware(new_de))
+            t = getattr(it, "type", "") or ""
+
+            # _expand_next kann bei nicht-wiederkehrenden Items auch Vergangenes zurückgeben
+            occs_raw = _expand_next(it, start_dt=now_dt, max_count=3)
+
+            # "Echte" zukünftige/aktive Occurrences ableiten (für include_past=0 Entscheidung)
+            real_future_occs = []
+            for o in occs_raw:
+                if t in ("appointment", "event"):
+                    o_start = _utc_aware(getattr(o, "start_utc", None))
+                    o_end = _utc_aware(getattr(o, "end_utc", None))
+
+                    # Relevanz: noch nicht vorbei (Ende >= jetzt) oder (wenn kein Ende) Start >= jetzt
+                    if o_end is not None:
+                        if o_end >= now_dt:
+                            real_future_occs.append(o)
+                    elif o_start is not None:
+                        if o_start >= now_dt:
+                            real_future_occs.append(o)
+                    else:
+                        # Keine Zeitinformationen -> als "relevant" behandeln (defensiv)
+                        real_future_occs.append(o)
+
+                elif t in ("task", "reminder"):
+                    o_dt = _utc_aware(getattr(o, "due_utc", None) or getattr(o, "reminder_utc", None))
+                    if o_dt is None or o_dt >= now_dt:
+                        real_future_occs.append(o)
+
+                else:
+                    # Unbekannter Typ: defensiv behalten
+                    real_future_occs.append(o)
+
+            has_future_occs = len(real_future_occs) > 0
+
+            # Für Anzeige/Syntax: bei Terminen/Remindern nur die "echten" künftigen Occurrences nutzen,
+            # Tasks dürfen überfällig sein (werden trotzdem angezeigt, wenn nicht terminal)
+            if t in ("appointment", "event", "reminder"):
+                occs = real_future_occs
+            else:
+                occs = occs_raw
+
+            base_due = _utc_aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None))
+            base_start = _utc_aware(getattr(it, "start_utc", None))
+            base_end = _utc_aware(getattr(it, "end_utc", None))
+
+            st = getattr(it, "status", "") or ""
+            is_terminal = status_svc.is_terminal(st)
+
+            if show_past_bool:
+                keep_item = True
+            else:
+                if t == "task":
+                    is_recurring = bool(getattr(it, "recurrence", None) or getattr(it, "rrule_string", None))
+                    if is_recurring:
+                        keep_item = True
+                    else:
+                        keep_item = not is_terminal  # nicht-wiederkehrende erledigte Tasks ausblenden
+
+                elif t == "reminder":
+                    if is_terminal:
+                        keep_item = False
+                    else:
+                        reminder_dt = _utc_aware(getattr(it, "reminder_utc", None))
+                        if reminder_dt is None:
+                            keep_item = True
+                        elif reminder_dt >= now_dt:
+                            keep_item = True
+                        else:
+                            keep_item = has_future_occs
+
+                elif t in ("appointment", "event"):
+                    if is_terminal:
+                        keep_item = False
+                    else:
+                        end_dt = base_end
+                        start_dt = base_start
+                        if end_dt is not None:
+                            keep_item = (end_dt >= now_dt) or has_future_occs
+                        elif start_dt is not None:
+                            keep_item = (start_dt >= now_dt) or has_future_occs
+                        else:
+                            # Zeitloser Termin/Event -> anzeigen
+                            keep_item = True
+
+                else:
+                    keep_item = True
+
+            # Display Werte (Priorität: Occurrences -> Basiswerte)
+            if occs:
+                first = occs[0]
+                if t in ("task", "reminder"):
+                    disp_start = getattr(first, "due_utc", None) or getattr(first, "reminder_utc", None)
+                    disp_end = None
+                else:
+                    disp_start = getattr(first, "start_utc", None)
+                    disp_end = getattr(first, "end_utc", None)
+            else:
+                if t in ("task", "reminder"):
+                    disp_start = base_due
+                    disp_end = None
+                else:
+                    disp_start = base_start
+                    disp_end = base_end
+
+        # Finale Entscheidung für dieses Item
+        if keep_item:
+            # Fallback falls disp_start immer noch None (z.B. Task ohne alles)
+            # Für Sortierung wichtig
+            rows.append((it, occs, _aware(disp_start), _aware(disp_end)))
 
 
-    # ===== Status-Optionen/Farben für Template =====
+    # ====== PIPELINE SCHRITT 4: Sortierung (Auf BERECHNETEN Daten) ======
+    key = (sort or "").strip()
+    reverse = (dir or "asc").lower() == "desc"
+    key_norm = key.lower()
+
+    # Default Sortierung wenn nichts gewählt
+    if not key_norm:
+        key_norm = "start_faellig" 
+
+    try:
+        if key_norm == "type":
+            rows.sort(key=lambda r: (getattr(r[0], "type", "") or "").lower(), reverse=reverse)
+        
+        elif key_norm == "name":
+            rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower(), reverse=reverse)
+        
+        elif key_norm == "status":
+            rows.sort(key=lambda r: (getattr(r[0], "status", "") or "").lower(), reverse=reverse)
+        
+        elif key_norm == "priority":
+            def rk_prio(r):
+                it, _, ds, _ = r
+                p = getattr(it, "priority", None)
+                # None nach hinten (999), Hohe Prio (5) vor niedriger (1) -> bei asc umgekehrt? 
+                # Üblich: 5=Hoch, 1=Tief. Sort DESC für Wichtiges oben.
+                p_val = 999 if p is None else p
+                # Sekundär: Datum
+                d_val = ds or datetime.max.replace(tzinfo=timezone.utc)
+                return (p_val, d_val)
+            rows.sort(key=rk_prio, reverse=reverse)
+
+        elif key_norm == "tags":
+            rows.sort(key=lambda r: len(getattr(r[0], "tags", []) or []), reverse=reverse)
+
+        elif key_norm == "changed":
+            def rk_changed(r):
+                it, _, _, _ = r
+                ch = _utc_aware(getattr(it, "last_modified_utc", None))
+                return ch or datetime.min.replace(tzinfo=timezone.utc)
+            rows.sort(key=rk_changed, reverse=reverse)
+
+        elif key_norm.startswith("start") or key_norm in ("due","fällig","faellig","start/fällig","start_faellig"):
+            def rk_date(r):
+                it, _, ds, _ = r
+                # Primär: Das berechnete Display-Start Datum
+                # Items ohne Datum (ds=None) sollen ans Ende (bei ASC)
+                has_date = 0 if ds is not None else 1
+                dt_val = ds or datetime.max.replace(tzinfo=timezone.utc)
+                
+                # Sekundär: Name für Stabilität
+                name_val = (getattr(it, "name", "") or "").lower()
+                
+                return (has_date, dt_val, name_val)
+            
+            rows.sort(key=rk_date, reverse=reverse)
+        
+        else:
+            # Fallback Name
+            rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower(), reverse=reverse)
+
+    except Exception as ex:
+        print(f"Sort Error ({key_norm}): {ex}")
+        rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower())
+
+
+    # ====== PIPELINE SCHRITT 5: UI-Helper laden & Render ======
+    
+    # Status Optionen laden (für UI)
     TYPES = ("task", "reminder", "appointment", "event")
-
-    # 1) Optionen je Typ als StatusDef laden
     _raw = {t: status_svc.get_options_for(t) for t in TYPES}
-
-    # 2) Für Templates in (key, label)-Tupel umwandeln (gleicher Variablenname!)
+    
     type_status_options = {t: [(sd.key, sd.display_name) for sd in defs] for t, defs in _raw.items()}
-
-    # 3) status_choices als flache Liste (key, label) – für index.html Dropdown
+    
     status_choices = [(sd.key, sd.display_name) for t, defs in _raw.items() for sd in defs]
     status_choices.sort(key=lambda x: (x[1] or "").lower())
-
-    # 4) Farben je Typ (key -> color) auf Basis der Roh-Defs
+    
     type_status_colors = {t: {sd.key: sd.color_light for sd in defs if getattr(sd, "color_light", None)} for t, defs in _raw.items()}
 
-    # 5) Optionaler Guard
-    if all(len(defs) == 0 for defs in _raw.values()):
-        html = templates.get_template("_alerts.html").render({"messages": ["Keine Statusdefinitionen gefunden. Bitte Katalog/Bootstrap prüfen."]})
-        return HTMLResponse(content=html, status_code=500)
+    # Header Datum
+    header_today = format_local_weekday_de(datetime.now(local_tz)) + ", " + datetime.now(local_tz).strftime("%d.%m.%Y")
 
-    now_local = datetime.now(ZoneInfo("Europe/Berlin"))
-    header_today = format_local_weekday_de(now_local) + ", " + now_local.strftime("%d.%m.%Y")
-
-    # ===== Render =====
     ctx = {
         "header_today": header_today,
         "request": request,
@@ -1046,7 +985,7 @@ def index(
         "status_choices": status_choices,
         "current_range": rng,
         "timedelta": timedelta,
-        # Filter-Werte für Template
+        # Filter-Werte zurückgeben
         "q": q or "",
         "types": types or "",
         "status": status or "",
@@ -1058,46 +997,11 @@ def index(
         "dir": dir or "asc",
     }
 
-    # DEBUG
-    print("=== STATUS OPTIONS DEBUG ===")
-    print(f"type_status_options keys: {list(type_status_options.keys())}")
-    print(f"type_status_options['task']: {type_status_options.get('task', [])[:3]}")
-    print(f"type_status_colors keys: {list(type_status_colors.keys())}")
-    print("============================")
-
-
-    # Im Index-Handler, direkt nach der Filter-Vorbereitung
-    print(f"=== FILTER DEBUG ===")
-    print(f"q: {q}")
-    print(f"types_list: {types_list}")
-    print(f"status_list: {status_list}")
-    print(f"tags_list: {tags_list}")
-    print(f"min_prio: {min_prio}")
-    print(f"include_private: {bool(int(show_private or 0))}")
-    print(f"include_past: {bool(int(include_past or 0))}")
-    print(f"===================")
-
-    try:
-        items = filter_items(
-            items=items,
-            text=q,
-            types=types_list,
-            status_keys=status_list,
-            include_private=bool(int(show_private or 0)), 
-            tags=tags_list,
-            min_priority=min_prio,
-        )
-    except Exception as e:
-        print(f"Filter FAILED: {e}")
-
-
     if is_htmx(request):
-        # Nur die TRs liefern; hx-target="#items-table" ersetzt deren innerHTML
         return templates.TemplateResponse("_items_table.html", ctx)
 
     resp = templates.TemplateResponse("index.html", ctx)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
     return resp
 
 

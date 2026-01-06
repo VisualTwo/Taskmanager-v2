@@ -49,6 +49,19 @@ class StatusService:
     def map_ical_status(self, ical_status: Optional[str]) -> Optional[str]:
         return self.sm.map_ical_status(ical_status) if ical_status else None
 
+    # CSV/status import mapping: high-level wrapper for simple CSV values
+    def map_csv_status(self, simple_status: Optional[str], item_type: Optional[str] = None) -> Optional[str]:
+        """
+        Map simple CSV-friendly status values (e.g. 'active', 'waiting', 'someday')
+        to the internal status key using the underlying StatusManager.
+
+        This wrapper keeps the domain-level API consistent and prevents callers
+        from depending directly on the utils implementation.
+        """
+        if not simple_status:
+            return None
+        return self.sm.map_csv_status(simple_status, item_type=item_type)
+
     # Automatische Anpassung (Dict-Payload; kompatibel zu deinem Manager)
     def auto_adjust_appointment_status(self, payload: dict, now=None) -> Optional[str]:
         return self.sm.auto_adjust_appointment_status(payload, now=now)

@@ -96,3 +96,87 @@ def calculate_occurrences(rruleset_obj: rruleset, start: datetime, end: datetime
     start_utc = _to_aware_utc(start)
     end_utc = _to_aware_utc(end)
     return rruleset_obj.between(start_utc, end_utc, inc=True)
+
+    # --- lightweight helpers used by templates and tests ------------------
+import re
+from calendar import monthrange
+from datetime import timedelta
+
+
+def has_yearly_semantics(it) -> bool:
+    rec = getattr(it, "recurrence", None)
+    recstr = getattr(rec, "rrulestring", None) if rec else None
+    if recstr and "FREQ=YEARLY" in (recstr or "").upper():
+        return True
+    tags = getattr(it, "tags", None) or []
+    if any(t and "geburtstag" in t.lower() for t in tags):
+        return True
+    return False
+
+
+def compute_next_yearly_from(it, now: Optional[datetime] = None):
+    """Compute next yearly occurrence from an item's DTSTART/recurrence DTSTART.
+
+    Returns (start_datetime, end_datetime) or None.
+    """
+    now = now or datetime.now(timezone.utc)
+    rec = getattr(it, "recurrence", None)
+    recstr = getattr(rec, "rrulestring", None) if rec else None
+    base = None
+    if recstr:
+        m = re.search(r"DTSTART:(\d{8}T\d{6}Z)", recstr)
+        if m:
+            try:
+                base = datetime.strptime(m.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+            except Exception:
+                base = None
+    if base is None:
+        base = getattr(it, "start_utc", None)
+    if base is None:
+        return None
+    dur = timedelta(days=1)
+    s0 = getattr(it, "start_utc", None)
+    e0 = getattr(it, "end_utc", None)
+    if s0 and e0:
+        try:
+            dur = max(e0 - s0, timedelta(hours=1))
+        except Exception:
+            pass
+    y = now.year
+    m = base.month
+    d = base.day
+    hh, mm, ss = base.hour, base.minute, base.second
+    try:
+        cand = datetime(y, m, d, hh, mm, ss, tzinfo=timezone.utc)
+    except ValueError:
+        last_day = monthrange(y, m)[1]
+        cand = datetime(y, m, min(d, last_day), hh, mm, ss, tzinfo=timezone.utc)
+    if cand <= now:
+        y += 1
+        try:
+            cand = datetime(y, m, d, hh, mm, ss, tzinfo=timezone.utc)
+        except ValueError:
+            last_day = monthrange(y, m)[1]
+            cand = datetime(y, m, min(d, last_day), hh, mm, ss, tzinfo=timezone.utc)
+    return cand, cand + dur
+
+
+def next_or_display_occurrence(it, now: Optional[datetime] = None, require_future: bool = True):
+    now = now or datetime.now(timezone.utc)
+    t = getattr(it, "type", None)
+    if t in ("task", "reminder"):
+        due_or_rem = getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None)
+        return due_or_rem, None
+    if t == "event":
+        rec = getattr(it, "recurrence", None)
+        recstr = getattr(rec, "rrulestring", None) if rec else None
+        if recstr and "FREQ=YEARLY" in (recstr or "").upper():
+            nxt = compute_next_yearly_from(it, now)
+            if nxt:
+                return nxt
+        if has_yearly_semantics(it):
+            y = compute_next_yearly_from(it, now)
+            if y:
+                return y
+        return getattr(it, "start_utc", None), getattr(it, "end_utc", None)
+    return getattr(it, "start_utc", None), getattr(it, "end_utc", None)
