@@ -45,11 +45,17 @@ def _status_task_to_ics(key: Optional[str]) -> Optional[str]:
         return None
     # VTODO STATUS: NEEDS-ACTION | IN-PROCESS | COMPLETED | CANCELLED
     mapping = {
-        "TASK_SOMEDAY": "NEEDS-ACTION",
+        # Task-related
+        "TASK_BACKLOG": "NEEDS-ACTION",
         "TASK_OPEN": "NEEDS-ACTION",
         "TASK_IN_PROGRESS": "IN-PROCESS",
         "TASK_BLOCKED": "NEEDS-ACTION",
         "TASK_DONE": "COMPLETED",
+        # Reminder-related
+        "REMINDER_BACKLOG": "NEEDS-ACTION",
+        "REMINDER_ACTIVE": "NEEDS-ACTION",
+        "REMINDER_SNOOZED": "NEEDS-ACTION",
+        "REMINDER_DISMISSED": "COMPLETED",
     }
     return mapping.get(key)
 

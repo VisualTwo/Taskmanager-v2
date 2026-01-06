@@ -2073,6 +2073,59 @@ async def import_upload(
 ):
     text = (await file.read()).decode("utf-8", errors="ignore")
 
+    # Heuristik: falls CSV (Dateiname .csv oder Header mit type,status,title), dann CSV-Import
+    fname = getattr(file, "filename", "") or ""
+    is_csv = False
+    if fname.lower().endswith(".csv"):
+        is_csv = True
+    else:
+        first = text.splitlines()[0] if text else ""
+        if "," in first and any(h in first.lower() for h in ("type", "status", "title")):
+            is_csv = True
+
+    if is_csv:
+        import csv
+        from domain.models import Task, Reminder
+
+        reader = csv.DictReader(io.StringIO(text))
+        try:
+            repo.conn.execute("BEGIN")
+            for r in reader:
+                typ = (r.get("type") or "").strip().lower()
+                if typ not in ("task", "reminder"):
+                    continue
+                name = (r.get("title") or r.get("name") or "Unbenannt").strip()
+                desc = (r.get("description") or "").strip() or None
+                notes = (r.get("notes") or "").strip() or None
+                raw_status = (r.get("status") or "").strip()
+                mapped = status_svc.map_csv_status(raw_status, item_type=typ) or ("TASK_OPEN" if typ == "task" else "REMINDER_ACTIVE")
+                # annotate backlog imports
+                if mapped in ("TASK_BACKLOG", "REMINDER_BACKLOG"):
+                    if notes is None or ("backlog" not in (notes or "").lower() and "someday" not in (notes or "").lower()):
+                        notes = (notes + "; Backlog import") if notes else "Backlog import"
+
+                nid = (r.get("id") or "").strip() or str(uuid.uuid4())
+                if typ == "task":
+                    it = Task(id=nid, type="task", name=name, status=mapped, is_private=False, description=desc, ics_uid=None, priority=0)
+                else:
+                    it = Reminder(id=nid, type="reminder", name=name, status=mapped, is_private=False, description=desc, ics_uid=None, priority=0)
+                # attach notes into metadata to preserve them
+                md = dict(it.metadata or {})
+                if notes:
+                    md["import_notes"] = notes
+                payload = dict(it.__dict__)
+                payload["metadata"] = md
+                cls = it.__class__
+                repo.upsert(cls(**payload))
+            repo.conn.commit()
+        except Exception:
+            repo.conn.rollback()
+            raise
+        # UX
+        if is_htmx(request):
+            return Response(status_code=204, headers={"HX-Redirect": "/"})
+        return RedirectResponse("/", status_code=303)
+
     # 1) ICS parsen (liefert bereits angereicherte Items: description, tags, links, metadata, audit)
     from services.ics_import import import_ics
     items = import_ics(text)

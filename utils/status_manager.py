@@ -195,7 +195,7 @@ class StatusManager:
 
     def map_csv_status(self, simple_status: str, item_type: Optional[str] = None) -> Optional[str]:
         """
-        Map simple CSV-style status values (e.g. 'active', 'waiting', 'someday')
+        Map simple CSV-style status values (e.g. 'active', 'waiting', 'someday'/'backlog')
         to the internal status key used in STATUS_DEFINITIONS.
 
         This provides a small, stable mapping layer so user-friendly CSV values
@@ -209,15 +209,18 @@ class StatusManager:
         s = simple_status.strip().lower()
         # default mappings per type
         if item_type == "task":
-            if s == "someday":
-                return "TASK_SOMEDAY"
+            if s in ("someday", "backlog", "irgendwann"):
+                return "TASK_BACKLOG"
+            # Some users call backlog/open items "Offen" or "open" — treat these as backlog
+            if s in ("open", "offen"):
+                return "TASK_BACKLOG"
             if s == "active":
                 return "TASK_OPEN"
             if s == "waiting":
                 return "TASK_BLOCKED"
         if item_type == "reminder":
-            if s == "someday":
-                return "REMINDER_SOMEDAY"
+            if s in ("someday", "backlog", "irgendwann"):
+                return "REMINDER_BACKLOG"
             if s == "active":
                 return "REMINDER_ACTIVE"
             if s == "waiting":
