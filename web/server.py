@@ -2110,11 +2110,14 @@ async def import_upload(
                 else:
                     it = Reminder(id=nid, type="reminder", name=name, status=mapped, is_private=False, description=desc, ics_uid=None, priority=0)
                 # attach notes into metadata to preserve them
-                md = dict(it.metadata or {})
-                if notes:
-                    md["import_notes"] = notes
+                # Move import notes into visible description (append to existing description)
                 payload = dict(it.__dict__)
-                payload["metadata"] = md
+                desc_existing = payload.get("description") or ""
+                if notes:
+                    if desc_existing:
+                        payload["description"] = f"{desc_existing}\n\nImport-Notiz: {notes}"
+                    else:
+                        payload["description"] = f"Import-Notiz: {notes}"
                 cls = it.__class__
                 repo.upsert(cls(**payload))
             repo.conn.commit()
