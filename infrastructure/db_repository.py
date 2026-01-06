@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS items(
   priority INTEGER CHECK(priority IS NULL OR (priority >= 0 AND priority <= 5)),
 
   -- ICE Prioritization (strukturiert statt generisches metadata)
-  ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 10)),
+    ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 5)),
   ice_confidence TEXT CHECK(ice_confidence IS NULL OR ice_confidence IN ('very_low','low','medium','high','very_high')),
-  ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 10)),
+    ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 5)),
   ice_score REAL CHECK(ice_score IS NULL OR ice_score >= 0),
 
   -- Weitere Metadaten (JSON) für Erweiterung
@@ -142,11 +142,11 @@ class DbRepository:
         migrations = []
         
         if "ice_impact" not in cols:
-            migrations.append("ALTER TABLE items ADD COLUMN ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 10));")
+            migrations.append("ALTER TABLE items ADD COLUMN ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 5));")
         if "ice_confidence" not in cols:
             migrations.append("ALTER TABLE items ADD COLUMN ice_confidence TEXT CHECK(ice_confidence IS NULL OR ice_confidence IN ('very_low','low','medium','high','very_high'));")
         if "ice_ease" not in cols:
-            migrations.append("ALTER TABLE items ADD COLUMN ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 10));")
+            migrations.append("ALTER TABLE items ADD COLUMN ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 5));")
         if "ice_score" not in cols:
             migrations.append("ALTER TABLE items ADD COLUMN ice_score REAL CHECK(ice_score IS NULL OR ice_score >= 0);")
         if "metadata" not in cols:

@@ -15,9 +15,9 @@ from pathlib import Path
 
 
 ALTER_STMTS = {
-    "ice_impact": "ALTER TABLE items ADD COLUMN ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 10));",
+    "ice_impact": "ALTER TABLE items ADD COLUMN ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 5));",
     "ice_confidence": "ALTER TABLE items ADD COLUMN ice_confidence TEXT CHECK(ice_confidence IS NULL OR ice_confidence IN ('very_low','low','medium','high','very_high'));",
-    "ice_ease": "ALTER TABLE items ADD COLUMN ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 10));",
+    "ice_ease": "ALTER TABLE items ADD COLUMN ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 5));",
     "ice_score": "ALTER TABLE items ADD COLUMN ice_score REAL CHECK(ice_score IS NULL OR ice_score >= 0);",
     "metadata": "ALTER TABLE items ADD COLUMN metadata TEXT DEFAULT '{}';",
 }

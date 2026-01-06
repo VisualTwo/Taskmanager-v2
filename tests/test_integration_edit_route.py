@@ -44,9 +44,9 @@ def test_edit_route_accepts_and_persists_ice_metadata():
 
     resp = client.post(f"/items/{item.id}/edit", data={
         'name': 'Y',
-        'ice_impact': '8',
+        'ice_impact': '4',
         'ice_confidence': 'high',
-        'ice_ease': '7',
+        'ice_ease': '5',
     })
 
     # HTMX responses may return 200/204; we expect success
@@ -56,8 +56,8 @@ def test_edit_route_accepts_and_persists_ice_metadata():
     stored = repo.get(item.id)
     assert stored is not None
     meta = getattr(stored, 'metadata', {}) or {}
-    assert meta.get('ice_impact') == '8'
+    assert meta.get('ice_impact') == '4'
     assert meta.get('ice_confidence') == 'high'
-    assert meta.get('ice_ease') == '7'
-    # Score should be computed: 8 * 0.7 * 7 = 39.2
-    assert meta.get('ice_score') == '39.2'
+    assert meta.get('ice_ease') == '5'
+    # Score should be computed: 4 * 0.7 * 5 = 14.0
+    assert meta.get('ice_score') == '14.0'

@@ -1296,7 +1296,7 @@ async def edit_item_submit(
         if ice_impact_str:
             try:
                 imp_val = int(ice_impact_str)
-                if 1 <= imp_val <= 10:
+                if 1 <= imp_val <= 5:
                     final_impact = imp_val
             except ValueError:
                 pass  # Ungültig -> übergebe
@@ -1311,7 +1311,7 @@ async def edit_item_submit(
         if ice_ease_str:
             try:
                 ease_val = int(ice_ease_str)
-                if 1 <= ease_val <= 10:
+                if 1 <= ease_val <= 5:
                     final_ease = ease_val
             except ValueError:
                 pass  # Ungültig -> übergebe

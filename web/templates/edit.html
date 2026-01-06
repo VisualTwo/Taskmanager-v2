@@ -89,15 +89,10 @@
                     hx-swap="none">
               <option value="">– Wählen –</option>
               <option value="1" {% if it.metadata.get('ice_impact') == '1' %}selected{% endif %}>1: Minimal</option>
-              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>2: Sehr gering</option>
-              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>3: Gering</option>
-              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>4: Moderat</option>
-              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>5: Mittel</option>
-              <option value="6" {% if it.metadata.get('ice_impact') == '6' %}selected{% endif %}>6: Erheblich</option>
-              <option value="7" {% if it.metadata.get('ice_impact') == '7' %}selected{% endif %}>7: Stark</option>
-              <option value="8" {% if it.metadata.get('ice_impact') == '8' %}selected{% endif %}>8: Sehr stark</option>
-              <option value="9" {% if it.metadata.get('ice_impact') == '9' %}selected{% endif %}>9: Extrem</option>
-              <option value="10" {% if it.metadata.get('ice_impact') == '10' %}selected{% endif %}>10: Transformativ</option>
+              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>2: Gering</option>
+              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>3: Mittel</option>
+              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>4: Hoch</option>
+              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>5: Transformativ</option>
             </select>
           </div>
 
@@ -126,15 +121,10 @@
                     hx-swap="none">
               <option value="">– Wählen –</option>
               <option value="1" {% if it.metadata.get('ice_ease') == '1' %}selected{% endif %}>1: Extrem schwierig</option>
-              <option value="2" {% if it.metadata.get('ice_ease') == '2' %}selected{% endif %}>2: Sehr schwierig</option>
-              <option value="3" {% if it.metadata.get('ice_ease') == '3' %}selected{% endif %}>3: Schwierig</option>
-              <option value="4" {% if it.metadata.get('ice_ease') == '4' %}selected{% endif %}>4: Eher schwierig</option>
-              <option value="5" {% if it.metadata.get('ice_ease') == '5' %}selected{% endif %}>5: Moderat</option>
-              <option value="6" {% if it.metadata.get('ice_ease') == '6' %}selected{% endif %}>6: Eher leicht</option>
-              <option value="7" {% if it.metadata.get('ice_ease') == '7' %}selected{% endif %}>7: Leicht</option>
-              <option value="8" {% if it.metadata.get('ice_ease') == '8' %}selected{% endif %}>8: Sehr leicht</option>
-              <option value="9" {% if it.metadata.get('ice_ease') == '9' %}selected{% endif %}>9: Sehr einfach</option>
-              <option value="10" {% if it.metadata.get('ice_ease') == '10' %}selected{% endif %}>10: Trivial+</option>
+              <option value="2" {% if it.metadata.get('ice_ease') == '2' %}selected{% endif %}>2: Schwierig</option>
+              <option value="3" {% if it.metadata.get('ice_ease') == '3' %}selected{% endif %}>3: Moderat</option>
+              <option value="4" {% if it.metadata.get('ice_ease') == '4' %}selected{% endif %}>4: Leicht</option>
+              <option value="5" {% if it.metadata.get('ice_ease') == '5' %}selected{% endif %}>5: Trivial</option>
             </select>
           </div>
 

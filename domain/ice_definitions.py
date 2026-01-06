@@ -10,19 +10,14 @@ Score: Impact × Confidence × Ease (float, rounded to 2 decimals)
 from typing import Dict, Tuple
 
 # ============================================================================
-# IMPACT: Auswirkungen auf Ziele / Geschäft (1-10)
+# IMPACT: Auswirkungen auf Ziele / Geschäft (1-5)
 # ============================================================================
 IMPACT_LEVELS = {
     1: {"label": "Minimal", "desc": "Kaum messbarer Einfluss"},
-    2: {"label": "Sehr gering", "desc": "Sehr kleiner positiver Effekt"},
-    3: {"label": "Gering", "desc": "Kleiner, aber erkennbarer Effekt"},
-    4: {"label": "Niedrig", "desc": "Moderate positive Auswirkung"},
-    5: {"label": "Mittel", "desc": "Deutlicher positiver Einfluss"},
-    6: {"label": "Erhöht", "desc": "Guter positiver Effekt"},
-    7: {"label": "Hoch", "desc": "Großer positiver Einfluss"},
-    8: {"label": "Sehr hoch", "desc": "Sehr großer positiver Effekt"},
-    9: {"label": "Kritisch", "desc": "Kritischer Einfluss auf Ziele"},
-    10: {"label": "Transformativ", "desc": "Grundlegender positiver Wandel"},
+    2: {"label": "Gering", "desc": "Kleiner positiver Effekt"},
+    3: {"label": "Mittel", "desc": "Deutlicher positiver Einfluss"},
+    4: {"label": "Hoch", "desc": "Großer positiver Einfluss"},
+    5: {"label": "Transformativ", "desc": "Grundlegender positiver Wandel"},
 }
 
 # ============================================================================
@@ -37,19 +32,14 @@ CONFIDENCE_LEVELS = {
 }
 
 # ============================================================================
-# EASE: Aufwand / Umsetzungsleichtigkeit (1-10, invers zur Komplexität)
+# EASE: Aufwand / Umsetzungsleichtigkeit (1-5)
 # ============================================================================
 EASE_LEVELS = {
     1: {"label": "Extrem schwierig", "desc": "Sehr großer Aufwand"},
-    2: {"label": "Sehr schwierig", "desc": "Enormer Aufwand"},
-    3: {"label": "Schwierig", "desc": "Großer Aufwand"},
-    4: {"label": "Schwer", "desc": "Erheblicher Aufwand"},
-    5: {"label": "Moderat", "desc": "Moderater Aufwand"},
-    6: {"label": "Machbar", "desc": "Handhabbarer Aufwand"},
-    7: {"label": "Leicht", "desc": "Relativ gering"},
-    8: {"label": "Sehr leicht", "desc": "Kleiner Aufwand"},
-    9: {"label": "Trivial", "desc": "Minimaler Aufwand"},
-    10: {"label": "Trivial+", "desc": "Praktisch kostenlos"},
+    2: {"label": "Schwierig", "desc": "Großer Aufwand"},
+    3: {"label": "Moderat", "desc": "Moderater Aufwand"},
+    4: {"label": "Leicht", "desc": "Relativ gering"},
+    5: {"label": "Trivial", "desc": "Minimaler Aufwand"},
 }
 
 def get_confidence_value(key: str) -> float:
