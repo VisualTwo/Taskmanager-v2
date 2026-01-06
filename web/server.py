@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile, File, Form, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -2207,6 +2207,14 @@ async def import_upload(
     if is_htmx(request):
         return Response(status_code=204, headers={"HX-Redirect": f"/?{back_qs}" if back_qs else "/"})
     return RedirectResponse(f"/?{back_qs}" if back_qs else "/", status_code=303)
+
+
+@app.get("/download/prioritization_template.csv")
+def download_template():
+    p = Path("prioritization_template.csv")
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Template not found")
+    return FileResponse(str(p), media_type="text/csv", filename="prioritization_template.csv")
 
 
 @app.get("/tags/suggest")
