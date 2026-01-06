@@ -40,6 +40,10 @@ Setup:
 3. Install dependencies
 4. Start the server
 
+## Database migrations
+
+If you are upgrading an existing database schema, there is a migration helper in `scripts/migrate_add_ice_columns.py` which adds the ICE columns (impact/confidence/ease/score), creates the `idx_items_ice_score` index, and backfills values from the `metadata` JSON when present. See `docs/migrations.md` for details and recommended steps.
+
 ## Example 
 
 ### Windows:
