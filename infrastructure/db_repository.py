@@ -17,9 +17,9 @@ CREATE TABLE IF NOT EXISTS items(
   name TEXT NOT NULL,
   description TEXT,
   status_key TEXT NOT NULL,
-  is_private INTEGER NOT NULL DEFAULT 0,
-  tags TEXT,
-  links TEXT,
+  is_private INTEGER NOT NULL DEFAULT 0 CHECK(is_private IN (0,1)),
+  tags TEXT NOT NULL DEFAULT '[]',
+  links TEXT NOT NULL DEFAULT '[]',
 
   -- Zeitfelder
   start_utc TEXT,
@@ -33,20 +33,38 @@ CREATE TABLE IF NOT EXISTS items(
   -- Reminder: primärer Zeitpunkt
   reminder_utc TEXT,
 
-  is_all_day INTEGER DEFAULT 0,
+  is_all_day INTEGER NOT NULL DEFAULT 0 CHECK(is_all_day IN (0,1)),
   rrule_string TEXT,
   exdates TEXT,
 
   -- ICS
-  ics_uid TEXT,
+  ics_uid TEXT UNIQUE,
 
-  -- Priorität
-  priority INTEGER,
+  -- Priorität: 0-5, NULL bedeutet nicht gesetzt
+  priority INTEGER CHECK(priority IS NULL OR (priority >= 0 AND priority <= 5)),
+
+  -- ICE Prioritization (strukturiert statt generisches metadata)
+  ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 10)),
+  ice_confidence TEXT CHECK(ice_confidence IS NULL OR ice_confidence IN ('very_low','low','medium','high','very_high')),
+  ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 10)),
+  ice_score REAL CHECK(ice_score IS NULL OR ice_score >= 0),
+
+  -- Weitere Metadaten (JSON) für Erweiterung
+  metadata TEXT NOT NULL DEFAULT '{}',
 
   -- Audit
-  created_utc TEXT,
-  last_modified_utc TEXT
+  created_utc TEXT NOT NULL,
+  last_modified_utc TEXT NOT NULL
 );
+
+-- Indizes für häufige Abfragen
+CREATE INDEX IF NOT EXISTS idx_items_type ON items(type);
+CREATE INDEX IF NOT EXISTS idx_items_status_key ON items(status_key);
+CREATE INDEX IF NOT EXISTS idx_items_ics_uid ON items(ics_uid);
+CREATE INDEX IF NOT EXISTS idx_items_priority ON items(priority);
+CREATE INDEX IF NOT EXISTS idx_items_is_private ON items(is_private);
+CREATE INDEX IF NOT EXISTS idx_items_created_utc ON items(created_utc);
+CREATE INDEX IF NOT EXISTS idx_items_ice_score ON items(ice_score DESC);
 """
 
 EXPECTED_COLS = {
@@ -71,6 +89,7 @@ class DbRepository:
         self.conn.executescript(DDL)
         self.conn.commit()
         self._ensure_columns()
+        self._ensure_metadata_column()
 
     def clear(self) -> None:
         self.conn.execute("DELETE FROM items")
@@ -117,6 +136,49 @@ class DbRepository:
                 pass
             self.conn.commit()
 
+    def _ensure_metadata_column(self):
+        """Add ICE and metadata columns if they don't exist (schema migration)."""
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(items)").fetchall()}
+        migrations = []
+        
+        if "ice_impact" not in cols:
+            migrations.append("ALTER TABLE items ADD COLUMN ice_impact INTEGER CHECK(ice_impact IS NULL OR (ice_impact >= 1 AND ice_impact <= 10));")
+        if "ice_confidence" not in cols:
+            migrations.append("ALTER TABLE items ADD COLUMN ice_confidence TEXT CHECK(ice_confidence IS NULL OR ice_confidence IN ('very_low','low','medium','high','very_high'));")
+        if "ice_ease" not in cols:
+            migrations.append("ALTER TABLE items ADD COLUMN ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 10));")
+        if "ice_score" not in cols:
+            migrations.append("ALTER TABLE items ADD COLUMN ice_score REAL CHECK(ice_score IS NULL OR ice_score >= 0);")
+        if "metadata" not in cols:
+            migrations.append("ALTER TABLE items ADD COLUMN metadata TEXT DEFAULT '{}';")
+        
+        # Ensure proper defaults and NOT NULLs (for existing tables)
+        if migrations:
+            for stmt in migrations:
+                try:
+                    self.conn.execute(stmt)
+                except Exception as e:
+                    # Column may already exist; that's fine
+                    pass
+            
+            # Ensure indices
+            indices = [
+                "CREATE INDEX IF NOT EXISTS idx_items_type ON items(type);",
+                "CREATE INDEX IF NOT EXISTS idx_items_status_key ON items(status_key);",
+                "CREATE INDEX IF NOT EXISTS idx_items_ics_uid ON items(ics_uid);",
+                "CREATE INDEX IF NOT EXISTS idx_items_priority ON items(priority);",
+                "CREATE INDEX IF NOT EXISTS idx_items_is_private ON items(is_private);",
+                "CREATE INDEX IF NOT EXISTS idx_items_created_utc ON items(created_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_items_ice_score ON items(ice_score DESC);",
+            ]
+            for idx_stmt in indices:
+                try:
+                    self.conn.execute(idx_stmt)
+                except Exception:
+                    pass
+            
+            self.conn.commit()
+
     def upsert(self, item: Item) -> None:
         """
         Fügt ein Item ein oder aktualisiert es.
@@ -126,6 +188,7 @@ class DbRepository:
         tags_json = json.dumps(list(getattr(item, "tags", ()) or ()))
         links_json = json.dumps(list(getattr(item, "links", ()) or ()))
         description = (getattr(item, "description", None) or "")
+        metadata_json = json.dumps(dict(getattr(item, "metadata", {}) or {}))
 
         # Recurrence
         rrule_string = item.recurrence.rrule_string if getattr(item, "recurrence", None) else None
@@ -135,8 +198,27 @@ class DbRepository:
         # ICS UID und Priority
         ics_uid = (getattr(item, "ics_uid", None) or None)
         priority = getattr(item, "priority", None)
-        # Cast: SQLite speichert numerisch, None bleibt None
         prio_val = int(priority) if (priority is not None and str(priority).strip() != "") else None
+
+        # ICE Felder aus metadata extrahieren (Backward compatibility)
+        ice_impact = getattr(item, "metadata", {}).get("ice_impact")
+        ice_confidence = getattr(item, "metadata", {}).get("ice_confidence")
+        ice_ease = getattr(item, "metadata", {}).get("ice_ease")
+        ice_score = getattr(item, "metadata", {}).get("ice_score")
+
+        # Parse to proper types
+        try:
+            ice_impact = int(ice_impact) if ice_impact else None
+        except (ValueError, TypeError):
+            ice_impact = None
+        try:
+            ice_ease = int(ice_ease) if ice_ease else None
+        except (ValueError, TypeError):
+            ice_ease = None
+        try:
+            ice_score = float(ice_score) if ice_score else None
+        except (ValueError, TypeError):
+            ice_score = None
 
         # Audit
         now_iso = format_db_datetime(now_utc())
@@ -145,8 +227,8 @@ class DbRepository:
             self.conn.execute(
                 """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
                                       due_utc,task_planned_start_utc,task_planned_end_utc,
-                                      rrule_string,exdates,ics_uid,priority,created_utc,last_modified_utc)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                      rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                      type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
                      is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
@@ -156,6 +238,9 @@ class DbRepository:
                      rrule_string=excluded.rrule_string, exdates=excluded.exdates,
                      ics_uid=excluded.ics_uid,
                      priority=excluded.priority,
+                     ice_impact=excluded.ice_impact, ice_confidence=excluded.ice_confidence,
+                     ice_ease=excluded.ice_ease, ice_score=excluded.ice_score,
+                     metadata=excluded.metadata,
                      last_modified_utc=excluded.last_modified_utc
                 """,
                 (
@@ -164,7 +249,7 @@ class DbRepository:
                     format_db_datetime(getattr(item, "planned_start_utc", None)),
                     format_db_datetime(getattr(item, "planned_end_utc", None)),
                     rrule_string, exdates_str,
-                    ics_uid, prio_val,
+                    ics_uid, prio_val, ice_impact, ice_confidence, ice_ease, ice_score, metadata_json,
                     now_iso, now_iso,
                 ),
             )
@@ -172,8 +257,8 @@ class DbRepository:
             self.conn.execute(
                 """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
                                       start_utc,end_utc,is_all_day,
-                                      rrule_string,exdates,ics_uid,priority,created_utc,last_modified_utc)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                      rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                      type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
                      is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
@@ -181,6 +266,9 @@ class DbRepository:
                      rrule_string=excluded.rrule_string, exdates=excluded.exdates,
                      ics_uid=excluded.ics_uid,
                      priority=excluded.priority,
+                     ice_impact=excluded.ice_impact, ice_confidence=excluded.ice_confidence,
+                     ice_ease=excluded.ice_ease, ice_score=excluded.ice_score,
+                     metadata=excluded.metadata,
                      last_modified_utc=excluded.last_modified_utc
                 """,
                 (
@@ -189,28 +277,31 @@ class DbRepository:
                     format_db_datetime(getattr(item, "end_utc", None)),
                     int(getattr(item, "is_all_day", False)),
                     rrule_string, exdates_str,
-                    ics_uid, prio_val,
+                    ics_uid, prio_val, ice_impact, ice_confidence, ice_ease, ice_score, metadata_json,
                     now_iso, now_iso,
                 ),
             )
         elif item.type == "reminder":
             self.conn.execute(
                 """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
-                                      reminder_utc,rrule_string,exdates,ics_uid,priority,created_utc,last_modified_utc)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                      reminder_utc,rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                      type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
                      is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
                      reminder_utc=excluded.reminder_utc, rrule_string=excluded.rrule_string, exdates=excluded.exdates,
                      ics_uid=excluded.ics_uid,
                      priority=excluded.priority,
+                     ice_impact=excluded.ice_impact, ice_confidence=excluded.ice_confidence,
+                     ice_ease=excluded.ice_ease, ice_score=excluded.ice_score,
+                     metadata=excluded.metadata,
                      last_modified_utc=excluded.last_modified_utc
                 """,
                 (
                     item.id, "reminder", item.name, description, item.status, int(item.is_private), tags_json, links_json,
                     format_db_datetime(getattr(item, "reminder_utc", None)),
                     rrule_string, exdates_str,
-                    ics_uid, prio_val,
+                    ics_uid, prio_val, ice_impact, ice_confidence, ice_ease, ice_score, metadata_json,
                     now_iso, now_iso,
                 ),
             )
@@ -269,6 +360,7 @@ class DbRepository:
         # JSON-Felder (Repo speichert selbst als JSON; Domain hält tuples)
         tags = tuple(getattr(src, "tags", ()) or ())
         links = tuple(getattr(src, "links", ()) or ())
+        metadata = dict(getattr(src, "metadata", {}) or {})  # Copy metadata
 
         # Recurrence: baue aus Domain-Objekt die Spalten, wie es upsert erwartet
         recur = getattr(src, "recurrence", None)
@@ -276,6 +368,7 @@ class DbRepository:
         exdates_utc = tuple(getattr(recur, "exdates_utc", ()) or ())
 
         t = getattr(src, "type", "")
+        now = now_utc()
         common_kwargs = {
             "id": new_id,
             "type": t,
@@ -287,8 +380,9 @@ class DbRepository:
             "description": getattr(src, "description", "") or "",
             "priority": getattr(src, "priority", None),
             "ics_uid": new_uid,
-            "created_utc": now_utc(),
-            "last_modified_utc": now_utc(),
+            "metadata": metadata,
+            "created_utc": now,
+            "last_modified_utc": now,
         }
 
         # Typ-spezifische Zeitfelder setzen
@@ -320,16 +414,30 @@ class DbRepository:
         return new_obj
 
     def _parse_json_array(self, raw: Optional[str]) -> tuple[str, ...]:
+        """Parse JSON array or comma-separated string into tuple of strings."""
         if not raw:
             return ()
         try:
             arr = json.loads(raw)
             if isinstance(arr, list):
                 return tuple(str(x) for x in arr if x is not None)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
+            # Fallback: try comma-separated
             pass
         parts = [p.strip() for p in (raw or "").split(",") if p.strip()]
         return tuple(parts)
+
+    def _parse_json_dict(self, raw: Optional[str]) -> dict:
+        """Parse JSON object into dict; return empty dict on error."""
+        if not raw:
+            return {}
+        try:
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                return obj
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return {}
 
     def _row_to_recur(self, r: sqlite3.Row) -> Optional[Recurrence]:
         rrule = r["rrule_string"]
@@ -343,20 +451,44 @@ class DbRepository:
         return Recurrence(rrule_string=rrule, exdates_utc=exdates)
 
     def _row_to_item(self, r: sqlite3.Row) -> Item:
+        """Convert DB row to Domain Item; robust against missing/malformed data."""
         t = r["type"]
+        if t not in ("task", "appointment", "event", "reminder"):
+            raise ValueError(f"Unknown item type in DB: {t}")
+        
         tags = self._parse_json_array(r["tags"])
         links = self._parse_json_array(r["links"])
         description = r["description"] if r["description"] is not None else ""
 
+        # Parse metadata from JSON with fallback
+        metadata_dict = self._parse_json_dict(self._get_col(r, "metadata"))
+
+        # Extract ICE fields from DB columns (not from metadata anymore)
+        ice_impact = self._get_col(r, "ice_impact")
+        ice_confidence = self._get_col(r, "ice_confidence")
+        ice_ease = self._get_col(r, "ice_ease")
+        ice_score = self._get_col(r, "ice_score")
+
+        # Populate metadata with ICE fields for backward compatibility
+        if ice_impact is not None:
+            metadata_dict["ice_impact"] = str(ice_impact)
+        if ice_confidence is not None:
+            metadata_dict["ice_confidence"] = ice_confidence
+        if ice_ease is not None:
+            metadata_dict["ice_ease"] = str(ice_ease)
+        if ice_score is not None:
+            metadata_dict["ice_score"] = str(ice_score)
+
         common_kwargs = {
             "id": r["id"],
             "type": t,
-            "name": r["name"],
-            "status": r["status_key"],
+            "name": r["name"] or "Unbenannt",  # Fallback für Namen
+            "status": r["status_key"] or "UNKNOWN",  # Fallback für Status
             "is_private": bool(r["is_private"]),
             "tags": tags,
             "links": links,
             "description": description,
+            "metadata": metadata_dict,
         }
         # Audit-Felder
         created_dt = parse_db_datetime(self._get_col(r, "created_utc"))
@@ -369,13 +501,16 @@ class DbRepository:
         ics_uid = self._get_col(r, "ics_uid")
         if ics_uid:
             common_kwargs["ics_uid"] = ics_uid
-        # Priority
+        # Priority: validieren und casten
         if "priority" in r.keys():
             prio = self._get_col(r, "priority")
             if prio is not None:
                 try:
-                    common_kwargs["priority"] = int(prio)
-                except Exception:
+                    prio_int = int(prio)
+                    if 0 <= prio_int <= 5:
+                        common_kwargs["priority"] = prio_int
+                except (ValueError, TypeError):
+                    # Ungültiger Wert -> Skip
                     pass
 
         if t == "task":

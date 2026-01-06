@@ -23,6 +23,7 @@ from urllib.parse import urlencode
 
 # Projektmodule
 from domain.models import Task, Reminder, Appointment, Event
+from domain.ice_definitions import compute_ice_score, is_valid_confidence_key
 from infrastructure.db_repository import DbRepository
 from services.filter_service import filter_items
 from utils.datetime_helpers import now_utc
@@ -1138,6 +1139,11 @@ async def edit_item_submit(
     is_all_day: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     priority: Optional[str] = Form(None),
+    # ICE fields (optional) — stored in item.metadata
+    ice_impact: Optional[str] = Form(None),
+    ice_confidence: Optional[str] = Form(None),
+    ice_ease: Optional[str] = Form(None),
+    ice_score: Optional[str] = Form(None),
 ):
     it = repo.get(item_id)
 
@@ -1275,6 +1281,67 @@ async def edit_item_submit(
                 payload["links"] = tuple(cur_links) if isinstance(getattr(it, "links", ()), tuple) else cur_links
     except Exception:
         pass
+
+    # ICE-Metadaten verarbeiten (nur wenn explizit gesendet)
+    cur_meta = dict(getattr(it, "metadata", {}) or {})
+    
+    # Validierung und Normalisierung der ICE-Felder
+    final_impact = None
+    final_confidence = None
+    final_ease = None
+    final_score = None
+    
+    if ice_impact is not None:
+        ice_impact_str = (ice_impact or "").strip()
+        if ice_impact_str:
+            try:
+                imp_val = int(ice_impact_str)
+                if 1 <= imp_val <= 10:
+                    final_impact = imp_val
+            except ValueError:
+                pass  # Ungültig -> übergebe
+    
+    if ice_confidence is not None:
+        ice_confidence_str = (ice_confidence or "").strip()
+        if ice_confidence_str and is_valid_confidence_key(ice_confidence_str):
+            final_confidence = ice_confidence_str
+    
+    if ice_ease is not None:
+        ice_ease_str = (ice_ease or "").strip()
+        if ice_ease_str:
+            try:
+                ease_val = int(ice_ease_str)
+                if 1 <= ease_val <= 10:
+                    final_ease = ease_val
+            except ValueError:
+                pass  # Ungültig -> übergebe
+    
+    # ICE-Score neu berechnen (server-side validation)
+    if final_impact is not None or final_confidence is not None or final_ease is not None:
+        final_score = compute_ice_score(final_impact, final_confidence, final_ease)
+    
+    # Speichern in Metadaten
+    if final_impact is not None:
+        cur_meta["ice_impact"] = str(final_impact)
+    elif ice_impact is not None and not (ice_impact or "").strip():
+        cur_meta.pop("ice_impact", None)
+    
+    if final_confidence is not None:
+        cur_meta["ice_confidence"] = final_confidence
+    elif ice_confidence is not None and not (ice_confidence or "").strip():
+        cur_meta.pop("ice_confidence", None)
+    
+    if final_ease is not None:
+        cur_meta["ice_ease"] = str(final_ease)
+    elif ice_ease is not None and not (ice_ease or "").strip():
+        cur_meta.pop("ice_ease", None)
+    
+    if final_score is not None:
+        cur_meta["ice_score"] = str(final_score)
+    elif ice_score is not None and not (ice_score or "").strip():
+        cur_meta.pop("ice_score", None)
+
+    payload["metadata"] = cur_meta
 
     # Auto-Finalisierung (nur non-recurring)
     if it.type in ("appointment", "event"):
