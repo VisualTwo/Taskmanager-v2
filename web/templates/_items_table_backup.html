@@ -1,0 +1,1291 @@
+{# /web/templates/_items_table.html #}
+{% set type_colors = type_status_colors if type_status_colors is defined else {} %}
+{% set prio_labels = {0:'Keine',1:'Niedrig',2:'Normal',3:'Hoch',4:'Kritisch',5:'Blockierend'} %}
+
+{# Prioritätsfarben als CSS-Custom-Properties (in base.html definieren) #}
+{% set prio_color_vars = { 
+  0:'var(--prio-color-0, #9ca3af)', 
+  1:'var(--prio-color-1, #60a5fa)', 
+  2:'var(--prio-color-2, #a3a3a3)', 
+  3:'var(--prio-color-3, #f59e0b)', 
+  4:'var(--prio-color-4, #ef4444)', 
+  5:'var(--prio-color-5, #7f1d1d)' 
+} %}
+
+{# rows: (it, occs, disp_start, disp_end) #}
+
+
+
+<tbody>
+{% for it, occs, disp_start, disp_end in rows %}
+  <tr id="row-{{ it.id }}">
+    <!-- Auswahl -->
+    <td>
+      <input type="checkbox" class="sel-row" name="ids" value="{{ it.id }}" aria-label="Auswählen">
+    </td>
+
+    <!-- Name (mit Typ-Icon) -->
+    <td class="col-name">
+      {% set icon = "/static/icons/" ~ (it.type) ~ ".svg" %}
+      {% set type_map = {'task':'Aufgabe','reminder':'Erinnerung','appointment':'Termin','event':'Ereignis'} %}
+      {% set type_label = type_map.get(it.type, it.type|capitalize) %}
+      <span class="name-wrap">
+        <img src="{{ icon }}" alt="{{ type_label }}" title="{{ type_label }}" class="type-icon-inline" style="width:1.2em;vertical-align:middle;margin-right:.25em;opacity:0.85;">
+        
+        <!-- Titel ist Link zur Edit-Ansicht (Hauptaktion) -->
+        <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" 
+           class="name-link" 
+           target="_blank" 
+           rel="noopener noreferrer"
+           title="Details bearbeiten">{{ it.name }}</a>
+        
+        <!-- ✅ NEU: Stift-Icon direkt daneben für Inline-Edit (Spezialfall) -->
+        <button type="button" 
+                class="inline-edit-btn" 
+                data-for="{{ it.id }}"
+                title="Nur Titel bearbeiten"
+                aria-label="Titel inline bearbeiten">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+        
+        <!-- Inline-Edit Input (versteckt) -->
+        <input id="name-{{ it.id }}" 
+               class="name-input hidden" 
+               type="text" 
+               name="name" 
+               value="{{ it.name }}"
+               data-current="{{ it.name }}"
+               hx-post="/items/{{ it.id }}/rename"
+               hx-trigger="change"
+               hx-params="*"
+               hx-include="#name-{{ it.id }}"
+               hx-swap="none"
+               onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }"
+               aria-label="Titel bearbeiten">
+      </span>
+    </td>
+
+    <!-- Status -->
+    <td class="col-status">
+      {% set colmap = type_status_colors.get(it.type, {}) %}
+      {% set opts = type_status_options.get(it.type, []) %}
+
+      <span class="status-wrap">
+        <!-- Farbpunkt -->
+        <span class="status-dot" style="background: {{ colmap.get(it.status, '#bbb') }};"></span>
+
+        <!-- Badge (klickbar) -->
+        {% set cur_key = it.status %}
+        {% set cur_label = (opts | selectattr(0,'equalto',cur_key) | map(attribute=1) | list | first) or cur_key %}
+        <span class="status-badge"
+              data-for="{{ it.id }}"
+              tabindex="0"
+              role="button"
+              aria-label="Status ändern">
+          {{ cur_label }}
+        </span>
+
+        <!-- Select (versteckt) -->
+        <select class="status-select hidden"
+                name="new_status"
+                data-current="{{ it.status }}"
+                hx-post="/items/{{ it.id }}/status"
+                hx-trigger="change"
+                hx-swap="none"
+                aria-label="Status auswählen">
+          {% if opts and opts|length > 0 %}
+            {% for key, label in opts %}
+              {% set col = colmap.get(key) %}
+              <option value="{{ key }}" {% if col %}data-color="{{ col }}"{% endif %} {% if key == it.status %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          {% else %}
+            <option value="{{ it.status }}" selected>{{ it.status }}</option>
+          {% endif %}
+        </select>
+      </span>
+    </td>
+
+    <!-- Priorität -->
+    {% set pv = it.priority if it.priority is not none else 0 %}
+    <td class="col-priority">
+      <span class="prio-wrap">
+        <span class="prio-badge" 
+              data-for="{{ it.id }}" 
+              data-priority="{{ pv }}"
+              tabindex="0" 
+              role="button"
+              aria-label="Priorität ändern"
+              style="border-color: {{ prio_color_vars.get(pv, '#9ca3af') }}; background: {{ prio_color_vars.get(pv, '#9ca3af') }}22;">
+          {{ prio_labels.get(pv, 'Keine') }}
+        </span>
+        <select class="prio-select hidden"
+                name="priority"
+                data-current="{{ pv }}"
+                hx-post="/items/{{ it.id }}/priority"
+                hx-trigger="change"
+                hx-swap="none"
+                aria-label="Priorität auswählen">
+          <option value="0" data-color="{{ prio_color_vars[0] }}" {% if pv == 0 %}selected{% endif %}>Keine</option>
+          <option value="1" data-color="{{ prio_color_vars[1] }}" {% if pv == 1 %}selected{% endif %}>Niedrig</option>
+          <option value="2" data-color="{{ prio_color_vars[2] }}" {% if pv == 2 %}selected{% endif %}>Normal</option>
+          <option value="3" data-color="{{ prio_color_vars[3] }}" {% if pv == 3 %}selected{% endif %}>Hoch</option>
+          <option value="4" data-color="{{ prio_color_vars[4] }}" {% if pv == 4 %}selected{% endif %}>Kritisch</option>
+          <option value="5" data-color="{{ prio_color_vars[5] }}" {% if pv == 5 %}selected{% endif %}>Blockierend</option>
+        </select>
+      </span>
+    </td>
+
+    <!-- Zeiten -->
+    <td class="col-times">
+      {# Fallback: Keine Überfällig-Logik, da utcnow im Template nicht verfügbar ist #}
+      {% if it.type == 'task' %}
+        {% set due_text = (disp_start or it.due_utc) | format_local %}
+        <span class="time-edit-wrap">
+          <span class="time-label-inline" data-kind="due" data-for="{{ it.id }}">
+            {{ due_text }}
+          </span>
+          <input class="fp-datetime time-input hidden" type="text" name="due" placeholder="dd.mm.yyyy hh:mm"
+                value="{{ due_text }}"
+                data-endpoint="/items/{{ it.id }}/due"
+                data-target="#occ-{{ it.id }}"
+                aria-label="Fälligkeitsdatum bearbeiten">
+        </span>
+      {% elif it.type in ('appointment','event') %}
+        {% set start_text = (disp_start or it.start_utc) | format_local %}
+        {% set end_text = (disp_end or it.end_utc) | format_local %}
+        <span class="time-inline-pair">
+          <span class="time-edit-wrap">
+            <span class="time-label-inline" data-kind="start" data-for="{{ it.id }}">
+              {{ start_text }}
+            </span>
+            <input class="fp-datetime time-input hidden" type="text" name="start_local" placeholder="Start"
+                  value="{{ start_text }}"
+                  data-endpoint="/items/{{ it.id }}/start_end"
+                  data-param-name="start_local"
+                  data-target="#occ-{{ it.id }}"
+                  aria-label="Startzeit bearbeiten">
+          </span>
+          <span>–</span>
+          <span class="time-edit-wrap">
+            <span class="time-label-inline" data-kind="end" data-for="{{ it.id }}">{{ end_text }}</span>
+            <input class="fp-datetime time-input hidden" type="text" name="end_local" placeholder="Ende"
+                  value="{{ end_text }}"
+                  data-endpoint="/items/{{ it.id }}/start_end"
+                  data-param-name="end_local"
+                  data-target="#occ-{{ it.id }}"
+                  aria-label="Endzeit bearbeiten">
+          </span>
+        </span>
+      {% elif it.type == 'reminder' %}
+        {% set rem_text = (disp_start or it.reminder_utc) | format_local %}
+        <span class="time-edit-wrap">
+          <span class="time-label-inline" data-kind="reminder" data-for="{{ it.id }}">
+            {{ rem_text }}
+          </span>
+          <input class="fp-datetime time-input hidden" type="text" name="until_local" placeholder="dd.mm.yyyy hh:mm"
+                value="{{ rem_text }}"
+                data-endpoint="/items/{{ it.id }}/snooze"
+                data-param-name="until_local"
+                data-target="#occ-{{ it.id }}"
+                aria-label="Erinnerungszeit bearbeiten">
+        </span>
+      {% endif %}
+    </td>
+
+    <!-- Vorkommen -->
+    <td class="col-occs" id="occ-{{ it.id }}">
+      {% include "_occurrences.html" with context %}
+    </td>
+
+    <!-- Links -->
+    <td class="col-links" id="links-{{ it.id }}">
+      <div class="links" data-id="{{ it.id }}">
+        <div class="links-list">
+          {% for u in (it.links or []) %}
+            <span class="link-row" data-url="{{ u }}">
+              <a class="link-anchor" href="{{ u }}" target="_blank" rel="noopener noreferrer" title="{{ u }}">
+                <img class="link-favicon" data-url="{{ u }}" alt="" loading="lazy">
+                <span class="link-text">{{ u }}</span>
+              </a>
+              <button type="button"
+                      class="link-del"
+                      title="Entfernen"
+                      aria-label="Link entfernen"
+                      hx-post="/items/{{ it.id }}/links/remove"
+                      hx-params="*"
+                      hx-include="closest .link-row"
+                      hx-target="#links-{{ it.id }}"
+                      hx-swap="outerHTML"
+                      style="padding:0 .3em; background:none; border:none; cursor:pointer;">×</button>
+              <input type="hidden" name="url" value="{{ u }}">
+            </span>
+          {% endfor %}
+        </div>
+
+        <div class="links-input-row" style="margin-top: 0.3em;">
+          <button type="button" class="btn btn-xs add-link" data-for="{{ it.id }}" style="width: auto;">Hinzufügen</button>
+        </div>
+      </div>
+    </td>
+
+    <!-- Tags -->
+    <td class="col-tags">
+      <div class="tags" data-id="{{ it.id }}">
+        <div class="tag-list-with-btn" style="display:flex; align-items:center; justify-content:space-between; gap:.5em;">
+          <div class="tag-list" style="display:flex; flex-wrap:wrap; gap:.3em;">
+            {% for t in (it.tags or []) %}
+            <span class="tag-chip" data-tag="{{ t }}">
+              <span class="tag-text">{{ t }}</span>
+              <input type="hidden" name="tag" value="{{ t }}">
+              <button type="button" class="tag-x"
+                      title="Entfernen"
+                      aria-label="Tag entfernen"
+                      hx-post="/items/{{ it.id }}/tags/remove"
+                      hx-params="*"
+                      hx-include="closest .tag-chip"
+                      hx-swap="none">×</button>
+            </span>
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-xs add-tag-btn" aria-label="Tag hinzufügen" title="Tag hinzufügen" style="margin-left:auto;">Hinzufügen</button>
+        </div>
+        <!-- Kein sichtbares Tag-Eingabefeld mehr -->
+      </div>
+    </td>
+
+    <!-- Aktionen -->
+    <td class="col-action" style="white-space: nowrap;">
+      <a href="/items/{{ it.id }}/zoom" class="icon-btn" title="Zoom" aria-label="In neuem Fenster öffnen" target="_blank" rel="noopener" style="display: inline-block; margin-right: 0.25em;">
+        <img src="/static/icons/zoom.svg" alt="" width="16" height="16">
+      </a>
+
+      <span class="delete-wrap" data-id="{{ it.id }}" style="display: inline-block;">
+        <a href="javascript:void(0)" class="icon-btn delete-trigger" title="Löschen" aria-label="Eintrag löschen">
+          <img src="/static/icons/delete.svg" alt="" width="16" height="16" data-keep-color="true" class="no-invert">
+        </a>
+        <span class="delete-confirm hidden">
+          <span class="confirm-text">Löschen?</span>
+          <button type="button" class="btn btn-danger btn-xs do-delete"
+                  hx-post="/items/{{ it.id }}/delete" hx-swap="none">Ja</button>
+          <button type="button" class="btn btn-secondary btn-xs cancel-delete">Nein</button>
+        </span>
+      </span>
+    </td>
+{% endfor %}
+</tbody>
+  <style>
+  @media (max-width: 900px) {
+    .col-links, .col-occs { font-size: 0.8em; }
+    .col-tags { display: none; }
+    .col-times { min-width: 90px; }
+    .col-name { min-width: 120px; }
+  }
+  @media (max-width: 600px) {
+    .col-links, .col-occs { display: none; }
+    .col-status, .col-priority { display: none; }
+    .col-times { min-width: 70px; }
+    .col-name { min-width: 80px; }
+  }
+  .type-icon-inline { max-width: 1.2em; }
+  .toast-success { background: #10b981; }
+  .toast-error { background: #ef4444; }
+  .toast-info { background: #3b82f6; }
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; }
+  .modal-dialog { background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-width: 400px; width: 90%; animation: modalSlideIn 0.2s ease; }
+  .modal-title { margin: 0 0 1rem; font-size: 1.1rem; color: #333; }
+  .modal-buttons { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+  @keyframes modalSlideIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .shortcuts-help { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 10001; max-width: 500px; width: 90%; }
+  .shortcuts-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; margin: 1rem 0; }
+  .shortcut-key { background: #f3f4f6; padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.9em; }
+  .show-tag-input { margin-top: .2em; }
+  .tag-input-row.hidden { display: none; }
+  .tag-input-row { margin-top: .2em; }
+  .status-badge, .prio-badge { cursor: pointer; transition: all 0.2s ease; }
+  .status-badge:hover, .prio-badge:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .status-badge:focus, .prio-badge:focus { outline: 2px solid #2563eb; }
+  .loading-indicator { display: inline-block; width: 1em; height: 1em; border: 2px solid #ccc; border-radius: 50%; border-top: 2px solid #2563eb; animation: spin 1s linear infinite; vertical-align: middle; margin-left: .3em; }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+  .toast { position: fixed; bottom: 1.5em; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: .7em 1.2em; border-radius: .5em; z-index: 9999; font-size: 1em; box-shadow: 0 2px 8px #0002; transition: opacity 0.3s ease; }
+  .btn { transition: all 0.2s ease; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .icon-btn { transition: all 0.2s ease; }
+  .icon-btn:hover { transform: scale(1.1); }
+  .tag-chip, .link-row { transition: all 0.2s ease; }
+  .tag-chip:hover, .link-row:hover { background-color: rgba(0,0,0,0.05); }
+  .auto-save-indicator { font-size: 0.8em; color: #666; margin-left: 0.5em; opacity: 0; transition: opacity 0.3s ease; }
+  .auto-save-indicator.show { opacity: 1; }
+  </style>
+  </tr>
+
+<script>
+  // Load modules dynamically
+  const modules = [
+    '/static/js/modules/toast-notifications.js',
+    '/static/js/modules/modal-dialogs.js', 
+    '/static/js/modules/loading-states.js',
+    '/static/js/modules/ui-interactions.js',
+    '/static/js/modules/tags-links.js',
+    '/static/js/modules/keyboard-shortcuts.js',
+    '/static/js/modules/app.js'
+  ];
+
+  // Guard: Verhindert mehrfache Bindung bei HTMX-Reloads
+  if (window.__itemsTableBound) return;
+  window.__itemsTableBound = true;
+
+  // Load modules sequentially
+  let loadedCount = 0;
+  modules.forEach((src, index) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => {
+      loadedCount++;
+      if (loadedCount === modules.length) {
+        console.log('All modules loaded successfully');
+      }
+    };
+    script.onerror = () => console.warn(`Failed to load ${src}`);
+    document.head.appendChild(script);
+  });
+
+  // Handle multi-template responses
+  document.addEventListener('htmx:afterOnLoad', (e) => {
+    const root = e.detail.elt;
+    if (!root) return;
+    const multi = root.querySelector && root.querySelector('#htmx-multi');
+    if (!multi) return;
+    multi.querySelectorAll('template[data-target]').forEach(tpl => {
+      const sel = tpl.getAttribute('data-target');
+      const tgt = document.querySelector(sel);
+      if (tgt) tgt.innerHTML = tpl.innerHTML;
+    });
+  });
+
+    // Modern confirmation dialog system
+    function showConfirmDialog(message, onConfirm, onCancel) {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog';
+      
+      dialog.innerHTML = `
+        <h3 class="modal-title">Bestätigung</h3>
+        <p>${message}</p>
+        <div class="modal-buttons">
+          <button type="button" class="btn btn-secondary cancel-btn">Abbrechen</button>
+          <button type="button" class="btn btn-danger confirm-btn">Bestätigen</button>
+        </div>
+      `;
+      
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+      
+      const confirmBtn = dialog.querySelector('.confirm-btn');
+      const cancelBtn = dialog.querySelector('.cancel-btn');
+      
+      confirmBtn.focus();
+      
+      const cleanup = () => {
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 200);
+      };
+      
+      confirmBtn.addEventListener('click', () => {
+        cleanup();
+        if (onConfirm) onConfirm();
+      });
+      
+      cancelBtn.addEventListener('click', () => {
+        cleanup();
+        if (onCancel) onCancel();
+      });
+      
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          cleanup();
+          if (onCancel) onCancel();
+        }
+      });
+      
+      document.addEventListener('keydown', function escapeHandler(e) {
+        if (e.key === 'Escape') {
+          cleanup();
+          if (onCancel) onCancel();
+          document.removeEventListener('keydown', escapeHandler);
+        }
+      });
+    }
+    
+    function createAutoSaveIndicator(element) {
+      const indicator = document.createElement('span');
+      indicator.className = 'auto-save-indicator';
+      element.parentElement.appendChild(indicator);
+      return indicator;
+    }
+
+    // Keyboard shortcuts help system
+    function showShortcutsHelp() {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      
+      const dialog = document.createElement('div');
+      dialog.className = 'shortcuts-help';
+      
+      dialog.innerHTML = `
+        <h3>Keyboard Shortcuts</h3>
+        <div class="shortcuts-grid">
+          <span class="shortcut-key">Ctrl+L</span><span>Link hinzufügen</span>
+          <span class="shortcut-key">Ctrl+T</span><span>Tag hinzufügen</span>
+          <span class="shortcut-key">Enter/Space</span><span>Status/Priorität ändern</span>
+          <span class="shortcut-key">Esc</span><span>Bearbeitung abbrechen</span>
+          <span class="shortcut-key">?</span><span>Diese Hilfe anzeigen</span>
+        </div>
+        <div style="text-align: right; margin-top: 1rem;">
+          <button type="button" class="btn btn-primary close-help">Schließen</button>
+        </div>
+      `;
+      
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+      
+      const closeBtn = dialog.querySelector('.close-help');
+      closeBtn.focus();
+      
+      const cleanup = () => {
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 200);
+      };
+      
+      closeBtn.addEventListener('click', cleanup);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) cleanup();
+      });
+      
+      document.addEventListener('keydown', function escapeHandler(e) {
+        if (e.key === 'Escape') {
+          cleanup();
+          document.removeEventListener('keydown', escapeHandler);
+        }
+      });
+    }
+
+    document.addEventListener('htmx:beforeRequest', (e) => {
+      const el = e.target;
+      
+      // Add loading indicator to buttons
+      if (el.matches('button:not(.no-loading)')) {
+        const originalText = el.textContent;
+        el.dataset.originalText = originalText;
+        el.innerHTML = originalText + ' <span class="loading-indicator"></span>';
+        el.disabled = true;
+      }
+      
+      // Show auto-save indicator for inputs
+      if (el.matches('input[name="name"], select')) {
+        const indicator = el.parentElement.querySelector('.auto-save-indicator') || createAutoSaveIndicator(el);
+        indicator.textContent = 'Speichern...';
+        indicator.classList.add('show');
+      }
+    });
+
+    document.addEventListener('htmx:beforeRequest', (e) => {
+      const el = e.target;
+      
+      // Add loading indicator to buttons
+      if (el.matches('button:not(.no-loading)')) {
+        const originalText = el.textContent;
+        el.dataset.originalText = originalText;
+        el.innerHTML = originalText + ' <span class="loading-indicator"></span>';
+        el.disabled = true;
+      }
+      
+      // Show auto-save indicator for inputs
+      if (el.matches('input[name="name"], select')) {
+        const indicator = el.parentElement.querySelector('.auto-save-indicator') || createAutoSaveIndicator(el);
+        indicator.textContent = 'Speichern...';
+        indicator.classList.add('show');
+      }
+    });
+
+    document.addEventListener('htmx:afterRequest', (e) => {
+      const el = e.target;
+      
+      // Remove loading indicator from buttons
+      if (el.matches('button') && el.dataset.originalText) {
+        el.textContent = el.dataset.originalText;
+        el.disabled = false;
+        delete el.dataset.originalText;
+      }
+      
+      // Update auto-save indicator
+      const indicator = el.parentElement?.querySelector('.auto-save-indicator');
+      if (indicator) {
+        if (e.detail.xhr.status >= 200 && e.detail.xhr.status < 300) {
+          indicator.textContent = 'Gespeichert';
+          setTimeout(() => indicator.classList.remove('show'), 2000);
+        } else {
+          indicator.textContent = 'Fehler beim Speichern';
+          indicator.style.color = '#ef4444';
+          setTimeout(() => {
+            indicator.classList.remove('show');
+            indicator.style.color = '';
+          }, 3000);
+        }
+      }
+      const el = e.target;
+      
+      // Remove loading indicator from buttons
+      if (el.matches('button') && el.dataset.originalText) {
+        el.textContent = el.dataset.originalText;
+        el.disabled = false;
+        delete el.dataset.originalText;
+      }
+      
+      // Update auto-save indicator
+      const indicator = el.parentElement?.querySelector('.auto-save-indicator');
+      if (indicator) {
+        if (e.detail.xhr.status >= 200 && e.detail.xhr.status < 300) {
+          indicator.textContent = 'Gespeichert';
+          setTimeout(() => indicator.classList.remove('show'), 2000);
+        } else {
+          indicator.textContent = 'Fehler beim Speichern';
+          indicator.style.color = '#ef4444';
+          setTimeout(() => {
+            indicator.classList.remove('show');
+            indicator.style.color = '';
+          }, 3000);
+        }
+      }
+      const el = e.target;
+
+      // Status-Select
+      if (el && el.matches && el.matches('select[name="new_status"]')) {
+        const wrap = el.closest('.status-wrap');
+        const dot  = wrap?.querySelector('.status-dot');
+        const badge= wrap?.querySelector('.status-badge');
+
+        if (e.detail && e.detail.xhr && e.detail.xhr.status === 204) {
+          const selected = el.options[el.selectedIndex];
+          const color    = selected?.getAttribute('data-color') || '#bbb';
+          const label    = selected?.textContent || el.value;
+
+          if (dot) dot.style.background = color;
+          if (badge) badge.textContent = label;
+
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+
+          el.setAttribute('data-current', el.value);
+          Array.from(el.options).forEach(o => o.removeAttribute('selected'));
+          if (selected) selected.setAttribute('selected', 'selected');
+        }
+
+        if (e.detail && e.detail.xhr && e.detail.xhr.status === 422) {
+          const current = el.getAttribute('data-current');
+          if (current) el.value = current;
+
+          const alerts = document.getElementById('alerts') || document.body;
+          const wrapDiv = document.createElement('div');
+          wrapDiv.innerHTML = e.detail.xhr.responseText;
+          alerts.prepend(wrapDiv);
+
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+        }
+        return;
+      }
+
+      // Priority-Select
+      if (el.matches && el.matches('select.prio-select')) {
+        const wrap = el.closest('.prio-wrap');
+        const badge = wrap?.querySelector('.prio-badge');
+        
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          const selected = el.options[el.selectedIndex];
+          const color = selected.getAttribute('data-color') || '#9ca3af';
+          const label = selected.textContent || 'Keine';
+          const prio = selected.value;
+          
+          if (badge) {
+            badge.textContent = label;
+            badge.style.borderColor = color;
+            badge.style.background = color + '22';
+            badge.setAttribute('data-priority', prio);
+          }
+          
+          el.setAttribute('data-current', el.value);
+          Array.from(el.options).forEach(o => o.removeAttribute('selected'));
+          selected.setAttribute('selected', 'selected');
+          
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+        }
+        
+        if (e.detail.xhr && e.detail.xhr.status === 422) {
+          const current = el.getAttribute('data-current');
+          if (current) el.value = current;
+          
+          const alerts = document.getElementById('alerts') || document.body;
+          const wrap = document.createElement('div');
+          wrap.innerHTML = e.detail.xhr.responseText;
+          alerts.prepend(wrap);
+          
+          el.classList.add('hidden');
+          if (badge) badge.classList.remove('hidden');
+        }
+      }
+
+      // Name-Input
+      if (el.matches && el.matches('input[name="name"]')) {
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          el.setAttribute('data-current', el.value);
+        }
+        if (e.detail.xhr && e.detail.xhr.status === 422) {
+          const cur = el.getAttribute('data-current');
+          if (cur !== null) el.value = cur;
+          const alerts = document.getElementById('alerts') || document.body;
+          const wrap = document.createElement('div');
+          wrap.innerHTML = e.detail.xhr.responseText;
+          alerts.prepend(wrap);
+        }
+      }
+
+      // Delete (Ja)
+      if (el.classList && el.classList.contains('do-delete')) {
+        if (e.detail.xhr && (e.detail.xhr.status === 204 || e.detail.xhr.status === 200)) {
+          const tr = el.closest('tr');
+          if (tr) {
+            tr.remove();
+            showToast('Eintrag gelöscht', 'success');
+          }
+        }
+      }
+
+      // Tags: Entfernen
+      if (el.classList && el.classList.contains('tag-x')) {
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          const chip = el.closest('.tag-chip');
+          if (chip) {
+            chip.remove();
+            showToast('Tag entfernt', 'success');
+          }
+        }
+      }
+
+      // Links: Entfernen
+      if (el.classList && el.classList.contains('link-del')) {
+        if (e.detail.xhr && e.detail.xhr.status === 204) {
+          const row = el.closest('.link-row');
+          if (row) {
+            row.remove();
+            showToast('Link entfernt', 'success');
+          }
+        }
+      }
+    });
+
+    // Status: Badge -> Select
+    document.addEventListener('click', (e) => {
+      const badge = e.target.closest('.status-badge');
+      if (!badge) return;
+      e.preventDefault();
+      const wrap = badge.closest('.status-wrap');
+      const sel = wrap?.querySelector('.status-select');
+      if (!sel) return;
+      badge.classList.add('hidden');
+      sel.classList.remove('hidden');
+      sel.style.display = 'inline-block';
+      sel.focus();
+    });
+
+    // Status: Select -> Badge (blur)
+    document.addEventListener('blur', (e) => {
+      const sel = e.target;
+      if (!(sel.classList && sel.classList.contains('status-select'))) return;
+      setTimeout(() => {
+        if (document.activeElement === sel) return;
+        const wrap = sel.closest('.status-wrap');
+        const badge = wrap?.querySelector('.status-badge');
+        sel.classList.add('hidden');
+        sel.style.display = 'none';
+        if (badge) badge.classList.remove('hidden');
+      }, 0);
+    }, true);
+
+    // Priority: Badge -> Select
+    document.addEventListener('click', (e) => {
+      const badge = e.target.closest('.prio-badge');
+      if (!badge) return;
+      e.preventDefault();
+      const wrap = badge.closest('.prio-wrap');
+      const sel = wrap?.querySelector('.prio-select');
+      if (!sel) return;
+      badge.classList.add('hidden');
+      sel.classList.remove('hidden');
+      sel.style.display = 'inline-block';
+      sel.focus();
+    });
+
+    // Priority: Select -> Badge (blur)
+    document.addEventListener('blur', (e) => {
+      const sel = e.target;
+      if (!(sel.classList && sel.classList.contains('prio-select'))) return;
+      setTimeout(() => {
+        if (document.activeElement === sel) return;
+        const wrap = sel.closest('.prio-wrap');
+        const badge = wrap?.querySelector('.prio-badge');
+        sel.classList.add('hidden');
+        sel.style.display = 'none';
+        if (badge) badge.classList.remove('hidden');
+      }, 0);
+    }, true);
+
+    // Status & Priority: Keyboard-Support (kombiniert)
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      
+      const statusBadge = e.target.closest('.status-badge');
+      if (statusBadge) {
+        e.preventDefault();
+        statusBadge.click();
+        return;
+      }
+      
+      const prioBadge = e.target.closest('.prio-badge');
+      if (prioBadge) {
+        e.preventDefault();
+        prioBadge.click();
+        return;
+      }
+    });
+
+    // ✅ NEU: Inline-Edit Button Handler
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.inline-edit-btn');
+      if (!btn) return;
+      
+      e.preventDefault();
+      e.stopPropagation(); // Verhindert dass Link ausgelöst wird
+      
+      const id = btn.getAttribute('data-for');
+      const wrap = btn.closest('.name-wrap');
+      const link = wrap.querySelector('.name-link');
+      const input = document.getElementById(`name-${id}`);
+      
+      if (!input) return;
+      
+      // Verstecke Link und Button
+      link.style.display = 'none';
+      btn.style.display = 'none';
+      
+      // Zeige Input
+      input.classList.remove('hidden');
+      setTimeout(() => {
+        input.focus();
+        input.select(); // Selektiert den Text für schnelles Überschreiben
+      }, 0);
+    });
+
+    // ✅ NEU: Name Input Blur Handler (aktualisiert)
+    document.addEventListener('blur', async (e) => {
+      const input = e.target;
+      if (!(input.classList && input.classList.contains('name-input'))) return;
+      
+      const val = input.value.trim();
+      const wrap = input.closest('.name-wrap');
+      const link = wrap?.querySelector('.name-link');
+      const btn = wrap?.querySelector('.inline-edit-btn');
+      
+      if (!val) {
+        input.value = input.getAttribute('data-current') || '';
+        input.classList.add('hidden');
+        if (link) link.style.display = '';
+        if (btn) btn.style.display = '';
+        return;
+      }
+      
+      try {
+        await htmx.ajax('POST', input.getAttribute('hx-post'), { 
+          values: { name: val }, 
+          swap: 'none' 
+        });
+        
+        input.setAttribute('data-current', val);
+        if (link) link.textContent = val;
+      } catch (err) {
+        console.error('Fehler beim Umbenennen:', err);
+      } finally {
+        input.classList.add('hidden');
+        if (link) link.style.display = '';
+        if (btn) btn.style.display = '';
+      }
+    }, true);
+
+    // ✅ NEU: ESC-Taste schließt Inline-Edit ohne Speichern
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      
+      const input = e.target;
+      if (!(input.classList && input.classList.contains('name-input'))) return;
+      
+      // Setze auf vorherigen Wert zurück
+      input.value = input.getAttribute('data-current') || '';
+      
+      const wrap = input.closest('.name-wrap');
+      const link = wrap?.querySelector('.name-link');
+      const btn = wrap?.querySelector('.inline-edit-btn');
+      
+      input.classList.add('hidden');
+      if (link) link.style.display = '';
+      if (btn) btn.style.display = '';
+    });
+
+    // Inline-Löschen mit moderner Bestätigung
+    document.addEventListener('click', (e) => {
+      const trigger = e.target.closest('.delete-trigger');
+      if (trigger) {
+        e.preventDefault();
+        const wrap = trigger.closest('.delete-wrap');
+        const itemName = wrap.closest('tr').querySelector('.name-link')?.textContent || 'diesen Eintrag';
+        
+        showConfirmDialog(
+          `Möchten Sie "${itemName}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
+          () => {
+            // Bestätigt - lösche Item
+            const deleteBtn = wrap.querySelector('.do-delete');
+            if (deleteBtn) deleteBtn.click();
+          }
+        );
+        return;
+      }
+      
+      const cancel = e.target.closest('.cancel-delete');
+      if (cancel) {
+        e.preventDefault();
+        const wrap = cancel.closest('.delete-wrap');
+        wrap.querySelector('.delete-confirm')?.classList.add('hidden');
+        wrap.querySelector('.delete-trigger')?.classList.remove('hidden');
+        return;
+      }
+    });
+
+    // Tag-Suggest
+    document.addEventListener('htmx:afterOnLoad', (e) => {
+      const tgt = e.target;
+      if (!(tgt.classList && tgt.classList.contains('tag-suggest'))) return;
+      try {
+        const data = JSON.parse(e.detail.xhr.responseText);
+        tgt.innerHTML = '';
+        data.forEach(tag => {
+          const item = document.createElement('div');
+          item.className = 'tag-sugg-item';
+          item.tabIndex = 0;
+          item.textContent = tag;
+          item.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+            addTagFromSuggest(tgt, tag);
+          });
+          item.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') { ev.preventDefault(); addTagFromSuggest(tgt, tag); }
+          });
+          tgt.appendChild(item);
+        });
+      } catch(_) {}
+    });
+
+    let clickedSuggest = false;
+    document.addEventListener('mousedown', (e) => {
+      if (e.target && e.target.classList && e.target.classList.contains('tag-sugg-item')) {
+        clickedSuggest = true;
+      }
+    });
+
+    document.addEventListener('blur', (e) => {
+      const el = e.target;
+      if (!(el.classList && el.classList.contains('tag-input'))) return;
+      setTimeout(() => {
+        const wrap = el.closest('.tags');
+        const sugg = wrap?.querySelector('.tag-suggest');
+        if (!sugg) return;
+        if (clickedSuggest) {
+          clickedSuggest = false;
+        } else {
+          sugg.innerHTML = '';
+        }
+      }, 0);
+    }, true);
+
+    function addTagFromSuggest(tgt, tag){
+      const wrap = tgt.closest('.tags');
+      const input = wrap.querySelector('.tag-input');
+      const sugg = wrap.querySelector('.tag-suggest');
+      if (sugg) sugg.innerHTML = '';
+      input.value = tag;
+      htmx.ajax('POST', `/items/${wrap.dataset.id}/tags/add`, {values: {tag}, target: null, swap: 'none'})
+        .then(()=>{
+          const chip = appendTagChip(wrap, tag);
+          if (window.htmx && chip) htmx.process(chip);
+          input.value='';
+        });
+    }
+
+
+    // Tag hinzufügen per Button mit Prompt
+    document.addEventListener('click', async (e) => {
+      if (!(e.target && e.target.classList.contains('add-tag-btn'))) return;
+      const btn = e.target;
+      const wrap = btn.closest('.tags');
+      let tag = prompt('Bitte Tag eingeben');
+      if (!tag) return;
+      tag = tag.trim();
+      if (!tag) {
+        showToast('Tag darf nicht leer sein', 'error');
+        return;
+      }
+      if (Array.from(wrap.querySelectorAll('.tag-chip')).some(c => c.getAttribute('data-tag') === tag)) {
+        showToast('Tag bereits vorhanden', 'error');
+        return;
+      }
+      btn.disabled = true;
+      try {
+        await htmx.ajax('POST', `/items/${wrap.dataset.id}/tags/add`, {values: {tag}, target: null, swap: 'none'});
+        const chip = appendTagChip(wrap, tag);
+        if (window.htmx && chip) htmx.process(chip);
+        showToast('Tag hinzugefügt', 'success');
+      } catch (err) {
+        showToast('Fehler beim Hinzufügen des Tags', 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    function appendTagChip(wrap, tag) {
+      if (Array.from(wrap.querySelectorAll('.tag-chip')).some(c => c.getAttribute('data-tag') === tag)) return null;
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.setAttribute('data-tag', tag);
+
+      const text = document.createElement('span');
+      text.className = 'tag-text';
+      text.textContent = tag;
+
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'tag';
+      hidden.value = tag;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tag-x';
+      btn.title = 'Entfernen';
+      btn.setAttribute('aria-label', 'Tag entfernen');
+      btn.textContent = '×';
+      btn.setAttribute('hx-post', `/items/${wrap.dataset.id}/tags/remove`);
+      btn.setAttribute('hx-params', '*');
+      btn.setAttribute('hx-include', 'closest .tag-chip');
+      btn.setAttribute('hx-swap', 'none');
+
+      chip.appendChild(text);
+      chip.appendChild(hidden);
+      chip.appendChild(btn);
+
+      const list = wrap.querySelector('.tag-list') || wrap;
+      list.appendChild(chip);
+
+      if (window.htmx) { htmx.process(chip); }
+      return chip;
+    }
+
+    // Lazy Favicons (EINMAL via IntersectionObserver)
+    function setFavicon(img, url){
+      try {
+        const domain = new URL(url).hostname;
+        img.src = domain ? `https://www.google.com/s2/favicons?domain=${domain}` : '/static/icons/link.svg';
+      } catch(_){
+        img.src = '/static/icons/link.svg';
+      }
+    }
+    
+    const imgs = Array.from(document.querySelectorAll('img.link-favicon[data-url]'));
+    if (!('IntersectionObserver' in window)) {
+      imgs.forEach(img => setFavicon(img, img.dataset.url));
+    } else {
+      const io = new IntersectionObserver((entries, obs)=>{
+        entries.forEach(ent=>{
+          if (ent.isIntersecting) {
+            const img = ent.target;
+            setFavicon(img, img.dataset.url);
+            obs.unobserve(img);
+          }
+        });
+      }, {rootMargin: '200px 0px'});
+      imgs.forEach(img => io.observe(img));
+    }
+
+    // Link hinzufügen
+
+    document.addEventListener('click', async (e) => {
+      if (!(e.target && e.target.classList.contains('add-link'))) return;
+      const btn = e.target;
+      const wrap = btn.closest('.links');
+      const id = wrap.dataset.id;
+      let url = prompt('Bitte Link-URL eingeben (https://...)');
+      if (!url) return;
+      url = url.trim();
+      if (!url) {
+        showToast('URL darf nicht leer sein', 'error');
+        return;
+      }
+      if (!/^https?:\/\//i.test(url)) {
+        showToast('Bitte eine gültige URL mit https:// oder http:// angeben', 'error');
+        return;
+      }
+      const exists = Array.from(wrap.querySelectorAll('.links-list .link-anchor'))
+        .some(a => (a.getAttribute('href') || '') === url);
+      if (exists) {
+        showToast('Link bereits vorhanden', 'error');
+        return;
+      }
+      btn.disabled = true;
+      try {
+        await htmx.ajax('POST', `/items/${id}/links/add`, {values: {url}, swap:'none'});
+        appendLinkAnchor(wrap, url);
+        showToast('Link hinzugefügt', 'success');
+      } catch (err) {
+        showToast('Fehler beim Hinzufügen des Links', 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      const el = e.target;
+      if (el.classList && el.classList.contains('link-input') && e.key === 'Enter') {
+        e.preventDefault();
+        const btn = el.closest('.links').querySelector('.add-link');
+        if (btn) btn.click();
+      }
+    });
+
+    function appendLinkAnchor(wrap, url){
+      const list = wrap.querySelector('.links-list');
+      if (Array.from(list.querySelectorAll('.link-row')).some(r => (r.dataset.url||'') === url)) return;
+
+      const row = document.createElement('span');
+      row.className = 'link-row';
+      row.dataset.url = url;
+
+      const a = document.createElement('a');
+      a.className = 'link-anchor';
+      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = url;
+
+      const img = document.createElement('img');
+      img.className = 'link-favicon'; img.alt = ''; img.loading = 'lazy';
+      const domain = (()=>{
+        try { return new URL(url).hostname; } catch(_){ return ''; }
+      })();
+      img.src = domain ? `https://www.google.com/s2/favicons?domain=${domain}` : '/static/icons/link.svg';
+
+      const text = document.createElement('span');
+      text.className = 'link-text';
+      text.textContent = url;
+
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'url';
+      hidden.value = url;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'link-del';
+      btn.title = 'Entfernen';
+      btn.setAttribute('aria-label', 'Link entfernen');
+      btn.setAttribute('hx-post', `/items/${wrap.dataset.id}/links/remove`);
+      btn.setAttribute('hx-params', '*');
+      btn.setAttribute('hx-include', 'closest .link-row');
+      btn.setAttribute('hx-target', `#links-${wrap.dataset.id}`);
+      btn.setAttribute('hx-swap', 'outerHTML');
+      btn.style.padding = '0 .3em';
+      btn.style.background = 'none';
+      btn.style.border = 'none';
+      btn.style.cursor = 'pointer';
+      btn.textContent = '×';
+
+      a.appendChild(img);
+      a.appendChild(text);
+      row.appendChild(a);
+      row.appendChild(btn);
+      row.appendChild(hidden);
+      list.appendChild(row);
+      
+      // htmx für den neuen Button aktivieren
+      if (window.htmx) {
+        htmx.process(btn);
+      }
+    }
+
+    // Zeit-Inputs: Label->Input
+    document.addEventListener('click', (e) => {
+      const lab = e.target.closest('.time-label-inline');
+      if (!lab) return;
+
+      const wrap = lab.closest('.time-edit-wrap');
+      if (!wrap) return;
+
+      const input = wrap.querySelector('input.time-input');
+      if (!input) return;
+
+      lab.classList.add('hidden');
+      input.classList.remove('hidden');
+
+      // Flatpickr initialisieren (einmalig pro Input)
+      if (window.flatpickr) {
+        // Alte Instanz zerstören falls vorhanden
+        if (input._fp) {
+          input._fp.destroy();
+        }
+        
+        const endpoint = input.getAttribute('data-endpoint');
+        const paramName = input.getAttribute('data-param-name') || input.getAttribute('name');
+        const targetSel = input.getAttribute('data-target');
+
+        input._fp = flatpickr(input, {
+          enableTime: true,
+          time_24hr: true,
+          dateFormat: "d.m.Y H:i",
+          locale: "de",
+          clickOpens: true,
+          
+          // Beim Schließen: Wert speichern
+          onClose: async function(selectedDates, dateStr, instance) {
+            const val = dateStr.trim();
+            if (!val) {
+              input.classList.add('hidden');
+              lab.classList.remove('hidden');
+              return;
+            }
+
+            const isAppointmentOrEvent = wrap.closest('.time-inline-pair') !== null;
+            
+            try {
+              if (isAppointmentOrEvent) {
+                // Finde beide Inputs (start und end)
+                const pair = wrap.closest('.time-inline-pair');
+                const startInput = pair.querySelector('input[data-param-name="start_local"]');
+                const endInput = pair.querySelector('input[data-param-name="end_local"]');
+                
+                const values = {
+                  start_local: startInput?.value || '',
+                  end_local: endInput?.value || ''
+                };
+                
+                await htmx.ajax('POST', endpoint, {
+                  values: values,
+                  target: targetSel || null,
+                  swap: targetSel ? 'innerHTML' : 'none'
+                });
+              } else {
+                // Tasks/Reminders: Einzelner Wert
+                const values = {};
+                values[paramName] = val;
+                
+                await htmx.ajax('POST', endpoint, {
+                  values: values,
+                  target: targetSel || null,
+                  swap: targetSel ? 'innerHTML' : 'none'
+                });
+              }
+
+              lab.textContent = val;
+              input.value = val;
+            } catch (err) {
+              console.error('Fehler beim Speichern:', err);
+            } finally {
+              input.classList.add('hidden');
+              lab.classList.remove('hidden');
+            }
+          }
+        });
+      }
+
+      // Flatpickr öffnen
+      if (input._fp) {
+        setTimeout(() => input._fp.open(), 10);
+      } else {
+        // Fallback: normaler Focus (falls Flatpickr nicht geladen)
+        setTimeout(() => input.focus(), 0);
+      }
+    });
+
+    // ESC schließt Zeit-Input
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      
+      const inp = e.target;
+      if (!(inp.classList && inp.classList.contains('time-input'))) return;
+      
+      // Flatpickr schließen
+      if (inp._fp) {
+        inp._fp.close();
+      }
+      
+      const wrap = inp.closest('.time-edit-wrap');
+      const lab = wrap?.querySelector('.time-label-inline');
+      
+      inp.classList.add('hidden');
+      if (lab) lab.classList.remove('hidden');
+    });
+
+    document.addEventListener('htmx:afterOnLoad', (e) => {
+      const root = e.detail.elt;
+      if (!root) return;
+      const multi = root.querySelector && root.querySelector('#htmx-multi');
+      if (!multi) return;
+      multi.querySelectorAll('template[data-target]').forEach(tpl => {
+        const sel = tpl.getAttribute('data-target');
+        const tgt = document.querySelector(sel);
+        if (tgt) tgt.innerHTML = tpl.innerHTML;
+      });
+    });
+
+    // Toast notification system
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Keyboard navigation for links and tags
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+L: Add link to focused row
+      if (e.ctrlKey && e.key === 'l' && !e.target.matches('input, textarea')) {
+        e.preventDefault();
+        const row = e.target.closest('tr');
+        const addBtn = row?.querySelector('.add-link');
+        if (addBtn) addBtn.click();
+      }
+      
+      // Ctrl+T: Add tag to focused row
+      if (e.ctrlKey && e.key === 't' && !e.target.matches('input, textarea')) {
+        e.preventDefault();
+        const row = e.target.closest('tr');
+        const addBtn = row?.querySelector('.add-tag-btn');
+        if (addBtn) addBtn.click();
+      }
+    });
+  })();
+</script>

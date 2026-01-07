@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Demo - Task Manager</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <div class="dashboard-header-left">
+                <h1 class="dashboard-title">
+                    <span class="dashboard-icon">📊</span>
+                    Dashboard Demo
+                </h1>
+                <div class="dashboard-status">
+                    <span class="status-indicator" data-tooltip="System Status: Online">
+                        <span class="status-dot status-dot--online"></span>
+                    </span>
+                    <span class="dashboard-timestamp" id="current-time"></span>
+                </div>
+            </div>
+            
+            <div class="dashboard-actions">
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <button class="btn-icon" data-tooltip="Neue Aufgabe">
+                        <svg class="icon"><use href="#icon-plus"></use></svg>
+                    </button>
+                    <button class="btn-icon" data-tooltip="Neuer Termin">
+                        <svg class="icon"><use href="#icon-calendar"></use></svg>
+                    </button>
+                </div>
+
+                <!-- Theme Toggle -->
+                <button class="btn-icon theme-toggle" data-tooltip="Dark/Light Mode" onclick="toggleTheme()">
+                    <svg class="icon theme-icon-light"><use href="#icon-sun"></use></svg>
+                    <svg class="icon theme-icon-dark"><use href="#icon-moon"></use></svg>
+                </button>
+
+                <!-- Dashboard Settings -->
+                <button class="btn-icon" data-tooltip="Dashboard anpassen" onclick="openCustomizer()">
+                    <svg class="icon"><use href="#icon-settings"></use></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid Container -->
+        <div class="dashboard-container" id="dashboard-grid">
+            
+            <!-- Widget: Quick Stats -->
+            <div class="dashboard-widget widget-stats" data-widget="stats">
+                <div class="widget-header">
+                    <div class="widget-title">
+                        <span class="widget-icon">📈</span>
+                        <span>Übersicht</span>
+                    </div>
+                </div>
+                <div class="widget-content">
+                    <div class="stats-grid">
+                        <div class="stat-card stat-card--danger">
+                            <div class="stat-number">3</div>
+                            <div class="stat-label">Überfällig</div>
+                        </div>
+                        <div class="stat-card stat-card--warning">
+                            <div class="stat-number">5</div>
+                            <div class="stat-label">Heute</div>
+                        </div>
+                        <div class="stat-card stat-card--info">
+                            <div class="stat-number">12</div>
+                            <div class="stat-label">Ohne Termin</div>
+                        </div>
+                        <div class="stat-card stat-card--success">
+                            <div class="stat-number">8</div>
+                            <div class="stat-label">Ereignisse</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widget: Priority Tasks -->
+            <div class="dashboard-widget widget-priority" data-widget="priority">
+                <div class="widget-header">
+                    <div class="widget-title">
+                        <span class="widget-icon">⚠️</span>
+                        <span>Prioritäten</span>
+                    </div>
+                    <div class="widget-actions">
+                        <button class="widget-action" data-tooltip="Aktualisieren">
+                            <svg class="icon"><use href="#icon-refresh"></use></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="widget-content">
+                    <div class="priority-list">
+                        <div class="priority-item priority-item--overdue">
+                            <div class="priority-indicator"></div>
+                            <div class="priority-content">
+                                <div class="priority-title">
+                                    <img src="/static/icons/task.svg" class="item-icon" alt="" width="20" height="20">
+                                    <span>Wichtiger Bericht fertigstellen</span>
+                                </div>
+                                <div class="priority-meta">
+                                    <span class="priority-time">Gestern 14:00</span>
+                                    <span class="priority-badge priority-badge--danger">Überfällig</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="priority-item priority-item--overdue">
+                            <div class="priority-indicator"></div>
+                            <div class="priority-content">
+                                <div class="priority-title">
+                                    <img src="/static/icons/reminder.svg" class="item-icon" alt="" width="20" height="20">
+                                    <span>Kundentermin vorbereiten</span>
+                                </div>
+                                <div class="priority-meta">
+                                    <span class="priority-time">Heute 09:00</span>
+                                    <span class="priority-badge priority-badge--danger">Überfällig</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widget: Today's Schedule -->
+            <div class="dashboard-widget widget-schedule" data-widget="schedule">
+                <div class="widget-header">
+                    <div class="widget-title">
+                        <span class="widget-icon">📅</span>
+                        <span>Heute</span>
+                    </div>
+                </div>
+                <div class="widget-content">
+                    <div class="schedule-timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-time">10:00</div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">
+                                    <img src="/static/icons/appointment.svg" class="item-icon" alt="" width="20" height="20">
+                                    <span>Teammeeting</span>
+                                </div>
+                                <div class="timeline-status">
+                                    <span class="status-badge" style="background: #3b82f6;">Offen</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="timeline-item">
+                            <div class="timeline-time">14:30</div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">
+                                    <img src="/static/icons/task.svg" class="item-icon" alt="" width="20" height="20">
+                                    <span>Projektupdate</span>
+                                </div>
+                                <div class="timeline-status">
+                                    <span class="status-badge" style="background: #f59e0b;">In Bearbeitung</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widget: Quick Actions -->
+            <div class="dashboard-widget widget-actions" data-widget="actions">
+                <div class="widget-header">
+                    <div class="widget-title">
+                        <span class="widget-icon">⚡</span>
+                        <span>Aktionen</span>
+                    </div>
+                </div>
+                <div class="widget-content">
+                    <div class="actions-grid">
+                        <button class="action-btn action-btn--primary">
+                            <svg class="icon"><use href="#icon-plus"></use></svg>
+                            <span>Neue Aufgabe</span>
+                        </button>
+                        <button class="action-btn action-btn--secondary">
+                            <svg class="icon"><use href="#icon-calendar"></use></svg>
+                            <span>Neuer Termin</span>
+                        </button>
+                        <button class="action-btn action-btn--tertiary">
+                            <svg class="icon"><use href="#icon-upload"></use></svg>
+                            <span>Importieren</span>
+                        </button>
+                        <button class="action-btn action-btn--tertiary">
+                            <svg class="icon"><use href="#icon-settings"></use></svg>
+                            <span>Einstellungen</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widget: Upcoming Events -->
+            <div class="dashboard-widget widget-events" data-widget="events">
+                <div class="widget-header">
+                    <div class="widget-title">
+                        <span class="widget-icon">🎉</span>
+                        <span>Ereignisse</span>
+                    </div>
+                </div>
+                <div class="widget-content">
+                    <div class="events-list">
+                        <div class="event-item">
+                            <div class="event-date">15.11.</div>
+                            <div class="event-content">
+                                <div class="event-title">
+                                    <img src="/static/icons/birthday.svg" class="item-icon birthday-icon" alt="" width="20" height="20">
+                                    <span>Marias Geburtstag</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="event-item">
+                            <div class="event-date">20.11.</div>
+                            <div class="event-content">
+                                <div class="event-title">
+                                    <img src="/static/icons/event.svg" class="item-icon" alt="" width="20" height="20">
+                                    <span>Firmenfeier</span>
+                                </div>
+                                <div class="event-status">
+                                    <span class="status-badge" style="background: #8b5cf6;">Offen</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widget: Mini Calendar -->
+            <div class="dashboard-widget widget-calendar" data-widget="calendar">
+                <div class="widget-header">
+                    <div class="widget-title">
+                        <span class="widget-icon">📅</span>
+                        <span>November 2024</span>
+                    </div>
+                    <div class="widget-actions">
+                        <button class="widget-action">
+                            <svg class="icon"><use href="#icon-chevron-left"></use></svg>
+                        </button>
+                        <button class="widget-action">
+                            <svg class="icon"><use href="#icon-chevron-right"></use></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="widget-content">
+                    <div class="mini-calendar">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>So</th><th>Mo</th><th>Di</th><th>Mi</th><th>Do</th><th>Fr</th><th>Sa</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="other-month">27</td>
+                                    <td class="other-month">28</td>
+                                    <td class="other-month">29</td>
+                                    <td class="other-month">30</td>
+                                    <td class="other-month">31</td>
+                                    <td>1</td>
+                                    <td>2</td>
+                                </tr>
+                                <tr>
+                                    <td>3</td>
+                                    <td>4</td>
+                                    <td>5</td>
+                                    <td>6</td>
+                                    <td>7</td>
+                                    <td>8</td>
+                                    <td>9</td>
+                                </tr>
+                                <tr>
+                                    <td>10</td>
+                                    <td>11</td>
+                                    <td>12</td>
+                                    <td>13</td>
+                                    <td>14</td>
+                                    <td class="today has-events">15</td>
+                                    <td>16</td>
+                                </tr>
+                                <tr>
+                                    <td>17</td>
+                                    <td>18</td>
+                                    <td>19</td>
+                                    <td class="has-events">20</td>
+                                    <td>21</td>
+                                    <td>22</td>
+                                    <td>23</td>
+                                </tr>
+                                <tr>
+                                    <td>24</td>
+                                    <td>25</td>
+                                    <td>26</td>
+                                    <td>27</td>
+                                    <td>28</td>
+                                    <td>29</td>
+                                    <td>30</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Dashboard Customizer -->
+        <div class="dashboard-customizer" id="dashboard-customizer">
+            <div class="customizer-header">
+                <h3>Dashboard anpassen</h3>
+                <button class="btn-icon" onclick="closeCustomizer()">
+                    <svg class="icon"><use href="#icon-x"></use></svg>
+                </button>
+            </div>
+            
+            <div class="customizer-content">
+                <div class="customizer-section">
+                    <h4>Layout</h4>
+                    <div class="layout-options">
+                        <button class="layout-option" data-layout="compact">Kompakt</button>
+                        <button class="layout-option active" data-layout="default">Standard</button>
+                        <button class="layout-option" data-layout="spacious">Geräumig</button>
+                    </div>
+                </div>
+
+                <div class="customizer-section">
+                    <h4>Widgets</h4>
+                    <div class="widget-toggles">
+                        <label class="widget-toggle">
+                            <input type="checkbox" checked data-widget="stats">
+                            <span>Übersicht</span>
+                        </label>
+                        <label class="widget-toggle">
+                            <input type="checkbox" checked data-widget="priority">
+                            <span>Prioritäten</span>
+                        </label>
+                        <label class="widget-toggle">
+                            <input type="checkbox" checked data-widget="schedule">
+                            <span>Heute</span>
+                        </label>
+                        <label class="widget-toggle">
+                            <input type="checkbox" checked data-widget="events">
+                            <span>Ereignisse</span>
+                        </label>
+                        <label class="widget-toggle">
+                            <input type="checkbox" checked data-widget="actions">
+                            <span>Aktionen</span>
+                        </label>
+                        <label class="widget-toggle">
+                            <input type="checkbox" checked data-widget="calendar">
+                            <span>Kalender</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlay -->
+        <div class="dashboard-overlay" id="dashboard-overlay"></div>
+    </div>
+
+    <!-- SVG Icons -->
+    <svg style="display: none;">
+        <defs>
+            <symbol id="icon-plus" viewBox="0 0 24 24">
+                <path stroke="currentColor" stroke-width="2" d="M12 5v14m-7-7h14"/>
+            </symbol>
+            <symbol id="icon-calendar" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" stroke-width="2"/>
+                <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
+                <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
+            </symbol>
+            <symbol id="icon-settings" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path d="m12 1 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6z" stroke="currentColor" stroke-width="2" fill="none"/>
+            </symbol>
+            <symbol id="icon-sun" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
+                <line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2"/>
+                <line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2"/>
+                <line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2"/>
+            </symbol>
+            <symbol id="icon-moon" viewBox="0 0 24 24">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" stroke-width="2" fill="none"/>
+            </symbol>
+            <symbol id="icon-refresh" viewBox="0 0 24 24">
+                <polyline points="23 4 23 10 17 10" stroke="currentColor" stroke-width="2" fill="none"/>
+                <polyline points="1 20 1 14 7 14" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path d="m3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke="currentColor" stroke-width="2" fill="none"/>
+            </symbol>
+            <symbol id="icon-x" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/>
+                <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2"/>
+            </symbol>
+            <symbol id="icon-chevron-left" viewBox="0 0 24 24">
+                <polyline points="15,18 9,12 15,6" stroke="currentColor" stroke-width="2" fill="none"/>
+            </symbol>
+            <symbol id="icon-chevron-right" viewBox="0 0 24 24">
+                <polyline points="9,18 15,12 9,6" stroke="currentColor" stroke-width="2" fill="none"/>
+            </symbol>
+            <symbol id="icon-upload" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" fill="none"/>
+                <polyline points="7,10 12,5 17,10" stroke="currentColor" stroke-width="2" fill="none"/>
+                <line x1="12" y1="5" x2="12" y2="15" stroke="currentColor" stroke-width="2"/>
+            </symbol>
+        </defs>
+    </svg>
+
+    <script>
+        // Theme Toggle
+        function toggleTheme() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+
+        // Customizer
+        function openCustomizer() {
+            document.getElementById('dashboard-customizer').classList.add('open');
+            document.getElementById('dashboard-overlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeCustomizer() {
+            document.getElementById('dashboard-customizer').classList.remove('open');
+            document.getElementById('dashboard-overlay').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Layout Options
+        document.addEventListener('click', (e) => {
+            if (e.target.matches('.layout-option')) {
+                document.querySelectorAll('.layout-option').forEach(opt => opt.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                const layout = e.target.dataset.layout;
+                document.documentElement.setAttribute('data-layout', layout);
+            }
+        });
+
+        // Widget Toggles
+        document.addEventListener('change', (e) => {
+            if (e.target.matches('.widget-toggle input[type="checkbox"]')) {
+                const widgetId = e.target.dataset.widget;
+                const widget = document.querySelector(`[data-widget="${widgetId}"]`);
+                
+                if (widget) {
+                    if (e.target.checked) {
+                        widget.style.display = '';
+                    } else {
+                        widget.style.display = 'none';
+                    }
+                }
+            }
+        });
+
+        // Close customizer on overlay click
+        document.getElementById('dashboard-overlay').addEventListener('click', closeCustomizer);
+
+        // Time update
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('de-DE', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('current-time').textContent = timeStr;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Apply saved theme
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            // Update time
+            updateTime();
+            setInterval(updateTime, 1000);
+        });
+    </script>
+</body>
+</html>
