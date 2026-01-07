@@ -22,12 +22,12 @@ STATUS_DEFINITIONS: Dict[str, Dict] = {
     # -------------------------
     # Tasks
     # -------------------------
-    "TASK_SOMEDAY": {
-        "display_name": "Irgendwann",
+    "TASK_BACKLOG": {
+        "display_name": "Zurückgestellt",
         "relevant_for_types": ["task"],
         "is_terminal": False,
         "ui_order": 1,
-        "tooltip": "Wird ggf. später angegangen (someday/backlog).",
+        "tooltip": "Auf später verschoben / im Backlog (nicht aktiv).",
         "color_light": "#9e9e9e",
     },
     "TASK_OPEN": {
@@ -66,12 +66,12 @@ STATUS_DEFINITIONS: Dict[str, Dict] = {
     # -------------------------
     # Reminders
     # -------------------------
-    "REMINDER_SOMEDAY": {
-        "display_name": "Irgendwann",
+    "REMINDER_BACKLOG": {
+        "display_name": "Zurückgestellt",
         "relevant_for_types": ["reminder"],
         "is_terminal": False,
         "ui_order": 11,
-        "tooltip": "Erinnerung ohne festen Termin (someday).",
+        "tooltip": "Auf später verschoben / im Backlog (nicht aktiv).",
         "color_light": "#9e9e9e",
     },
     "REMINDER_ACTIVE": {

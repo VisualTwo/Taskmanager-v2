@@ -1,0 +1,8 @@
+{
+  "backup_type": "daily",
+  "created_at": "2026-01-07T09:43:05.298481",
+  "source_db": "taskman.db",
+  "backup_path": "test_backups\\daily\\taskman_daily_20260107_094305.db",
+  "file_size": 241664,
+  "checksum": "f0631af22fa6948b217c3de387f14aad82a8cb538dc29b8ba08ee5b952e2febe"
+}

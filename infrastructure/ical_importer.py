@@ -222,8 +222,9 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         created = _read_created(block) or _read_dtstamp(block)
         last_mod = _read_last_modified(block) or _read_dtstamp(block)
         priority_ics = _read_priority(block)
-        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip().upper()
+        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip()
         x_app_type = (_read_prop(block, "X-APP-TYPE") or "").strip().lower()
+        # prefer X-APP-STATUS (internal key) when present, otherwise map from ICS STATUS
         status_key = x_app_status if x_app_status else _status_for_task(ical_status)
 
         if not uid:
@@ -250,8 +251,7 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
             last_modified_utc=format_db_datetime(last_mod) if last_mod else None,
         )
 
-        # Status
-        status_key = _status_for_task(ical_status)
+        # Note: keep status_key as determined above (prefer X-APP-STATUS when present)
 
         # Upsert: älteres CREATED bewahren, wenn vorhanden
         if uid in existing_lookup:
@@ -293,8 +293,9 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         created = _read_created(block) or _read_dtstamp(block)
         last_mod = _read_last_modified(block) or _read_dtstamp(block)
         priority_ics = _read_priority(block)
-        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip().upper()
-        status_key = x_app_status if x_app_status else _status_for_eventlike(ical_status, inferred_type)
+        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip()
+        # Defer mapping to internal key until we know the inferred_type below
+        status_key = None
 
         if not uid:
             uid = _fallback_uid("VEVENT", name, s.strftime(DT_FMT_Z) if s else "", e.strftime(DT_FMT_Z) if e else "")
@@ -316,8 +317,8 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         if is_birthday_tag:
             recur = _ensure_yearly_birthday(recur, s.strftime(DT_FMT_Z) if s else None)
 
-        # Status
-        status_key = _status_for_eventlike(ical_status, inferred_type)
+        # Status: prefer X-APP-STATUS (internal key) when present, otherwise map from ICS STATUS
+        status_key = x_app_status if x_app_status else _status_for_eventlike(ical_status, inferred_type)
 
         base_kwargs = dict(
             id=uid,

@@ -52,7 +52,7 @@ class StatusService:
     # CSV/status import mapping: high-level wrapper for simple CSV values
     def map_csv_status(self, simple_status: Optional[str], item_type: Optional[str] = None) -> Optional[str]:
         """
-        Map simple CSV-friendly status values (e.g. 'active', 'waiting', 'someday')
+        Map simple CSV-friendly status values (e.g. 'active', 'waiting', 'backlog'/'someday')
         to the internal status key using the underlying StatusManager.
 
         This wrapper keeps the domain-level API consistent and prevents callers

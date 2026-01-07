@@ -58,8 +58,12 @@
                   hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
                   hx-include="#status_key"
                   hx-swap="none">
+            <option value="" disabled {% if not it.status %}selected{% endif %}>– Status wählen –</option>
             {% for key, label in status_options %}
-              <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>{{ label }}</option>
+              <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>
+                {% set icon = '/static/icons/status/' ~ key|lower ~ '.svg' %}
+                {% if false %}<img src="{{ icon }}" alt="" style="width:1em;vertical-align:middle;"> {% endif %}{{ label }}
+              </option>
             {% endfor %}
           </select>
         </div>
@@ -70,6 +74,7 @@
                   hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
                   hx-include="#priority"
                   hx-swap="none">
+            <option value="" disabled {% if it.priority is none or it.priority == '' %}selected{% endif %}>– Priorität wählen –</option>
             <option value="0" {% if (it.priority or 0) == 0 %}selected{% endif %}>Keine</option>
             <option value="1" {% if it.priority == 1 %}selected{% endif %}>Niedrig</option>
             <option value="2" {% if it.priority == 2 %}selected{% endif %}>Normal</option>
@@ -78,7 +83,63 @@
             <option value="5" {% if it.priority == 5 %}selected{% endif %}>Blockierend</option>
           </select>
         </div>
-      </div>
+
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+          <div style="min-width:180px;">
+            <label for="ice_impact">Impact</label>
+            <select id="ice_impact" name="ice_impact"
+                    onchange="computeIce()"
+                    hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                    hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
+                    hx-swap="none">
+              <option value="" disabled {% if not it.metadata.get('ice_impact') %}selected{% endif %}>– Impact wählen –</option>
+              <option value="1" {% if it.metadata.get('ice_impact') == '1' %}selected{% endif %}>Minimal</option>
+              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>Gering</option>
+              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>Mittel</option>
+              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>Hoch</option>
+              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>Transformativ</option>
+            </select>
+          </div>
+
+          <div style="min-width:180px;">
+            <label for="ice_confidence">Zuversicht</label>
+            <select id="ice_confidence" name="ice_confidence"
+                    onchange="computeIce()"
+                    hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                    hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
+                    hx-swap="none">
+              <option value="" disabled {% if not it.metadata.get('ice_confidence') %}selected{% endif %}>– Zuversicht wählen –</option>
+              <option value="very_low" {% if it.metadata.get('ice_confidence') == 'very_low' %}selected{% endif %}>Sehr niedrig (10%)</option>
+              <option value="low" {% if it.metadata.get('ice_confidence') == 'low' %}selected{% endif %}>Niedrig (30%)</option>
+              <option value="medium" {% if it.metadata.get('ice_confidence') == 'medium' %}selected{% endif %}>Mittel (50%)</option>
+              <option value="high" {% if it.metadata.get('ice_confidence') == 'high' %}selected{% endif %}>Hoch (70%)</option>
+              <option value="very_high" {% if it.metadata.get('ice_confidence') == 'very_high' %}selected{% endif %}>Sehr hoch (90%)</option>
+            </select>
+          </div>
+
+          <div style="min-width:180px;">
+            <label for="ice_ease">Realisierbarkeit</label>
+            <select id="ice_ease" name="ice_ease"
+                    onchange="computeIce()"
+                    hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                    hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
+                    hx-swap="none">
+              <option value="" disabled {% if not it.metadata.get('ice_ease') %}selected{% endif %}>– Realisierbarkeit wählen –</option>
+              <option value="1" {% if it.metadata.get('ice_ease') == '1' %}selected{% endif %}>Extrem schwierig</option>
+              <option value="2" {% if it.metadata.get('ice_ease') == '2' %}selected{% endif %}>Schwierig</option>
+              <option value="3" {% if it.metadata.get('ice_ease') == '3' %}selected{% endif %}>Moderat</option>
+              <option value="4" {% if it.metadata.get('ice_ease') == '4' %}selected{% endif %}>Leicht</option>
+              <option value="5" {% if it.metadata.get('ice_ease') == '5' %}selected{% endif %}>Trivial</option>
+            </select>
+          </div>
+
+          <div style="min-width:140px;">
+            <label for="ice_score">ICE Score</label>
+            <input id="ice_score" name="ice_score" type="text" readonly
+                   value="{{ it.metadata.get('ice_score','') }}"
+                   style="background-color:#f5f5f5; cursor:default;">
+          </div>
+        </div>
 
       {# Links-Editor: nur das Partial einbinden #}
       {% include "_links_block.html" with context %}
@@ -402,6 +463,10 @@
       'description': 'Beschreibung',
       'status_key': 'Status',
       'priority': 'Priorität',
+      'ice_impact': 'Impact (ICE)',
+      'ice_confidence': 'Confidence (ICE)',
+      'ice_ease': 'Ease (ICE)',
+      'ice_score': 'ICE-Score',
       'is_private': 'Privatsphäre',
       'is_all_day': 'Ganztägig',
       'tags': 'Tags',
@@ -1036,6 +1101,47 @@
       }
     });
   })();
+</script>
+
+<script>
+  // ICE confidence label to value mapping
+  const CONFIDENCE_VALUES = {
+    'very_low': 0.1,
+    'low': 0.3,
+    'medium': 0.5,
+    'high': 0.7,
+    'very_high': 0.9
+  };
+
+  // Compute ICE score client-side and populate readonly field
+  function computeIce() {
+    try {
+      const impEl = document.getElementById('ice_impact');
+      const confEl = document.getElementById('ice_confidence');
+      const easeEl = document.getElementById('ice_ease');
+      const scoreEl = document.getElementById('ice_score');
+
+      const imp = impEl ? parseInt(impEl.value) || 0 : 0;
+      const confKey = confEl ? confEl.value : '';
+      const ease = easeEl ? parseInt(easeEl.value) || 0 : 0;
+
+      let conf = 0;
+      if (confKey && CONFIDENCE_VALUES[confKey]) {
+        conf = CONFIDENCE_VALUES[confKey];
+      }
+
+      const raw = imp * conf * ease;
+      const rounded = Math.round(raw * 100) / 100;
+      if (scoreEl) scoreEl.value = (rounded && !isNaN(rounded)) ? String(rounded) : '';
+    } catch (e) {
+      // silent
+    }
+  }
+
+  // Initialize on load
+  document.addEventListener('DOMContentLoaded', () => computeIce());
+  // Also compute once immediately (in case template rendered after DOMContentLoaded)
+  setTimeout(() => computeIce(), 50);
 </script>
 
 {% endblock %}

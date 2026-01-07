@@ -103,11 +103,11 @@ def main():
         # compute if missing or forced
         if args.force or ice is None:
             ice = compute_ice(impact, confidence, ease)
-        # if someday, ensure notes reflect that this was a someday/backlog item
+        # if backlog/someday, ensure notes reflect that this was a backlog import
         notes = (r.get("notes") or "")
-        if mapped in ("TASK_SOMEDAY", "REMINDER_SOMEDAY"):
-            if "someday" not in notes.lower():
-                notes = (notes + "; Someday import") if notes else "Someday import"
+        if mapped in ("TASK_BACKLOG", "REMINDER_BACKLOG"):
+            if "backlog" not in notes.lower() and "someday" not in notes.lower():
+                notes = (notes + "; Backlog import") if notes else "Backlog import"
 
         processed.append({**r, "mapped_status": mapped or "", "ice_score": ice, "notes": notes})
 

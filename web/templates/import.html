@@ -7,4 +7,18 @@
   <input type="file" name="file" accept=".ics,text/calendar" required>
   <button type="submit">Import</button>
 </form>
+<section>
+  <h3>CSV-Import (optional)</h3>
+  <p>Du kannst auch eine CSV-Datei hochladen. Erwartetes Format (Kopfzeile):</p>
+  <pre>id,type,status,title,description,impact,confidence,ease,ice_score,notes</pre>
+  <ul>
+    <li>`type`: <strong>task</strong> oder <strong>reminder</strong></li>
+    <li>`status`: akzeptierte Werte: <code>active</code>, <code>waiting</code>, <code>backlog</code>, <code>offen</code>)</li>
+    <li>`notes`: wird in die Beschreibung übernommen (sichtbar im UI)</li>
+  </ul>
+  <p>Lade die Datei einfach hier hoch; Tasks/Reminders werden importiert und in die DB geschrieben.</p>
+</section>
+<p>
+  <a href="/download/prioritization_template.csv" class="button">Vorlage herunterladen (CSV)</a>
+</p>
 {% endblock %}

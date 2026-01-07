@@ -31,7 +31,7 @@ Formel
 Operational Hinweise
 
 - Fülle die CSV nur für `type` == `task` oder `type` == `reminder` aus; Termine/Events ignorieren.
-- `status` behandeln: nutze `active`, `waiting`, `someday`. Items mit `status` == `waiting` werden ausgeblendet oder separat gelistet, unabhängig vom `ice_score`.
+- `status` behandeln: nutze `active`, `waiting`, `backlog` (oder `someday`). Items mit `status` == `waiting` werden ausgeblendet oder separat gelistet, unabhängig vom `ice_score`.
 - Trage Confidence konservativ ein; nach Ausführung von Experimenten Confidence anpassen.
 - Priorisiere nach `ice_score` absteigend; dokumentiere Unsicherheit in `notes`.
 
@@ -39,7 +39,7 @@ Mapping-Tabelle (CSV `status` → interne Status-Keys)
 
 | CSV `status` | `type=task` (intern) | `type=reminder` (intern) |
 |---|---:|---:|
-| `someday` | `TASK_SOMEDAY` (markiere ggf. in `notes`) | `REMINDER_SOMEDAY` |
+| `backlog` / `someday` | `TASK_BACKLOG` (display: "Zurückgestellt", markiere ggf. in `notes`) | `REMINDER_BACKLOG` (display: "Zurückgestellt") |
 | `active`  | `TASK_OPEN`        | `REMINDER_ACTIVE` |
 | `waiting` | `TASK_BLOCKED`     | `REMINDER_SNOOZED` |
 
