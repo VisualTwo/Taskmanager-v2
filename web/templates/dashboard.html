@@ -11,19 +11,73 @@
         hx-post="/items/new" hx-swap="none"
         aria-label="Neues Item anlegen">
     <label for="new-name" class="sr-only">Name</label>
-    <input id="new-name" type="text" name="name" placeholder="Neues Item"
-           required maxlength="140">
+    <div style="display:flex; gap:.5rem; align-items:center;">
+      <input id="new-name" type="text" name="name" placeholder="Neues Item" required maxlength="140">
+      <select id="new-type" name="item_type" title="Typ" required>
+        <option value="" selected disabled hidden>Typ…</option>
+        <option value="task">Aufgabe</option>
+        <option value="reminder">Erinnerung</option>
+        <option value="appointment">Termin</option>
+        <option value="event">Ereignis</option>
+      </select>
+      <button type="submit" class="header-btn header-btn-primary">Anlegen</button>
+      <button type="button" class="header-btn header-btn-secondary" id="new-advanced-toggle">Erweitert</button>
+    </div>
 
-    <label for="new-type" class="sr-only">Typ</label>
-    <select id="new-type" name="item_type" title="Typ" required>
-      <option value="" selected disabled hidden>Bitte Typ wählen…</option>
-      <option value="task">Aufgabe</option>
-      <option value="reminder">Erinnerung</option>
-      <option value="appointment">Termin</option>
-      <option value="event">Ereignis</option>
-    </select>
+    <div class="new-item-advanced hidden" style="margin-top:.5rem; display:flex; gap:.5rem; align-items:center;">
+      <label class="sr-only">Priorität</label>
+      <select name="priority" title="Priorität">
+        <option value="">Priorität</option>
+        <option value="0">Keine</option>
+        <option value="1">Niedrig</option>
+        <option value="2">Normal</option>
+        <option value="3">Hoch</option>
+        <option value="4">Kritisch</option>
+        <option value="5">Blockierend</option>
+      </select>
 
-    <button type="submit" class="btn btn-primary">Anlegen</button>
+      <label class="sr-only">Due / Erinnerung</label>
+      <input type="text" name="due_local" placeholder="dd.mm.yyyy hh:mm" class="small-input">
+
+      <label class="sr-only">Impact</label>
+      <select name="ice_impact" title="Impact">
+        <option value="">Impact</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+
+      <label class="sr-only">Confidence</label>
+      <select name="ice_confidence" title="Confidence">
+        <option value="">Confidence</option>
+        <option value="very_low">Sehr gering</option>
+        <option value="low">Gering</option>
+        <option value="medium">Mittel</option>
+        <option value="high">Hoch</option>
+        <option value="very_high">Sehr hoch</option>
+      </select>
+
+      <label class="sr-only">Ease</label>
+      <select name="ice_ease" title="Ease">
+        <option value="">Ease</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+    </div>
+
+    <script>
+      (function(){
+        const btn = document.getElementById('new-advanced-toggle');
+        const adv = btn && btn.closest('form') && btn.closest('form').querySelector('.new-item-advanced');
+        if(!btn || !adv) return;
+        btn.addEventListener('click', ()=>{ adv.classList.toggle('hidden'); });
+      })();
+    </script>
   </form>
 </div>
 
@@ -34,6 +88,11 @@
      title="Kalender in Excel exportieren">
     📥 Kalender exportieren (Excel)
   </a>
+  <div style="display:flex; gap:.25rem; align-items:center;">
+    <span class="muted" style="font-size:.85rem; margin-right:.25rem;">Sortierung:</span>
+    <a class="btn btn-xs {% if active_sort == 'date' %}btn-primary{% endif %}" href="/dashboard?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ cal_weeks }}&show_private={{ show_private }}&q={{ q|urlencode }}&types={{ types|urlencode }}&status={{ status|urlencode }}&tags={{ tags|urlencode }}&sort_by=date" aria-pressed="{% if active_sort == 'date' %}true{% else %}false{% endif %}">Datum</a>
+    <a class="btn btn-xs {% if active_sort == 'score' %}btn-primary{% endif %}" href="/dashboard?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ cal_weeks }}&show_private={{ show_private }}&q={{ q|urlencode }}&types={{ types|urlencode }}&status={{ status|urlencode }}&tags={{ tags|urlencode }}&sort_by=score" aria-pressed="{% if active_sort == 'score' %}true{% else %}false{% endif %}">Wichtigkeit</a>
+  </div>
 </div>
 
 <section class="cards-grid">

@@ -131,7 +131,7 @@ def index(
     except Exception:
         type_status_options = {}
 
-    return templates.TemplateResponse("index.html", {
+    return templates.TemplateResponse(request, "index.html", {
         "request": request,
         "rows": rows,
         "type_status_options": type_status_options,
@@ -163,7 +163,7 @@ def edit_item_page(item_id: str, request: Request, repo: DbRepository = Depends(
     if getattr(it, "recurrence", None) and it.recurrence.exdates_utc:
         exdates_local = ", ".join(format_local(d) for d in it.recurrence.exdates_utc)
 
-    return templates.TemplateResponse("edit.html", {
+    return templates.TemplateResponse(request, "edit.html", {
         "request": request,
         "it": it,
         "status_options": status_options,
@@ -224,7 +224,7 @@ def edit_item_submit(
         # Nur Occurrence-Teil zurückgeben, damit die Seite ohne Reload aktualisiert werden kann
         win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
         occs = expand_item(it2, win_start, win_end)
-        return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+        return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
     return RedirectResponse(f"/items/{item_id}/edit", status_code=303)
 
 @app.get("/items/{item_id}/occurrences", response_class=HTMLResponse)
@@ -234,7 +234,7 @@ def item_occurrences_partial(item_id: str, request: Request, repo: DbRepository 
         return PlainTextResponse("Not found", status_code=404)
     win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
     occs = expand_item(it, win_start, win_end)
-    return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+    return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
 
 @app.post("/items/{item_id}/status")
 def change_status(request: Request, item_id: str, new_status: str = Form(...), repo: DbRepository = Depends(get_repo), status=Depends(get_status)):
@@ -263,7 +263,7 @@ def set_due(request: Request, item_id: str, due: str = Form(...), repo: DbReposi
     if is_htmx(request):
         win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
         occs = expand_item(it2, win_start, win_end)
-        return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+        return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
     return RedirectResponse("/", status_code=303)
 
 @app.post("/items/{item_id}/start_end")
@@ -292,7 +292,7 @@ def set_start_end(
     if is_htmx(request):
         win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
         occs = expand_item(it2, win_start, win_end)
-        return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+        return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
     return RedirectResponse("/", status_code=303)
 
 @app.post("/items/{item_id}/snooze")
@@ -345,7 +345,7 @@ def export_ics(repo: DbRepository = Depends(get_repo)):
 
 @app.get("/import", response_class=HTMLResponse)
 def import_page(request: Request):
-    return templates.TemplateResponse("import.html", {"request": request})
+    return templates.TemplateResponse(request, "import.html", {"request": request})
 
 @app.post("/import", response_class=HTMLResponse)
 async def import_upload(request: Request, file: UploadFile = File(...), repo: DbRepository = Depends(get_repo)):

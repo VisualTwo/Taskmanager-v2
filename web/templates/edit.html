@@ -58,8 +58,12 @@
                   hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
                   hx-include="#status_key"
                   hx-swap="none">
+            <option value="" disabled {% if not it.status %}selected{% endif %}>– Status wählen –</option>
             {% for key, label in status_options %}
-              <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>{{ label }}</option>
+              <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>
+                {% set icon = '/static/icons/status/' ~ key|lower ~ '.svg' %}
+                {% if false %}<img src="{{ icon }}" alt="" style="width:1em;vertical-align:middle;"> {% endif %}{{ label }}
+              </option>
             {% endfor %}
           </select>
         </div>
@@ -70,6 +74,7 @@
                   hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
                   hx-include="#priority"
                   hx-swap="none">
+            <option value="" disabled {% if it.priority is none or it.priority == '' %}selected{% endif %}>– Priorität wählen –</option>
             <option value="0" {% if (it.priority or 0) == 0 %}selected{% endif %}>Keine</option>
             <option value="1" {% if it.priority == 1 %}selected{% endif %}>Niedrig</option>
             <option value="2" {% if it.priority == 2 %}selected{% endif %}>Normal</option>
@@ -87,12 +92,12 @@
                     hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
                     hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
                     hx-swap="none">
-              <option value="">– Wählen –</option>
-              <option value="1" {% if it.metadata.get('ice_impact') == '1' %}selected{% endif %}>1: Minimal</option>
-              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>2: Gering</option>
-              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>3: Mittel</option>
-              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>4: Hoch</option>
-              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>5: Transformativ</option>
+              <option value="" disabled {% if not it.metadata.get('ice_impact') %}selected{% endif %}>– Impact wählen –</option>
+              <option value="1" {% if it.metadata.get('ice_impact') == '1' %}selected{% endif %}>Minimal</option>
+              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>Gering</option>
+              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>Mittel</option>
+              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>Hoch</option>
+              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>Transformativ</option>
             </select>
           </div>
 
@@ -103,7 +108,7 @@
                     hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
                     hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
                     hx-swap="none">
-              <option value="">– Wählen –</option>
+              <option value="" disabled {% if not it.metadata.get('ice_confidence') %}selected{% endif %}>– Zuversicht wählen –</option>
               <option value="very_low" {% if it.metadata.get('ice_confidence') == 'very_low' %}selected{% endif %}>Sehr niedrig (10%)</option>
               <option value="low" {% if it.metadata.get('ice_confidence') == 'low' %}selected{% endif %}>Niedrig (30%)</option>
               <option value="medium" {% if it.metadata.get('ice_confidence') == 'medium' %}selected{% endif %}>Mittel (50%)</option>
@@ -119,12 +124,12 @@
                     hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
                     hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
                     hx-swap="none">
-              <option value="">– Wählen –</option>
-              <option value="1" {% if it.metadata.get('ice_ease') == '1' %}selected{% endif %}>1: Extrem schwierig</option>
-              <option value="2" {% if it.metadata.get('ice_ease') == '2' %}selected{% endif %}>2: Schwierig</option>
-              <option value="3" {% if it.metadata.get('ice_ease') == '3' %}selected{% endif %}>3: Moderat</option>
-              <option value="4" {% if it.metadata.get('ice_ease') == '4' %}selected{% endif %}>4: Leicht</option>
-              <option value="5" {% if it.metadata.get('ice_ease') == '5' %}selected{% endif %}>5: Trivial</option>
+              <option value="" disabled {% if not it.metadata.get('ice_ease') %}selected{% endif %}>– Realisierbarkeit wählen –</option>
+              <option value="1" {% if it.metadata.get('ice_ease') == '1' %}selected{% endif %}>Extrem schwierig</option>
+              <option value="2" {% if it.metadata.get('ice_ease') == '2' %}selected{% endif %}>Schwierig</option>
+              <option value="3" {% if it.metadata.get('ice_ease') == '3' %}selected{% endif %}>Moderat</option>
+              <option value="4" {% if it.metadata.get('ice_ease') == '4' %}selected{% endif %}>Leicht</option>
+              <option value="5" {% if it.metadata.get('ice_ease') == '5' %}selected{% endif %}>Trivial</option>
             </select>
           </div>
 
