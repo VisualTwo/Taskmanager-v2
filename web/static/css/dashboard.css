@@ -467,12 +467,57 @@
 }
 
 .calendar-day {
-  padding: 0.75rem 0.5rem;
-  text-align: center;
+  padding: 0.375rem 0.5rem;
+  min-height: 60px;
+  text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
   border: 1px solid transparent;
   color: var(--color-fg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.calendar-day .day-number {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-fg);
+  margin-bottom: 0.125rem;
+}
+
+.calendar-day.today .day-number {
+  color: white;
+}
+
+.calendar-day .day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+}
+
+.calendar-day .day-event {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--color-bg-alt);
+  border-left: 2px solid var(--color-primary);
+}
+
+.calendar-day .day-event.task-event {
+  border-left-color: var(--color-primary);
+}
+
+.calendar-day .day-event.appointment-event {
+  border-left-color: var(--color-success);
+}
+
+.calendar-day .day-event.event-event {
+  border-left-color: var(--color-warning);
 }
 
 .calendar-day:hover {
@@ -490,16 +535,8 @@
   position: relative;
 }
 
-.calendar-day.has-events::after {
-  content: '';
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  background: var(--color-accent);
-  border-radius: 50%;
+.calendar-day.has-many-events {
+  min-height: auto;
 }
 
 /* Quick Actions with premium styling */

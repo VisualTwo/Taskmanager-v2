@@ -5,8 +5,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}TaskManager{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="stylesheet" href="/static/style.css?v=20260109">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=20260109">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
 </head>
@@ -67,7 +67,7 @@
   <h1 style="margin:0;">TaskManager</h1>
   <nav class="header-group" style="display:flex; gap:.4rem; align-items:center;">
     <a href="/dashboard{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" class="header-btn">Dashboard</a>
-    <a href="{{ request.url_for('index') }}{% set qs2 = request.query_params | urlencode_qs %}{% if qs2 %}?{{ qs2 }}{% endif %}" class="header-btn">Liste</a>
+    <a href="/list{% set qs2 = request.query_params | urlencode_qs %}{% if qs2 %}?{{ qs2 }}{% endif %}" class="header-btn">Liste</a>
     <a href="/import{% set qs3 = request.query_params | urlencode_qs %}{% if qs3 %}?{{ qs3 }}{% endif %}" class="header-btn">Import</a>
     <form id="export-form-head" method="post" action="/export_selected" class="inline" style="gap:.4rem; margin:0;">
       <input type="hidden" name="q" value="{{ request.query_params.get('q','') }}">
@@ -81,6 +81,18 @@
       <input type="hidden" name="sort" value="{{ request.query_params.get('sort','') }}">
       <input type="hidden" name="dir" value="{{ request.query_params.get('dir','asc') }}">
     </form>
+    
+    <!-- Login/Logout Bereich -->
+    {% if current_user %}
+      {% if current_user.is_admin %}
+        <a href="/auth/admin/users" class="header-btn">👥 Benutzer</a>
+      {% endif %}
+      <span class="header-btn" style="color: #666;">{{ current_user.full_name or current_user.login }}</span>
+      <a href="/auth/logout" class="header-btn">Logout</a>
+    {% else %}
+      <a href="/auth/login" class="header-btn">Login</a>
+    {% endif %}
+    
     <button type="button" id="themeBtn" class="header-btn" aria-label="Theme umschalten">Light</button>
   </nav>
 </header>

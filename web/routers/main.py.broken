@@ -1,0 +1,786 @@
+"""
+Main Routes - Homepage, dashboard, navigation
+"""
+
+from fastapi import APIRouter, Request, Query, Depends, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from typing import List, Optional
+from urllib.parse import urlencode
+from datetime import datetime, timedelta, date
+import pytz
+import logging
+
+from infrastructure.db_repository import DbRepository
+from infrastructure.db_repository import DbRepository
+from infrastructure.user_repository import UserRepository
+from services.auth_service import AuthService
+from services.common_service import CommonService
+from services.filter_service import filter_items
+from services.recurrence_service import expand_item
+from web.handlers.error_handler import ErrorHandler
+from web.handlers.config import config
+from utils.datetime_helpers import now_utc
+from domain.user_models import User
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+templates = Jinja2Templates(directory=config.get_templates_path())
+
+# Import additional helper functions (assuming they exist in the codebase)
+def get_priority_class(item):
+    """Get CSS class for priority"""
+    return f"priority-{item.priority}" if hasattr(item, 'priority') and item.priority else ""
+
+def format_dashboard_time(dt, context, timezone):
+    """Format datetime for dashboard display with context-specific rules"""
+    from datetime import timezone as dt_timezone
+    
+    if not dt:
+        return ""
+    
+    # Sicherstellen dass dt timezone-aware ist
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=dt_timezone.utc)
+    
+    local_dt = dt.astimezone(timezone)
+    
+    if context == "series":
+        # TT.MM.
+        return local_dt.strftime("%d.%m.")
+    
+    elif context == "next_events":
+        # TT.MM.JJJJ HH:mm
+        return local_dt.strftime("%d.%m.%Y %H:%M")
+    
+    elif context in ("calendar", "today"):
+        # HH:mm
+        return local_dt.strftime("%H:%M")
+    
+    elif context == "next_48h":
+        # TT.MM HH:mm
+        return local_dt.strftime("%d.%m %H:%M")
+    
+    elif context in ("next_7d", "next_7_days"):
+        # Wochentag TT.MM. HH:mm
+        weekdays = ["Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So."]
+        weekday = weekdays[local_dt.weekday()]
+        return f"{weekday} {local_dt.strftime('%d.%m. %H:%M')}"
+        
+    elif context == "overdue":
+        # TT.MM.JJJJ HH:mm für überfällige Items
+        return local_dt.strftime("%d.%m.%Y %H:%M")
+    
+    elif context == "no_date":
+        # TT.MM.JJJJ (Änderungsdatum)
+        return local_dt.strftime("%d.%m.%Y")
+    
+    return local_dt.strftime("%d.%m.%Y %H:%M")
+
+def is_overdue_item(item, today):
+    """Check if item is overdue"""
+    # Only tasks have due_utc
+    if item.type != 'task' or not hasattr(item, 'due_utc') or not item.due_utc:
+        return False
+    return item.due_utc.date() < today
+
+def is_birthday(item):
+    """Check if item is a birthday event"""
+    return hasattr(item, 'name') and 'geburtstag' in item.name.lower()
+
+def is_terminal_status(status):
+    """Check if status is terminal"""
+    terminal_statuses = [
+        'erledigt', 'canceled',  # Legacy
+        'TASK_DONE', 'TASK_CANCELLED',  # Task
+        'REMINDER_DISMISSED',  # Reminder  
+        'APPOINTMENT_DONE', 'APPOINTMENT_CANCELLED',  # Appointment
+        'EVENT_DONE', 'EVENT_CANCELLED'  # Event
+    ]
+    return status in terminal_statuses
+
+def status_display(status):
+    """Get display name for status"""
+    status_map = {
+        # Task statuses
+        'TASK_OPEN': 'Offen',
+        'TASK_IN_PROGRESS': 'In Bearbeitung', 
+        'TASK_BLOCKED': 'Blockiert',
+        'TASK_DONE': 'Erledigt',
+        'TASK_CANCELLED': 'Abgebrochen',
+        
+        # Reminder statuses
+        'REMINDER_ACTIVE': 'Aktiv',
+        'REMINDER_DISMISSED': 'Erledigt',
+        'REMINDER_SNOOZED': 'Verschoben',
+        
+        # Appointment statuses
+        'APPOINTMENT_PLANNED': 'Geplant',
+        'APPOINTMENT_CONFIRMED': 'Bestätigt',
+        'APPOINTMENT_DONE': 'Stattgefunden',
+        'APPOINTMENT_CANCELLED': 'Abgesagt',
+        
+        # Event statuses
+        'EVENT_SCHEDULED': 'Geplant',
+        'EVENT_DONE': 'Stattgefunden',
+        'EVENT_CANCELLED': 'Abgesagt',
+        
+        # Legacy simple statuses (fallback)
+        'offen': 'Offen',
+        'bearbeitung': 'In Bearbeitung',
+        'warten': 'Warten',
+        'erledigt': 'Erledigt',
+        'verschoben': 'Verschoben',
+        'canceled': 'Abgebrochen'
+    }
+    return status_map.get(status, status)
+
+def format_local(dt: Optional[datetime], fmt: str = "%d.%m.%Y %H:%M") -> str:
+    """Format datetime to local Berlin time"""
+    if not dt:
+        return ""
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.astimezone(ZoneInfo("Europe/Berlin")).strftime(fmt)
+    except Exception:
+        return ""
+
+def format_local_weekday_de(dt, fmt_date: str = "%a %d.%m.%Y %H:%M") -> str:
+    """Format datetime with German weekday (full)"""
+    if not dt:
+        return ""
+    from zoneinfo import ZoneInfo
+    berlin = ZoneInfo("Europe/Berlin")
+    dt_local = dt.astimezone(berlin)
+    wd_idx = dt_local.weekday()  # 0=Montag ... 6=Sonntag
+    wd_de_full = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"][wd_idx]
+    return f"{wd_de_full}"
+
+def format_local_short_weekday_de(dt, fmt_date: str = "%a %d.%m.%Y %H:%M") -> str:
+    """Format datetime with German weekday (short)"""
+    if not dt:
+        return ""
+    from zoneinfo import ZoneInfo
+    berlin = ZoneInfo("Europe/Berlin")
+    dt_local = dt.astimezone(berlin)
+    wd_idx = dt_local.weekday()  # 0=Montag ... 6=Sonntag
+    wd_de_short = ["Mo","Di","Mi","Do","Fr","Sa","So"][wd_idx]
+    return f"{wd_de_short}"
+
+def urlencode_qs(params):
+    """URL encode query string"""
+    return urlencode(params) if params else ""
+
+# Register custom Jinja2 filters after defining the functions
+templates.env.filters['urlencode_qs'] = urlencode_qs
+templates.env.filters['format_local'] = format_local
+templates.env.filters['format_local_weekday_de'] = format_local_weekday_de
+templates.env.filters['format_local_short_weekday_de'] = format_local_short_weekday_de
+templates.env.filters['format_dashboard_time'] = format_dashboard_time
+templates.env.filters['status_display'] = status_display
+
+# Make Python functions available in templates
+templates.env.globals['timedelta'] = timedelta
+
+def generate_calendar_data(items, now_local, timezone, offset):
+    """Generate calendar data for display"""
+    # Simplified implementation
+    return {
+        'days': [],
+        'month': now_local.month,
+        'year': now_local.year
+    }
+
+# Auth dependency functions (moved here to fix import order)
+async def get_auth_service() -> AuthService:
+    """Get auth service instance"""
+    db_path = config.get_database_url().replace('sqlite:///', '')
+    user_repo = UserRepository(db_path)
+    return AuthService(user_repo)
+
+async def get_current_user(request: Request, auth_service: AuthService = Depends(get_auth_service)) -> Optional[User]:
+    """Get current authenticated user from session"""
+    try:
+        session_token = request.cookies.get("session_token")
+        if not session_token:
+            return None
+            
+        user = auth_service.get_user_from_session_token(session_token)
+        return user
+    except Exception as e:
+        logger.error(f"Error getting current user: {e}")
+        return None
+
+def require_auth(current_user: Optional[User] = Depends(get_current_user)) -> User:
+    """Require authentication, redirect to login if not authenticated"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return current_user
+
+@router.get("/")
+async def root_redirect(current_user: Optional[User] = Depends(get_current_user)):
+    """Redirect root to dashboard or login"""
+    if not current_user:
+        return RedirectResponse("/auth/login", status_code=302)
+    return RedirectResponse("/dashboard", status_code=302)
+
+# Color mappings
+TYPE_STATUS_COLORS = {
+    'task': {
+        'offen': '#ef4444',
+        'bearbeitung': '#f59e0b',
+        'warten': '#6b7280',
+        'erledigt': '#10b981'
+    },
+    'appointment': {
+        'offen': '#3b82f6',
+        'erledigt': '#10b981'
+    },
+    'event': {
+        'offen': '#8b5cf6',
+        'erledigt': '#10b981'
+    }
+}
+
+def get_repository():
+    """Dependency to get database repository"""
+    db_path = config.get_database_url().replace('sqlite:///', '')
+    return DbRepository(db_path)
+
+def get_user_repository():
+    """Dependency to get user repository"""
+    db_path = config.get_database_url().replace('sqlite:///', '')
+    return UserRepository(db_path)
+
+def get_auth_service():
+    """Dependency to get auth service"""
+    user_repo = get_user_repository()
+    return AuthService(user_repo)
+
+async def get_current_user(request: Request, auth_service: AuthService = Depends(get_auth_service)) -> Optional[User]:
+    """Get current authenticated user from session"""
+    # Check both possible cookie names for compatibility
+    token = request.cookies.get("auth_token") or request.cookies.get("session_token")
+    if not token:
+        logger.debug("No session token found in cookies")
+        return None
+    
+    logger.debug(f"Found session token: {token[:20]}...")
+    # Use the async method for proper session validation
+    user = await auth_service.get_user_from_session(token)
+    
+    if user:
+        logger.debug(f"User authenticated: {user.login}")
+    else:
+        logger.debug("Session validation failed - no user found")
+    
+    return user
+
+def get_error_handler():
+    """Dependency to get error handler"""
+    return ErrorHandler(templates)
+
+def get_common_service(repository: DbRepository = Depends(get_repository)):
+    """Dependency to get common service"""
+    return CommonService(repository)
+
+@router.get("/", response_class=HTMLResponse, name="index")
+async def homepage(
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Main homepage - redirect to dashboard or login"""
+    try:
+        # Redirect to login if not authenticated
+        if not current_user:
+            return RedirectResponse("/auth/login", status_code=302)
+        
+        # Redirect authenticated users to dashboard
+        return RedirectResponse("/dashboard", status_code=302)
+    
+    except Exception as e:
+        logger.error(f"Homepage error: {str(e)}")
+
+@router.get("/list", response_class=HTMLResponse, name="list")
+async def list_view(
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user),
+    repository: DbRepository = Depends(get_repository),
+    error_handler: ErrorHandler = Depends(get_error_handler),
+    common_service: CommonService = Depends(get_common_service),
+    # Legacy parameters for backwards compatibility - now just used for specialized logic
+    min_prio: Optional[str] = Query(None),    # Mindestpriorität
+    tag_mode: str = Query("all"),              # all (UND) oder any (ODER)
+    status_group: Optional[str] = Query(None), # active, completed, pending
+    time_range: Optional[str] = Query(None),   # overdue, next_3h, this_month, etc.
+    date: Optional[str] = Query(None),
+    created_by: Optional[str] = Query(None),   # me, user_id
+    assigned_to: Optional[str] = Query(None),  # me, user_id 
+    sort: Optional[str] = Query(None),
+    dir: str = Query("asc")
+):
+    """List view for items with filtering and sorting"""
+    try:
+        # Require authentication
+        if not current_user:
+            return RedirectResponse("/auth/login", status_code=302)
+            
+        error_handler.log_operation("list_view_access")
+        
+        # Extract standard filter parameters using common service
+        filter_params = common_service.extract_filter_params_from_query(request)
+        
+        # Get base filtered items using common service
+        all_items = common_service.get_items_for_user_with_filters(current_user.id, filter_params)
+        
+        # TODO: Apply additional specialized filters (min_prio, tag_mode, status_group, time_range, etc.)
+        # These could be moved to the common service later
+        
+        # Get timezone
+        berlin_tz = common_service.get_berlin_timezone()
+        now_local = common_service.get_berlin_now()
+        today = common_service.get_berlin_today()
+                    item_matches = False
+                    
+                    # Check different date fields based on item type
+                    dates_to_check = []
+                    
+                    if hasattr(item, 'due_utc') and item.due_utc:
+                        dates_to_check.append(item.due_utc)
+                    if hasattr(item, 'start_utc') and item.start_utc:
+                        dates_to_check.append(item.start_utc)
+                    if hasattr(item, 'end_utc') and item.end_utc:
+                        dates_to_check.append(item.end_utc)
+                    if hasattr(item, 'reminder_utc') and item.reminder_utc:
+                        dates_to_check.append(item.reminder_utc)
+                    
+                    # Check if any date matches the target date
+                    for dt in dates_to_check:
+                        if dt and dt.astimezone(local_tz).date() == parsed_date:
+                            item_matches = True
+                            break
+                    
+                    if item_matches:
+                        filtered_items.append(item)
+                        
+                all_items = filtered_items
+            except Exception as e:
+                logger.warning(f"Date filter error: {e}")
+        
+        # Time-Range Filter (erweiterte Zeit-Filter)
+        if time_range:
+            try:
+                from zoneinfo import ZoneInfo
+                local_tz = ZoneInfo("Europe/Berlin")
+                now_utc_dt = datetime.now(pytz.UTC)
+                now_local = now_utc_dt.astimezone(local_tz)
+                
+                filtered_items = []
+                
+                for item in all_items:
+                    include_item = False
+                    
+                    # Sammle relevante Zeiten für das Item
+                    item_times = []
+                    if hasattr(item, 'due_utc') and item.due_utc:
+                        item_times.append(('due', item.due_utc))
+                    if hasattr(item, 'start_utc') and item.start_utc:
+                        item_times.append(('start', item.start_utc))
+                    if hasattr(item, 'reminder_utc') and item.reminder_utc:
+                        item_times.append(('reminder', item.reminder_utc))
+                    
+                    for time_type, time_utc in item_times:
+                        time_local = time_utc.astimezone(local_tz)
+                        
+                        if time_range == "overdue":
+                            # Überfällige Items (Vergangenheit, aber nicht erledigt)
+                            if time_utc < now_utc_dt and item.status not in ['erledigt', 'abgebrochen']:
+                                include_item = True
+                        elif time_range == "next_3h":
+                            # Nächste 3 Stunden
+                            if now_utc_dt <= time_utc <= now_utc_dt + timedelta(hours=3):
+                                include_item = True
+                        elif time_range == "today":
+                            # Heute
+                            if time_local.date() == now_local.date():
+                                include_item = True
+                        elif time_range == "this_week":
+                            # Diese Woche
+                            week_start = now_local.date() - timedelta(days=now_local.weekday())
+                            week_end = week_start + timedelta(days=6)
+                            if week_start <= time_local.date() <= week_end:
+                                include_item = True
+                        elif time_range == "this_month":
+                            # Dieser Monat
+                            if (time_local.year == now_local.year and 
+                                time_local.month == now_local.month):
+                                include_item = True
+                        elif time_range == "next_week":
+                            # Nächste Woche
+                            next_week_start = now_local.date() + timedelta(days=7-now_local.weekday())
+                            next_week_end = next_week_start + timedelta(days=6)
+                            if next_week_start <= time_local.date() <= next_week_end:
+                                include_item = True
+                    
+                    if include_item:
+                        filtered_items.append(item)
+                
+                all_items = filtered_items
+            except Exception as e:
+                logger.warning(f"Time range filter error: {e}")
+        
+        # Create rows for template (item, occurrences, display_start, display_end)
+        rows = []
+        now_dt = now_utc()
+        for item in all_items:
+            # For appointments/events, get next occurrence
+            if item.type in ("appointment", "event"):
+                occs = expand_item(item, now_dt, now_dt + timedelta(days=30))
+                disp_start = getattr(item, 'start_utc', None)
+                disp_end = getattr(item, 'end_utc', None)
+            else:
+                occs = []
+                disp_start = (item.due_utc if item.type == 'task' else None) or getattr(item, 'start_utc', None)
+                disp_end = getattr(item, 'end_utc', None) or (item.reminder_utc if item.type == 'reminder' else None)
+                
+            rows.append((item, occs, disp_start, disp_end))
+        
+        # Sort items
+        if sort:
+            reverse = (dir == "desc")
+            if sort == "name":
+                rows.sort(key=lambda x: x[0].name.lower(), reverse=reverse)
+            elif sort == "status":
+                rows.sort(key=lambda x: x[0].status, reverse=reverse)
+            elif sort == "priority":
+                rows.sort(key=lambda x: x[0].priority or 0, reverse=reverse)
+            elif sort == "start":
+                rows.sort(key=lambda x: x[2] or datetime.min.replace(tzinfo=pytz.UTC), reverse=reverse)
+        
+        # Get available status options for dropdowns
+        type_status_options = {
+            "task": [("offen", "Offen"), ("bearbeitung", "In Bearbeitung"), ("warten", "Wartend"), ("erledigt", "Erledigt")],
+            "reminder": [("offen", "Offen"), ("erledigt", "Erledigt")],
+            "appointment": [("geplant", "Geplant"), ("erledigt", "Erledigt")],
+            "event": [("geplant", "Geplant"), ("erledigt", "Erledigt")]
+        }
+        
+        # Create status choices for dropdown (all available statuses)
+        status_choices = [
+            ("offen", "📋 Offen"),
+            ("bearbeitung", "⚙️ In Bearbeitung"),
+            ("warten", "⏳ Wartend"),
+            ("geplant", "📅 Geplant"),
+            ("erledigt", "✅ Erledigt"),
+            ("abgebrochen", "❌ Abgebrochen")
+        ]
+        
+        context = {
+            "request": request,
+            "current_user": current_user,
+            "rows": rows,
+            "type_status_options": type_status_options,
+            "status_choices": status_choices,
+            "current_q": q or "",
+            "current_types": types or "",
+            "current_status": status or "",
+            "current_prio": prio or "",
+            "current_min_prio": min_prio or "",      # Mindestpriorität
+            "current_tags": tags or "",
+            "current_tag_mode": tag_mode,               # Tag-Modus
+            "current_status_group": status_group or "", # Status-Gruppe
+            "current_time_range": time_range or "",     # Zeit-Bereich
+            "current_range": range or "",
+            "current_created_by": created_by or "",     # Ersteller-Filter
+            "current_assigned_to": assigned_to or "",   # Zugewiesen-Filter
+            "current_sort": sort or "",
+            "current_dir": dir,
+            "show_private": show_private,
+            "include_past": include_past,
+            "tags": tags or "",
+            # Template functions
+            "type_status_colors": TYPE_STATUS_COLORS,
+            "status_display": status_display,
+            "urlencode_qs": urlencode_qs
+        }
+        
+        return templates.TemplateResponse("index.html", context)
+        
+    except Exception as e:
+        logger.error(f"List view error: {str(e)}")
+        return error_handler.handle_error(request, e, "Fehler beim Laden der Liste")
+@router.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_user),
+    repository: DbRepository = Depends(get_repository),
+    error_handler: ErrorHandler = Depends(get_error_handler),
+    common_service: CommonService = Depends(get_common_service),
+    offset: int = Query(0, ge=0),
+    debug: bool = Query(False),
+    sort_by: Optional[str] = Query(None, description="Sortierung: 'date' oder 'score'")
+):
+    """Modern dashboard page with widget-based overview"""
+    try:
+        # Redirect to login if not authenticated
+        if not current_user:
+            return RedirectResponse("/auth/login", status_code=302)
+            
+        error_handler.log_operation("dashboard_access")
+        
+        # Extract filter parameters using common service
+        filter_params = common_service.extract_filter_params_from_query(request)
+        
+        # Get filtered items using common service
+        all_items = common_service.get_items_for_user_with_filters(current_user.id, filter_params)
+            all_items = [item for item in all_items if any(tag in (item.tags or []) for tag in tag_list)]
+        
+        # Private filter
+        if not show_private:
+            all_items = [item for item in all_items if not getattr(item, 'is_private', False)]
+        
+        # Include past filter - if not checked, filter out completed/past items
+        if not include_past:
+            # Filter out completed items
+            completed_statuses = ['erledigt', 'abgebrochen']
+            all_items = [item for item in all_items if item.status not in completed_statuses]
+            
+            # Also filter out past dated items (appointments/events that ended, tasks that are overdue but not completed)
+            now_utc = datetime.now(pytz.UTC)
+            def is_past_item(item):
+                if item.type in ('appointment', 'event'):
+                    end_utc = getattr(item, 'end_utc', None) or getattr(item, 'start_utc', None)
+                    return end_utc and end_utc < now_utc
+                elif item.type == 'task':
+                    due_utc = getattr(item, 'due_utc', None)
+                    return due_utc and due_utc < now_utc and item.status not in completed_statuses
+                elif item.type == 'reminder':
+                    reminder_utc = getattr(item, 'reminder_utc', None)
+                    return reminder_utc and reminder_utc < now_utc
+                return False
+            
+            # Only filter past items if they're not in an "active" state
+            all_items = [item for item in all_items if not is_past_item(item)]
+        
+        # Status choices for filter dropdown
+        status_choices = [
+            ("offen", "Offen"),
+            ("bearbeitung", "In Bearbeitung"), 
+            ("warten", "Warten"),
+            ("geplant", "Geplant"),
+            ("erledigt", "Erledigt"),
+            ("verschoben", "Verschoben"),
+            ("abgebrochen", "Abgebrochen")
+        ]
+        
+        # Helper functions (matching original dashboard)
+        def _aware(dt):
+            return dt if dt and dt.tzinfo else (dt.replace(tzinfo=pytz.UTC) if dt else datetime.max.replace(tzinfo=pytz.UTC))
+            
+        def _ice_score_num(it):
+            try:
+                meta = getattr(it, 'metadata', {}) or {}
+                v = meta.get('ice_score') if isinstance(meta, dict) else None
+                return float(v) if v is not None and str(v).strip() != '' else 0.0
+            except Exception:
+                return 0.0
+                
+        def sort_key_time(it):
+            """Sortierungsschlüssel für chronologische Auflistung (aufsteigend)"""
+            if getattr(it, "type", "") in ("appointment","event"):
+                # Für appointments/events: start_utc bevorzugen
+                start = getattr(it, "start_utc", None)
+                if start:
+                    return _aware(start)
+                return _aware(datetime.max)
+            else:
+                # Für tasks/reminders: due_utc oder reminder_utc
+                return _aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None) or datetime.max)
+        
+        # Filter by categories (matching original dashboard logic)
+        overdue = []
+        upcoming_today = []
+        upcoming_next7 = []
+        events_next2m = []
+        undated = []
+        recurring_items = []
+        
+        # Date ranges
+        tomorrow_start = berlin_tz.localize(datetime.combine(tomorrow, datetime.min.time()))
+        three_months_end_date = today + timedelta(days=90)  # 3 Monate statt 7 Tage
+        three_months_end_start = berlin_tz.localize(datetime.combine(three_months_end_date, datetime.min.time()))
+        
+        for item in all_items:
+            item_type = item.type
+            
+            # Handle appointments and events
+            if item_type == "appointment":
+                start_utc = getattr(item, 'start_utc', None)
+                if not start_utc:
+                    undated.append(item)
+                else:
+                    start_local = start_utc.astimezone(berlin_tz)
+                    
+                    # Today
+                    if today_start <= start_local <= today_end:
+                        upcoming_today.append(item)
+                    # Appointments don't go to next 3 months - that's for events only
+                    # Next 2 months (for events display) - only future events
+                    elif start_local.date() > today and start_local.date() <= end_of_2months:
+                        events_next2m.append(item)
+                        
+            elif item_type == "event":
+                start_utc = getattr(item, 'start_utc', None)
+                if not start_utc:
+                    undated.append(item)
+                else:
+                    start_local = start_utc.astimezone(berlin_tz)
+                    
+                    # Today
+                    if today_start <= start_local <= today_end:
+                        upcoming_today.append(item)
+                    # Next 3 months
+                    elif tomorrow_start <= start_local <= three_months_end_start:
+                        upcoming_next7.append(item)
+                    # Next 2 months - only future events  
+                    elif start_local.date() > today and start_local.date() <= end_of_2months:
+                        events_next2m.append(item)
+                        
+            # Handle tasks and reminders
+            elif item_type in ("task", "reminder"):
+                # Get due/reminder time
+                due_time = None
+                if item_type == "task":
+                    due_time = getattr(item, 'due_utc', None)
+                else:  # reminder
+                    due_time = getattr(item, 'reminder_utc', None)
+                
+                if not due_time:
+                    # No date - only show if not terminal status
+                    if not is_terminal_status(item.status):
+                        undated.append(item)
+                else:
+                    due_local = due_time.astimezone(berlin_tz)
+                    
+                    # Overdue check: past due AND not terminal status
+                    if due_time < now_local and not is_terminal_status(item.status):
+                        overdue.append(item)
+                    # Today
+                    elif today_start <= due_local <= today_end:
+                        upcoming_today.append(item)
+                    # Tasks and reminders don't go to next 3 months - that's for events only
+                        
+            # Skip terminal status items for other types
+            elif is_terminal_status(item.status):
+                continue
+                
+        # Get recurring items (items with rrule)
+        for item in all_items:
+            if hasattr(item, 'recurrence') and getattr(item.recurrence, 'rrule_string', None):
+                # Skip birthdays for recurring panel
+                if not is_birthday(item):
+                    recurring_items.append(item)
+        
+        # Resolve sorting mode (matching original logic)
+        cookie_mode = request.cookies.get("sort_by") if request else None
+        mode = (sort_by or cookie_mode or "date").lower()
+        
+        # Sort lists (matching original logic with ICE score)
+        if mode == "score":
+            # Score-first: ICE score desc, then time, then priority desc
+            overdue.sort(key=lambda x: (-_ice_score_num(x), -(getattr(x, "priority", 0) or 0), sort_key_time(x)))
+            upcoming_today.sort(key=lambda x: (-_ice_score_num(x), sort_key_time(x), -(getattr(x, "priority", 0) or 0)))
+            upcoming_next7.sort(key=lambda x: (-_ice_score_num(x), sort_key_time(x), -(getattr(x, "priority", 0) or 0)))
+        else:
+            # Date-first: time, then ICE score desc, then priority desc
+            overdue.sort(key=lambda x: (sort_key_time(x), -_ice_score_num(x), -(getattr(x, "priority", 0) or 0)))
+            upcoming_today.sort(key=lambda x: (sort_key_time(x), -_ice_score_num(x), -(getattr(x, "priority", 0) or 0)))
+            upcoming_next7.sort(key=lambda x: (sort_key_time(x), -_ice_score_num(x), -(getattr(x, "priority", 0) or 0)))
+            
+        # Special overdue sorting (matching original complex logic)
+        def _overdue_with_score(t):
+            # primary: ICE score (desc)
+            score = _ice_score_num(t)
+            # secondary: priority (higher first)  
+            prio = getattr(t, "priority", 0) or 0
+            # tertiary: due time, created time
+            due = getattr(t, "due_utc", None) or getattr(t, "reminder_utc", None) or datetime.max.replace(tzinfo=pytz.UTC)
+            created = getattr(t, "created_utc", datetime.max.replace(tzinfo=pytz.UTC))
+            return (-score, -int(prio), due, created)
+            
+        overdue.sort(key=_overdue_with_score)
+        
+        # Sort undated items
+        undated.sort(key=lambda x: (
+            -_ice_score_num(x),
+            -(x.priority or 0),  # Höchste Priorität zuerst
+            (x.last_modified_utc or datetime.min.replace(tzinfo=pytz.UTC))  # Älteste Änderung zuerst
+        ))
+        
+        # Sort events and recurring items
+        events_next2m.sort(key=lambda x: sort_key_time(x))
+        recurring_items.sort(key=lambda x: (-_ice_score_num(x), getattr(x, "name", "")))
+        
+        # Limit results (matching original dashboard)
+        overdue = overdue[:30]
+        upcoming_today = upcoming_today[:30] 
+        upcoming_next7 = upcoming_next7[:30]
+        
+        # Calendar data
+        calendar_data = None
+        if config.features.enable_dashboard:  # Using config.features.enable_dashboard instead
+            calendar_data = generate_calendar_data(all_items, now_local, berlin_tz, offset)
+        
+        context = {
+            "request": request,
+            "current_user": current_user,
+            "overdue": overdue,
+            "upcoming_today": upcoming_today,
+            "upcoming_next7": upcoming_next7,
+            "undated": undated,
+            "events_next2m": events_next2m,
+            "recurring_items": recurring_items,
+            "calendar_data": calendar_data,
+            "today": today,
+            "now_local": now_local,
+            "berlin_tz": berlin_tz,
+            "offset": offset,
+            "debug": debug,
+            "sort_mode": mode,  # Add current sort mode
+            # Filter parameters and choices
+            "status_choices": status_choices,
+            "tags": tags or "",
+            # Template functions
+            "get_priority_class": get_priority_class,
+            "format_dashboard_time": format_dashboard_time,
+            "is_overdue_item": is_overdue_item,
+            "is_birthday": is_birthday,
+            "is_terminal_status": is_terminal_status,
+            "status_display": status_display,
+            "urlencode_qs": urlencode_qs,
+            "type_status_colors": TYPE_STATUS_COLORS
+        }
+        
+        # Create response and handle cookie (matching original)
+        response = templates.TemplateResponse("dashboard.html", context)
+        
+        # If the user explicitly supplied a sort_by in the query, persist it as a cookie
+        if sort_by and sort_by.lower() in ("date", "score"):
+            response.set_cookie("sort_by", sort_by.lower(), max_age=60 * 60 * 24 * 30)  # 30 days
+            
+        return response
+        
+    except Exception as e:
+        return error_handler.handle_error(request, e, "Fehler beim Laden des Dashboards")
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "taskmanager"}
+
+@router.get("/about")  
+async def about(request: Request):
+    """About page"""
+    return templates.TemplateResponse("about.html", {"request": request})

@@ -1,6 +1,6 @@
 # domain/models.py
 from dataclasses import dataclass, field
-from typing import Optional, Literal, Dict, Tuple
+from typing import Optional, Literal, Dict, Tuple, List
 from datetime import datetime
 
 ItemType = Literal["task","appointment","event","reminder"]
@@ -19,8 +19,12 @@ class BaseItem:
     name: str
     status: StatusKey
     is_private: bool
+    creator: str  # User ID who created the item
     ics_uid: Optional[str] = None  # original ICS UID, falls importiert
     priority: Optional[int] = 0
+
+    # Multi-user fields
+    participants: Tuple[str, ...] = ()  # User IDs who participate, immutable
 
     # optionale Felder
     description: Optional[str] = None

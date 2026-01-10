@@ -23,7 +23,7 @@ from urllib.parse import urlencode
 
 # Projektmodule
 from domain.models import Task, Reminder, Appointment, Event
-from domain.ice_definitions import compute_ice_score, is_valid_confidence_key
+from domain.ice_definitions import compute_ice_score, is_valid_confidence_value
 from infrastructure.db_repository import DbRepository
 from services.filter_service import filter_items
 from utils.datetime_helpers import now_utc
@@ -348,8 +348,8 @@ def _status_colors_for(status, item_type: str) -> dict:
 def _status_display(status, key: str) -> str:
     if hasattr(status, "reverse_format"):
         return status.reverse_format(key)
-    if hasattr(status, "display_name"):
-        return status.display_name(key)
+    if hasattr(status, "get_display_name"):
+        return status.get_display_name(key)
     return key
 
 # ====== Zeit-/RRULE-Helfer ======
@@ -1465,8 +1465,13 @@ async def edit_item_submit(
     
     if ice_confidence is not None:
         ice_confidence_str = (ice_confidence or "").strip()
-        if ice_confidence_str and is_valid_confidence_key(ice_confidence_str):
-            final_confidence = ice_confidence_str
+        if ice_confidence_str:
+            try:
+                conf_val = int(ice_confidence_str)
+                if is_valid_confidence_value(conf_val):
+                    final_confidence = conf_val
+            except ValueError:
+                pass  # Ungültig -> übergehe
     
     if ice_ease is not None:
         ice_ease_str = (ice_ease or "").strip()
@@ -3176,43 +3181,13 @@ def dashboard(
         "active_sort": mode,
     }
 
-    resp = templates.TemplateResponse(request, "dashboard_modern.html", ctx)
+    resp = templates.TemplateResponse(request, "dashboard.html", ctx)
     # If the user explicitly supplied a sort_by in the query, persist it as a cookie.
     try:
         if sort_by and sort_by.lower() in ("date", "score"):
             resp.set_cookie("sort_by", sort_by.lower(), max_age=60 * 60 * 24 * 30)  # 30 days
     except Exception:
         pass
-    return resp
-
-
-@app.get("/dashboard/classic", response_class=HTMLResponse)
-def dashboard_classic(
-    request: Request,
-    q: str | None = None,
-    types: str | None = None,
-    status_keys: str | None = None,
-    status: str | None = None,
-    show_private: int = 0,
-    include_past: int = 0,
-    tags: str | None = None,
-    cal_weeks: int = 2,
-    cal_week_offset: int = 0,
-    repo: DbRepository = Depends(get_repo),
-    sm=Depends(get_status),
-    sort_by: str | None = Query(None, description="Sortierung: 'date' oder 'score'"),
-):
-    """Classic dashboard page (legacy)"""
-    # Same logic as the main dashboard but use the classic template
-    
-    # ... [same logic as main dashboard] ...
-    # For brevity, I'll just redirect to the main logic and change the template
-    
-    # Get the context from the main dashboard function
-    # This would need the full dashboard logic copied here, but for now:
-    ctx = {"request": request, "message": "Classic Dashboard - Implementation needed"}
-    
-    resp = templates.TemplateResponse(request, "dashboard.html", ctx)
     return resp
 
 
@@ -3332,7 +3307,7 @@ def export_dashboard_excel(
                 data["end_utc"] = occ_e
             inst = src.__class__(**data)
             if inst.type in ("appointment","event"):
-                basis = inst.start_utc or inst.end_utc
+                basis = getattr(inst, 'start_utc', None) or getattr(inst, 'end_utc', None)
             else:
                 basis = getattr(inst, "due_utc", None) or getattr(inst, "reminder_utc", None)
             if not basis:

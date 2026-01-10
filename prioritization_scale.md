@@ -1,32 +1,37 @@
-ICE-Scales und Anleitung
+ICE-Scales und Anleitung (Wissenschaftlich fundiert)
 
 Skalen (für `prioritization_template.csv`):
 
-- Impact (1–5)
-  - 1 — Vernachlässigbar: Kein messbaren Einfluss auf Nutzer/Business
+- Impact (0–5): Auswirkung bei Fertigstellung - DOPPELT GEWICHTET!
+  - 0 — Nicht zutreffend: Kein Einfluss oder nicht anwendbar
+  - 1 — Minimal: Kaum messbarer Einfluss
   - 2 — Gering: Kleine, lokale Verbesserung
   - 3 — Mittel: Deutliche, messbare Verbesserung
   - 4 — Hoch: Starker, breit wirkender Nutzen
   - 5 — Transformativ: Wesentliche Änderung/Mehrwert
 
-- Confidence (dezimal: 0.1, 0.3, 0.5, 0.7, 0.9)
-  - 0.9 — "Ich weiß genau, was zu tun ist / Termin steht fest." (sehr hohe Sicherheit)
-  - 0.7 — Hohe Zuversicht (gute Annahmen / vergleichbare Daten vorhanden)
-  - 0.5 — "Ich muss erst recherchieren / Entscheidung noch offen." (moderate Sicherheit)
-  - 0.3 — Niedrige Zuversicht (wenig Daten, Annahmen unsicher)
-  - 0.1 — "Idee, vielleicht später." (sehr unsicher)
+- Confidence (0–5): Sicherheit der Einschätzung
+  - 0 — Unbekannt: Keine Informationen verfügbar
+  - 1 — Sehr niedrig (20%): Hochgradig spekulativ
+  - 2 — Niedrig (40%): Schwache Annahmen / wenig Daten 
+  - 3 — Mittel (60%): Moderate Sicherheit / muss recherchiert werden
+  - 4 — Hoch (80%): Hohe Zuversicht / gute Daten vorhanden
+  - 5 — Sehr hoch (100%): Weiß genau was zu tun ist / Termin steht fest
 
-- Ease (1–5), höhere Werte = leichter umsetzbar
-  - 1 — Sehr aufwendig (mehrere Personen/Monate)
-  - 2 — Aufwendig (mehrere Wochen)
-  - 3 — Moderat (ein bis wenige Wochen)
-  - 4 — Schnell (ein paar Tage)
-  - 5 — Sehr schnell (weniger als ein Tag / trivial)
+- Ease (0–5): Umsetzungsleichtigkeit, höhere Werte = einfacher
+  - 0 — Unmöglich: Technisch oder resourcen-mäßig unmöglich
+  - 1 — Extrem schwierig: Sehr großer Aufwand (mehrere Personen/Monate)
+  - 2 — Schwierig: Großer Aufwand (mehrere Wochen)
+  - 3 — Moderat: Moderater Aufwand (ein bis wenige Wochen)
+  - 4 — Leicht: Relativ gering (ein paar Tage)
+  - 5 — Trivial: Minimaler Aufwand (weniger als ein Tag)
 
-Formel
+Formel (wissenschaftlich fundiert mit Impact-Gewichtung)
 
-- ICE = Impact * Confidence * Ease
-- Beispiel: Impact=4, Confidence=0.7, Ease=3 → ICE = 4 * 0.7 * 3 = 8.4
+- ICE = Impact² × Confidence × Ease
+- Impact wird quadriert, da es der wichtigste Faktor ist
+- Beispiel: Impact=4, Confidence=4, Ease=3 → ICE = 16 × 4 × 3 = 192
+- Maximum: 5² × 5 × 5 = 625
 
 Operational Hinweise
 

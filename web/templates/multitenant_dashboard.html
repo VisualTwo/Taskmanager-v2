@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - TaskManager</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <style>
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-card h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 2rem;
+            color: var(--primary);
+        }
+        .stat-card p {
+            margin: 0;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+        .stat-card.tasks { border-left: 4px solid #007bff; }
+        .stat-card.appointments { border-left: 4px solid #28a745; }
+        .stat-card.events { border-left: 4px solid #ffc107; }
+        .stat-card.reminders { border-left: 4px solid #dc3545; }
+        .recent-items {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .recent-items h2 {
+            margin: 0;
+            padding: 1rem 1.5rem;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .items-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .item-entry {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+        .item-entry:last-child {
+            border-bottom: none;
+        }
+        .item-entry:hover {
+            background: var(--bg-tertiary);
+        }
+        .item-info {
+            flex: 1;
+        }
+        .item-name {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+        .item-meta {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        .item-type-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .item-type-badge.task { 
+            background: color-mix(in srgb, var(--color-primary) 15%, var(--color-surface));
+            color: var(--color-primary); 
+        }
+        .item-type-badge.appointment { 
+            background: color-mix(in srgb, var(--color-success) 15%, var(--color-surface));
+            color: var(--color-success); 
+        }
+        .item-type-badge.event { 
+            background: color-mix(in srgb, var(--color-warning) 15%, var(--color-surface));
+            color: var(--color-warning); 
+        }
+        .item-type-badge.reminder { 
+            background: color-mix(in srgb, var(--color-danger) 15%, var(--color-surface));
+            color: var(--color-danger); 
+        }
+        .welcome-message {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .welcome-message h1 {
+            margin: 0 0 0.5rem 0;
+        }
+        .welcome-message p {
+            margin: 0;
+            opacity: 0.9;
+        }
+        .quick-actions {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .quick-action-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .quick-action-btn:hover {
+            background: var(--primary-dark);
+        }
+        .no-items {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+        .nav-link {
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .nav-link:hover {
+            background: var(--primary);
+            color: white;
+        }
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background: var(--color-danger);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .logout-btn:hover {
+            background: var(--color-danger-hover);
+        }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 2rem;">
+        <div class="dashboard-header">
+            <div class="user-info">
+                <div class="user-avatar">
+                    {{ current_user.full_name[0].upper() }}
+                </div>
+                <div>
+                    <div style="font-weight: 500;">{{ current_user.full_name }}</div>
+                    <div style="font-size: 0.875rem; color: var(--text-muted);">
+                        @{{ current_user.login }}
+                        {% if current_user.is_admin %}
+                            • 👑 Administrator
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="nav-links">
+                {% if current_user.is_admin %}
+                <a href="/admin/users" class="nav-link">👥 Benutzerverwaltung</a>
+                {% endif %}
+                <a href="/test-mt" class="nav-link">🧪 Test Multitenant</a>
+                <a href="/logout" class="logout-btn">🚪 Abmelden</a>
+            </div>
+        </div>
+
+        <div class="welcome-message">
+            <h1>Willkommen zurück, {{ current_user.full_name }}! 👋</h1>
+            <p>Hier ist Ihr TaskManager Dashboard mit allen Ihren Aufgaben und Terminen.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card tasks">
+                <h3>{{ tasks|length }}</h3>
+                <p>📋 Aufgaben</p>
+            </div>
+            <div class="stat-card appointments">
+                <h3>{{ appointments|length }}</h3>
+                <p>📅 Termine</p>
+            </div>
+            <div class="stat-card events">
+                <h3>{{ events|length }}</h3>
+                <p>🎉 Ereignisse</p>
+            </div>
+            <div class="stat-card reminders">
+                <h3>{{ reminders|length }}</h3>
+                <p>⏰ Erinnerungen</p>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+            <a href="/items/new?type=task" class="quick-action-btn">
+                ➕ Neue Aufgabe
+            </a>
+            <a href="/items/new?type=appointment" class="quick-action-btn">
+                📅 Neuer Termin
+            </a>
+            <a href="/items/new?type=event" class="quick-action-btn">
+                🎉 Neues Ereignis
+            </a>
+            <a href="/items/new?type=reminder" class="quick-action-btn">
+                ⏰ Neue Erinnerung
+            </a>
+        </div>
+
+        <div class="recent-items">
+            <h2>📝 Ihre neuesten Einträge</h2>
+            <div class="items-list">
+                {% if items %}
+                    {% for item in items[:10] %}
+                    <div class="item-entry">
+                        <div class="item-info">
+                            <div class="item-name">{{ item.name }}</div>
+                            <div class="item-meta">
+                                {% if item.description %}
+                                    {{ item.description[:100] }}{% if item.description|length > 100 %}...{% endif %}
+                                {% endif %}
+                                {% if item.created_utc %}
+                                    • Erstellt: {{ item.created_utc.strftime('%d.%m.%Y %H:%M') }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="item-type-badge {{ item.type }}">
+                                {% if item.type == 'task' %}📋 Aufgabe
+                                {% elif item.type == 'appointment' %}📅 Termin
+                                {% elif item.type == 'event' %}🎉 Ereignis
+                                {% elif item.type == 'reminder' %}⏰ Erinnerung
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-items">
+                        <h3>Noch keine Einträge vorhanden</h3>
+                        <p>Erstellen Sie Ihre erste Aufgabe oder Ihren ersten Termin!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div style="margin-top: 2rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
+            <h3>🔒 Multi-User Informationen</h3>
+            <ul style="margin: 0.5rem 0; color: var(--text-muted);">
+                <li>Sie sehen nur Einträge, die Sie erstellt haben oder an denen Sie beteiligt sind</li>
+                <li>Öffentliche Ereignisse (ohne Teilnehmer) sind für alle sichtbar</li>
+                <li>Als Creator können Sie andere Benutzer als Teilnehmer hinzufügen</li>
+                {% if current_user.is_admin %}
+                <li><strong>Administrator:</strong> Sie haben Zugriff auf die Benutzerverwaltung</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

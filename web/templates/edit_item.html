@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ item.name }} bearbeiten - TaskManager</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <style>
+        .edit-form {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .item-info {
+            flex: 1;
+        }
+        .item-title {
+            font-size: 1.5rem;
+            margin: 0 0 0.5rem 0;
+        }
+        .item-meta {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+        .item-actions {
+            display: flex;
+            gap: 1rem;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: var(--text-muted); color: white; }
+        .btn:hover { opacity: 0.9; }
+        .participants-management {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .section-title {
+            font-size: 1.25rem;
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+        }
+        .creator-info {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1.5rem;
+        }
+        .creator-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: var(--primary);
+            color: white;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .participants-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+        .participant-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+        .participant-item input[type="checkbox"] {
+            width: auto;
+        }
+        .participant-info {
+            flex: 1;
+        }
+        .participant-name {
+            font-weight: 500;
+        }
+        .participant-login {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        .save-participants {
+            margin-top: 1rem;
+        }
+        .access-info {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+        }
+        .access-info.readonly {
+            background: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        .no-participants {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 2rem;
+            font-style: italic;
+        }
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="edit-form">
+        <div class="item-header">
+            <div class="item-info">
+                <h1 class="item-title">
+                    {% if item.type == 'task' %}📋
+                    {% elif item.type == 'appointment' %}📅
+                    {% elif item.type == 'event' %}🎉
+                    {% elif item.type == 'reminder' %}⏰
+                    {% endif %}
+                    {{ item.name }}
+                </h1>
+                <div class="item-meta">
+                    {% if item.type == 'task' %}Aufgabe
+                    {% elif item.type == 'appointment' %}Termin
+                    {% elif item.type == 'event' %}Ereignis
+                    {% elif item.type == 'reminder' %}Erinnerung
+                    {% endif %}
+                    • Erstellt: {{ item.created_utc.strftime('%d.%m.%Y %H:%M') if item.created_utc else 'Unbekannt' }}
+                    {% if item.is_private %}• 🔒 Privat{% endif %}
+                </div>
+            </div>
+            <div class="item-actions">
+                <a href="/list" class="btn btn-secondary">← Zurück</a>
+                {% if is_creator %}
+                <button class="btn btn-danger" onclick="deleteItem('{{ item.id }}')">
+                    🗑️ Löschen
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if current_user.id == item.creator %}
+        <div class="access-info">
+            <strong>🎯 Sie sind der Ersteller</strong><br>
+            Sie können die Teilnehmerliste bearbeiten und das Item löschen.
+        </div>
+        {% elif current_user.id in item.participants %}
+        <div class="access-info">
+            <strong>👥 Sie sind Teilnehmer</strong><br>
+            Sie haben Lesezugriff auf dieses Item. Nur der Ersteller kann Änderungen vornehmen.
+        </div>
+        {% else %}
+        <div class="access-info readonly">
+            <strong>👁️ Öffentlicher Zugriff</strong><br>
+            Dies ist ein öffentliches Ereignis ohne spezielle Teilnehmer.
+        </div>
+        {% endif %}
+
+        <div class="participants-management">
+            <h2 class="section-title">👥 Beteiligte Personen</h2>
+            
+            <div class="creator-info">
+                <h3 class="section-heading-sm">Ersteller (nicht änderbar)</h3>
+                {% if creator %}
+                <div class="creator-badge">
+                    👑 {{ creator.full_name }} (@{{ creator.login }})
+                </div>
+                {% else %}
+                <div class="creator-badge">
+                    👑 Unbekannter Benutzer
+                </div>
+                {% endif %}
+            </div>
+
+            {% if is_creator %}
+            <h3 class="section-heading">Teilnehmer (bearbeitbar)</h3>
+            <form id="participantsForm">
+                <div class="participants-list">
+                    {% for user in active_users %}
+                    <div class="participant-item">
+                        <input type="checkbox" 
+                               id="participant_{{ user.id }}" 
+                               name="participants" 
+                               value="{{ user.id }}"
+                               {% if user.id in item.participants %}checked{% endif %}
+                               {% if user.id == current_user.id %}disabled title="Sie sind immer Teilnehmer"{% endif %}>
+                        <div class="participant-info">
+                            <div class="participant-name">{{ user.full_name }}</div>
+                            <div class="participant-login">@{{ user.login }}</div>
+                        </div>
+                        {% if user.id == current_user.id %}
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">(Sie)</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="save-participants">
+                    <button type="button" class="btn btn-primary" onclick="saveParticipants()">
+                        💾 Teilnehmer speichern
+                    </button>
+                </div>
+            </form>
+            {% else %}
+            <h3 class="section-heading">Teilnehmer (nur lesbar)</h3>
+            {% if participants %}
+            <div class="participants-list">
+                {% for participant in participants %}
+                <div class="participant-item">
+                    <div class="participant-info">
+                        <div class="participant-name">{{ participant.full_name }}</div>
+                        <div class="participant-login">@{{ participant.login }}</div>
+                    </div>
+                    {% if participant.id == current_user.id %}
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">(Sie)</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="no-participants">
+                Keine spezifischen Teilnehmer definiert
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+
+        {% if item.description %}
+        <div class="participants-management">
+            <h2 class="section-title">📝 Beschreibung</h2>
+            <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 4px; white-space: pre-wrap;">{{ item.description }}</div>
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <a href="/dashboard" class="btn btn-secondary">Zurück zum Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        function saveParticipants() {
+            const form = document.getElementById('participantsForm');
+            const formData = new FormData(form);
+            
+            fetch(`/items/{{ item.id }}/update-participants`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Teilnehmer erfolgreich aktualisiert!');
+                    location.reload();
+                } else {
+                    alert('Fehler beim Aktualisieren der Teilnehmer: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Ein Fehler ist aufgetreten: ' + error);
+            });
+        }
+
+        function deleteItem(itemId) {
+            if (confirm('Möchten Sie dieses Item wirklich unwiderruflich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+                fetch(`/items/${itemId}/delete`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Item erfolgreich gelöscht!');
+                        window.location.href = '/dashboard';
+                    } else {
+                        alert('Fehler beim Löschen: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Ein Fehler ist aufgetreten: ' + error);
+                });
+            }
+        }
+    </script>
+</body>
+</html>

@@ -78,7 +78,7 @@ def _import_key(it) -> tuple:
             name = name.split("]",1)[-1].strip()
         return (it.type, name, it.reminder_utc)
     if it.type == "task":
-        return (it.type, name, it.due_utc)
+        return (it.type, name, it.due_utc if it.type == 'task' else None)
     if it.type in ("appointment","event"):
         return (it.type, name, it.start_utc, it.end_utc)
     return (it.type, name)
@@ -234,7 +234,7 @@ def main():
     win_end = now_utc() + timedelta(hours=24)
     print("=== Items ===")
     for it in items:
-        print(f"- {it.type} {it.name} [{status.display_name(it.status)}]")
+        print(f"- {it.type} {it.name} [{status.get_display_name(it.status)}]")
         occs = expand_item(it, win_start, win_end)
         for occ in occs:
             if occ.item_type == "task":

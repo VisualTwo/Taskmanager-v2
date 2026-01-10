@@ -119,3 +119,26 @@ class ErrorHandler:
             status_code=500,
             details={"operation": operation, "filename": filename, "error_type": type(exc).__name__}
         )
+    
+    def handle_error(self, request: Request, exc: Exception, message: str = "An error occurred") -> HTMLResponse:
+        """Handle general errors and return HTML error page"""
+        error_id = id(exc)  # Simple error ID for tracking
+        
+        # Log the error with full traceback
+        logger.error(f"Error {error_id}: {exc}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Return HTML error page
+        try:
+            return self.templates.TemplateResponse("error.html", {
+                "request": request,
+                "error_message": message,
+                "error_details": str(exc),
+                "error_id": error_id
+            })
+        except Exception:
+            # Fallback if template rendering fails
+            return HTMLResponse(
+                content=f"<h1>Error</h1><p>{message}</p><p>Details: {str(exc)}</p>",
+                status_code=500
+            )

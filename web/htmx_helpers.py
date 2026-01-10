@@ -125,7 +125,7 @@ def index(
 
     try:
         type_status_options = {
-            t: [(k, status.display_name(k)) for k in _type_allowed_status_keys(status, t)]
+            t: [(k, status.get_display_name(k)) for k in _type_allowed_status_keys(status, t)]
             for t in ("task","reminder","appointment","event")
         }
     except Exception:
@@ -145,7 +145,7 @@ def edit_item_page(item_id: str, request: Request, repo: DbRepository = Depends(
         raise HTTPException(404, "Item nicht gefunden")
 
     allowed = _type_allowed_status_keys(status, it.type)
-    status_options = [(k, status.display_name(k)) for k in allowed]
+    status_options = [(k, status.get_display_name(k)) for k in allowed]
 
     rrule_line = ""
     dtstart_local = ""

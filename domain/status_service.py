@@ -15,7 +15,7 @@ class StatusService:
 
     # Anzeigename (Key -> Label)
     def display_name(self, key: Optional[str]) -> str:
-        return self.sm.display_name(key)
+        return self.sm.get_display_name(key)
 
     # Optional: UI-robust (Key oder Label -> Label)
     def get_display_name(self, key_or_label: Optional[str], item_type: Optional[str] = None) -> str:

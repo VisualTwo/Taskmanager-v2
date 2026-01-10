@@ -79,7 +79,7 @@
 
         <!-- Badge (klickbar) -->
         {% set cur_key = it.status %}
-        {% set cur_label = (opts | selectattr(0,'equalto',cur_key) | map(attribute=1) | list | first) or cur_key %}
+        {% set cur_label = status_display(cur_key) if status_display else cur_key %}
         <span class="status-badge"
               data-for="{{ it.id }}"
               tabindex="0"
@@ -144,7 +144,7 @@
     <td class="col-times">
       {# Fallback: Keine Überfällig-Logik, da utcnow im Template nicht verfügbar ist #}
       {% if it.type == 'task' %}
-        {% set due_text = (disp_start or it.due_utc) | format_local %}
+        {% set due_text = (disp_start or (it.due_utc if it.type == 'task' else None)) | format_local %}
         <span class="time-edit-wrap">
           <span class="time-label-inline" data-kind="due" data-for="{{ it.id }}">
             {{ due_text }}
@@ -157,7 +157,7 @@
         </span>
       {% elif it.type in ('appointment','event') %}
         {% set start_text = (disp_start or it.start_utc) | format_local %}
-        {% set end_text = (disp_end or it.end_utc) | format_local %}
+        {% set end_text = (disp_end or (it.end_utc if it.type != 'task' else None)) | format_local %}
         <span class="time-inline-pair">
           <span class="time-edit-wrap">
             <span class="time-label-inline" data-kind="start" data-for="{{ it.id }}">
@@ -182,7 +182,7 @@
           </span>
         </span>
       {% elif it.type == 'reminder' %}
-        {% set rem_text = (disp_start or it.reminder_utc) | format_local %}
+        {% set rem_text = (disp_start or (it.reminder_utc if it.type == 'reminder' else None)) | format_local %}
         <span class="time-edit-wrap">
           <span class="time-label-inline" data-kind="reminder" data-for="{{ it.id }}">
             {{ rem_text }}

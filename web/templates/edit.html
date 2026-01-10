@@ -93,11 +93,12 @@
                     hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
                     hx-swap="none">
               <option value="" disabled {% if not it.metadata.get('ice_impact') %}selected{% endif %}>– Impact wählen –</option>
-              <option value="1" {% if it.metadata.get('ice_impact') == '1' %}selected{% endif %}>Minimal</option>
-              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>Gering</option>
-              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>Mittel</option>
-              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>Hoch</option>
-              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>Transformativ</option>
+              <option value="0" {% if it.metadata.get('ice_impact') == '0' %}selected{% endif %}>0 - Nicht zutreffend</option>
+              <option value="1" {% if it.metadata.get('ice_impact') == '1' %}selected{% endif %}>1 - Minimal</option>
+              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>2 - Gering</option>
+              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>3 - Mittel</option>
+              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>4 - Hoch</option>
+              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>5 - Transformativ</option>
             </select>
           </div>
 
@@ -137,7 +138,8 @@
             <label for="ice_score">ICE Score</label>
             <input id="ice_score" name="ice_score" type="text" readonly
                    value="{{ it.metadata.get('ice_score','') }}"
-                   style="background-color:#f5f5f5; cursor:default;">
+                   style="background-color:#f5f5f5; cursor:default; color: #333;"
+                   class="ice-score-field">
           </div>
         </div>
 
@@ -186,6 +188,81 @@
     </div>
   </fieldset>
 
+  <!-- Teilnehmer-Verwaltung -->
+  {% if current_user and all_users %}
+  <fieldset class="card">
+    <legend>Zugriff verwalten</legend>
+    <div class="edit-container">
+      <div>
+        <label for="participants">Teilnehmer</label>
+        <div class="participants-container">
+          {% set current_participants = it.participants if it.participants else [] %}
+          <div class="current-participants">
+            {% if current_participants %}
+              {% for participant_id in current_participants %}
+                {% if participant_id and participant_id.strip() %}
+                  {% for user in all_users %}
+                    {% if user.id == participant_id.strip() %}
+                      <span class="participant-badge">
+                        {{ user.full_name }} ({{ user.login }})
+                        <button type="button" class="remove-participant" 
+                                hx-post="/items/{{ it.id }}/participants/remove"
+                                hx-vals='{"user_id": "{{ user.id }}"}'
+                                hx-target=".participants-container"
+                                hx-swap="innerHTML"
+                                title="Teilnehmer entfernen">×</button>
+                      </span>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <span class="muted">Nur Sie haben Zugriff auf dieses Item</span>
+            {% endif %}
+          </div>
+          
+          <div class="add-participant">
+            <select id="new-participant" name="new_participant">
+              <option value="">Teilnehmer hinzufügen...</option>
+              {% for user in all_users %}
+                {% if user.id not in current_participants %}
+                  <option value="{{ user.id }}">
+                    {{ user.full_name }} ({{ user.login }})
+                    {% if user.id == current_user.id %} - Sie selbst{% endif %}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button type="button" class="btn btn-sm"
+                    hx-post="/items/{{ it.id }}/participants/add"
+                    hx-include="#new-participant"
+                    hx-target=".participants-container"
+                    hx-swap="innerHTML">Hinzufügen</button>
+          </div>
+        </div>
+        <div class="muted">Hinzugefügte Benutzer können dieses Item sehen und bearbeiten.</div>
+        
+        <!-- Quick-Add für sich selbst -->
+        {% if current_user.id not in current_participants %}
+        <div style="margin-top: 1rem; padding: 0.75rem; background-color: var(--color-info-light); border-radius: 4px;">
+          <p style="margin: 0 0 0.5rem; font-size: 0.9em; color: var(--color-info-dark);">
+            💡 Sie sind noch nicht als Teilnehmer eingetragen
+          </p>
+          <button type="button" class="btn btn-sm btn-primary"
+                  hx-post="/items/{{ it.id }}/participants/add"
+                  hx-vals='{"new_participant": "{{ current_user.id }}"}'
+                  hx-target=".participants-container"
+                  hx-swap="innerHTML"
+                  title="Sich selbst als Teilnehmer hinzufügen">
+            + Mich als Teilnehmer hinzufügen
+          </button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </fieldset>
+  {% endif %}
+
   <!-- Zeitangaben -->
   <fieldset class="card">
     <legend class="card-title">Zeitangaben</legend>
@@ -193,7 +270,7 @@
       {% if it.type == 'task' %}
         <div>
           <label for="due">Fällig am</label>
-          <input id="due" class="fp-datetime" type="text" name="due" value="{{ it.due_utc | format_local }}"
+          <input id="due" class="fp-datetime" type="text" name="due" value="{{ (it.due_utc if it.type == 'task' else None) | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
                  hx-post="/items/{{ it.id }}/due" hx-trigger="change" hx-swap="none">
           <div class="muted">Optionales Fälligkeitsdatum.</div>
@@ -206,7 +283,7 @@
         </div>
         <div>
           <label for="end_local">Ende</label>
-          <input id="end_local" class="fp-datetime" type="text" name="end_local" value="{{ it.end_utc | format_local }}"
+          <input id="end_local" class="fp-datetime" type="text" name="end_local" value="{{ (it.end_utc if it.type != 'task' else None) | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm">
         </div>
         <div class="full">
@@ -229,7 +306,7 @@
       {% elif it.type == 'reminder' %}
         <div>
           <label for="until_local">Erinnern am</label>
-          <input id="until_local" class="fp-datetime" type="text" name="until_local" value="{{ it.reminder_utc | format_local }}"
+          <input id="until_local" class="fp-datetime" type="text" name="until_local" value="{{ (it.reminder_utc if it.type == 'reminder' else None) | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
                  hx-post="/items/{{ it.id }}/snooze" hx-trigger="change"
                  hx-target="#occ" hx-swap="innerHTML">
@@ -1104,16 +1181,9 @@
 </script>
 
 <script>
-  // ICE confidence label to value mapping
-  const CONFIDENCE_VALUES = {
-    'very_low': 0.1,
-    'low': 0.3,
-    'medium': 0.5,
-    'high': 0.7,
-    'very_high': 0.9
-  };
-
-  // Compute ICE score client-side and populate readonly field
+  // Compute ICE score with Impact weighting (0-5 scale)
+  // Formula: Impact² × Confidence × Ease (Impact is double-weighted)
+  // Max score: 5² × 5 × 5 = 625
   function computeIce() {
     try {
       const impEl = document.getElementById('ice_impact');
@@ -1122,15 +1192,11 @@
       const scoreEl = document.getElementById('ice_score');
 
       const imp = impEl ? parseInt(impEl.value) || 0 : 0;
-      const confKey = confEl ? confEl.value : '';
+      const conf = confEl ? parseInt(confEl.value) || 0 : 0;
       const ease = easeEl ? parseInt(easeEl.value) || 0 : 0;
 
-      let conf = 0;
-      if (confKey && CONFIDENCE_VALUES[confKey]) {
-        conf = CONFIDENCE_VALUES[confKey];
-      }
-
-      const raw = imp * conf * ease;
+      // Impact gets squared (double weight) for scientific prioritization
+      const raw = (imp * imp) * conf * ease;
       const rounded = Math.round(raw * 100) / 100;
       if (scoreEl) scoreEl.value = (rounded && !isNaN(rounded)) ? String(rounded) : '';
     } catch (e) {

@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS items(
     ice_ease INTEGER CHECK(ice_ease IS NULL OR (ice_ease >= 1 AND ice_ease <= 5)),
   ice_score REAL CHECK(ice_score IS NULL OR ice_score >= 0),
 
+  -- Multi-user fields for tenant support
+  creator TEXT NOT NULL,  -- User ID who created the item
+  participants TEXT NOT NULL DEFAULT '[]',  -- JSON array of User IDs
+
   -- Weitere Metadaten (JSON) für Erweiterung
   metadata TEXT NOT NULL DEFAULT '{}',
 
@@ -65,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_items_priority ON items(priority);
 CREATE INDEX IF NOT EXISTS idx_items_is_private ON items(is_private);
 CREATE INDEX IF NOT EXISTS idx_items_created_utc ON items(created_utc);
 CREATE INDEX IF NOT EXISTS idx_items_ice_score ON items(ice_score DESC);
+CREATE INDEX IF NOT EXISTS idx_items_creator ON items(creator);
 """
 
 EXPECTED_COLS = {
@@ -75,6 +80,7 @@ EXPECTED_COLS = {
   "is_all_day","rrule_string","exdates",
   "ics_uid",
   "priority",
+  "creator","participants",
   "created_utc","last_modified_utc"
 }
 
@@ -115,6 +121,10 @@ class DbRepository:
             to_add.append("ALTER TABLE items ADD COLUMN ics_uid TEXT;")
         if "priority" not in cols:
             to_add.append("ALTER TABLE items ADD COLUMN priority INTEGER;")
+        if "creator" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN creator TEXT DEFAULT 'admin';")
+        if "participants" not in cols:
+            to_add.append("ALTER TABLE items ADD COLUMN participants TEXT DEFAULT '[]';")
         if "created_utc" not in cols:
             to_add.append("ALTER TABLE items ADD COLUMN created_utc TEXT;")
         if "last_modified_utc" not in cols:
@@ -125,6 +135,8 @@ class DbRepository:
         if to_add:
             # Defaults initialisieren
             self.conn.execute("UPDATE items SET links='[]' WHERE links IS NULL;")
+            self.conn.execute("UPDATE items SET participants='[]' WHERE participants IS NULL;")
+            self.conn.execute("UPDATE items SET creator='admin' WHERE creator IS NULL;")
             # optionale Indizes
             try:
                 self.conn.execute("CREATE INDEX IF NOT EXISTS idx_items_ics_uid ON items(ics_uid);")
@@ -132,6 +144,10 @@ class DbRepository:
                 pass
             try:
                 self.conn.execute("CREATE INDEX IF NOT EXISTS idx_items_priority ON items(priority);")
+            except Exception:
+                pass
+            try:
+                self.conn.execute("CREATE INDEX IF NOT EXISTS idx_items_creator ON items(creator);")
             except Exception:
                 pass
             self.conn.commit()
@@ -189,6 +205,10 @@ class DbRepository:
         links_json = json.dumps(list(getattr(item, "links", ()) or ()))
         description = (getattr(item, "description", None) or "")
         metadata_json = json.dumps(dict(getattr(item, "metadata", {}) or {}))
+        
+        # Participants - convert tuple to comma-separated string
+        participants_str = ",".join(item.participants) if item.participants else ""
+        creator = item.creator if hasattr(item, 'creator') else ""
 
         # Recurrence
         rrule_string = item.recurrence.rrule_string if getattr(item, "recurrence", None) else None
@@ -227,8 +247,8 @@ class DbRepository:
             self.conn.execute(
                 """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
                                       due_utc,task_planned_start_utc,task_planned_end_utc,
-                                      rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,created_utc,last_modified_utc)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                      rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,creator,participants,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                      type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
                      is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
@@ -240,7 +260,7 @@ class DbRepository:
                      priority=excluded.priority,
                      ice_impact=excluded.ice_impact, ice_confidence=excluded.ice_confidence,
                      ice_ease=excluded.ice_ease, ice_score=excluded.ice_score,
-                     metadata=excluded.metadata,
+                     metadata=excluded.metadata, creator=excluded.creator, participants=excluded.participants,
                      last_modified_utc=excluded.last_modified_utc
                 """,
                 (
@@ -250,15 +270,15 @@ class DbRepository:
                     format_db_datetime(getattr(item, "planned_end_utc", None)),
                     rrule_string, exdates_str,
                     ics_uid, prio_val, ice_impact, ice_confidence, ice_ease, ice_score, metadata_json,
-                    now_iso, now_iso,
+                    creator, participants_str, now_iso, now_iso,
                 ),
             )
         elif item.type in ("appointment","event"):
             self.conn.execute(
                 """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
                                       start_utc,end_utc,is_all_day,
-                                      rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,created_utc,last_modified_utc)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                      rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,creator,participants,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                      type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
                      is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
@@ -268,7 +288,7 @@ class DbRepository:
                      priority=excluded.priority,
                      ice_impact=excluded.ice_impact, ice_confidence=excluded.ice_confidence,
                      ice_ease=excluded.ice_ease, ice_score=excluded.ice_score,
-                     metadata=excluded.metadata,
+                     metadata=excluded.metadata, creator=excluded.creator, participants=excluded.participants,
                      last_modified_utc=excluded.last_modified_utc
                 """,
                 (
@@ -278,14 +298,14 @@ class DbRepository:
                     int(getattr(item, "is_all_day", False)),
                     rrule_string, exdates_str,
                     ics_uid, prio_val, ice_impact, ice_confidence, ice_ease, ice_score, metadata_json,
-                    now_iso, now_iso,
+                    creator, participants_str, now_iso, now_iso,
                 ),
             )
         elif item.type == "reminder":
             self.conn.execute(
                 """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
-                                      reminder_utc,rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,created_utc,last_modified_utc)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                      reminder_utc,rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,creator,participants,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                      type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
                      is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
@@ -294,7 +314,7 @@ class DbRepository:
                      priority=excluded.priority,
                      ice_impact=excluded.ice_impact, ice_confidence=excluded.ice_confidence,
                      ice_ease=excluded.ice_ease, ice_score=excluded.ice_score,
-                     metadata=excluded.metadata,
+                     metadata=excluded.metadata, creator=excluded.creator, participants=excluded.participants,
                      last_modified_utc=excluded.last_modified_utc
                 """,
                 (
@@ -302,7 +322,7 @@ class DbRepository:
                     format_db_datetime(getattr(item, "reminder_utc", None)),
                     rrule_string, exdates_str,
                     ics_uid, prio_val, ice_impact, ice_confidence, ice_ease, ice_score, metadata_json,
-                    now_iso, now_iso,
+                    creator, participants_str, now_iso, now_iso,
                 ),
             )
         else:
@@ -336,6 +356,145 @@ class DbRepository:
     def filter(self, where_sql: str, params: Iterable = ()) -> List[Item]:
         rows = self.conn.execute(f"SELECT * FROM items WHERE {where_sql}", params).fetchall()
         return [self._row_to_item(r) for r in rows]
+        
+    def is_user_admin(self, user_id: str) -> bool:
+        """Check if user has admin privileges - reusable method"""
+        user_row = self.conn.execute(
+            "SELECT ist_admin FROM users WHERE id = ? OR login = ?",
+            (user_id, user_id)
+        ).fetchone()
+        return user_row and user_row["ist_admin"] == 1
+    
+    def _user_has_item_access(self, user_id: str, creator: str = None, participants: str = None, item_type: str = None) -> bool:
+        """Central access control logic for a single item
+        
+        Access rules:
+        - Tasks/Reminders/Appointments: Creator OR user in participants. If no participants, ONLY creator.
+        - Events: Creator OR user in participants. If no participants, EVERYONE can see.
+        """
+        # Get current user info for comparison
+        current_user_row = self.conn.execute(
+            "SELECT id, login FROM users WHERE id = ? OR login = ?",
+            (user_id, user_id)
+        ).fetchone()
+        
+        if current_user_row:
+            current_user_uuid = current_user_row["id"]
+            current_user_login = current_user_row["login"]
+        else:
+            # Fallback if user not found in DB
+            current_user_uuid = user_id
+            current_user_login = user_id
+            
+        # Rule 1: User is creator (check both UUID and login)
+        if creator:
+            creator_str = str(creator).strip()
+            if (creator_str == str(current_user_uuid).strip() or 
+                creator_str == str(current_user_login).strip()):
+                return True
+                
+            # Special case: Allow access to admin-created items for all users
+            if creator_str.lower() == "admin":
+                return True
+                
+        # Rule 2: User is participant (check both UUID and login)  
+        participants_str = str(participants).strip() if participants else ""
+        if (participants_str and 
+            participants_str not in ['', 'null', 'None', '[]'] and
+            not participants_str.startswith('[]')):
+            participant_list = [p.strip() for p in participants_str.split(",") if p.strip()]
+            for participant in participant_list:
+                if (str(participant) == str(current_user_uuid) or 
+                    str(participant) == str(current_user_login)):
+                    return True
+                    
+        # Rule 3: Empty participants - type-dependent logic
+        # Events: If no participants, EVERYONE can see
+        # Tasks/Reminders/Appointments: If no participants, ONLY creator (already checked in Rule 1)
+        participants_str = str(participants).strip() if participants else ""
+        is_empty_participants = (not participants or 
+            participants_str in ['', 'null', 'None', '[]'] or
+            participants_str.startswith('[]'))
+        
+        if is_empty_participants and item_type == 'event':
+            # Events without participants are visible to everyone
+            return True
+        
+        # For all other types or if creator/participant checks failed
+        return False
+        
+    def list_for_user(self, user_id: str) -> List[Item]:
+        """List all items that user has access to using consistent access logic"""
+        # Check if user is admin - admins can see all items
+        if self.is_user_admin(user_id):
+            rows = self.conn.execute("SELECT * FROM items").fetchall()
+        else:
+            # Use the same logic as individual access checks
+            rows = self.conn.execute("SELECT * FROM items").fetchall()
+            
+            # Filter using our central access logic
+            filtered_rows = []
+            for row in rows:
+                creator = row.get("creator")
+                participants = row.get("participants")
+                item_type = row.get("type")
+                if self._user_has_item_access(user_id, creator, participants, item_type):
+                    filtered_rows.append(row)
+            rows = filtered_rows
+            
+        return [self._row_to_item(r) for r in rows]
+    
+    def user_has_access(self, user_id: str, item_id: str) -> bool:
+        """Check if user has access to specific item"""
+        try:
+            print(f"DEBUG - Checking access for user {user_id} to item {item_id}")
+            
+            # Check if creator and participants columns exist
+            cursor = self.conn.execute("PRAGMA table_info(items)")
+            columns = [row[1] for row in cursor.fetchall()]
+            has_creator_col = 'creator' in columns
+            has_participants_col = 'participants' in columns
+            
+            print(f"DEBUG - Schema check: creator={has_creator_col}, participants={has_participants_col}")
+            
+            # Build query based on available columns
+            if has_creator_col and has_participants_col:
+                query = "SELECT creator, participants, type FROM items WHERE id = ?"
+            elif has_creator_col:
+                query = "SELECT creator, NULL as participants, type FROM items WHERE id = ?"
+            else:
+                print(f"DEBUG - No creator/participants columns, granting access")
+                return True
+                
+            row = self.conn.execute(query, (item_id,)).fetchone()
+            
+            if not row:
+                print(f"DEBUG - Item {item_id} not found in database")
+                return False
+                
+            creator = row["creator"] if has_creator_col else None
+            participants = row["participants"] if has_participants_col else ""
+            item_type = row["type"] if "type" in row.keys() else None
+            
+            print(f"DEBUG - DB creator: '{creator}', participants: '{participants}', type: '{item_type}'")
+            
+            # Use central access logic
+            has_access = self._user_has_item_access(user_id, creator, participants, item_type)
+            
+            if has_access:
+                print(f"DEBUG - Access granted by central logic")
+            else:
+                print(f"DEBUG - Access denied by central logic")
+            
+            return has_access
+            
+        except Exception as e:
+            print(f"DEBUG - Exception in user_has_access: {e}")
+            import traceback
+            traceback.print_exc()
+            # In case of any error, be permissive to avoid breaking the app
+            print(f"DEBUG - Granting access due to exception (fail-safe)")
+            return True
 
     def _get_col(self, r: sqlite3.Row, name: str):
         try:
@@ -485,6 +644,8 @@ class DbRepository:
             "name": r["name"] or "Unbenannt",  # Fallback für Namen
             "status": r["status_key"] or "UNKNOWN",  # Fallback für Status
             "is_private": bool(r["is_private"]),
+            "creator": r["creator"] if r["creator"] else "unknown",  # Fallback creator
+            "participants": tuple(r["participants"].split(",")) if r["participants"] else (),  # Parse participants
             "tags": tags,
             "links": links,
             "description": description,

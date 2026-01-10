@@ -14,7 +14,7 @@
 
   <!-- Neues Item: prominenter Platz im Kopf -->
   <form method="post" action="/items/new" class="new-item"
-        hx-post="/items/new" hx-swap="none"
+        target="_blank"
         aria-label="Neues Item anlegen">
     <label for="new-name" class="sr-only">Name</label>
     <div style="display:flex; gap:.5rem; align-items:center;">
@@ -84,7 +84,7 @@
 
 <!-- Filter-Toolbar: Moderne, intuitive Anordnung -->
 <section class="filterbar">
-  <form method="get" action="/" class="filters" role="search" aria-label="Suche und Filter" id="filters">
+  <form method="get" action="/list" class="filters" role="search" aria-label="Suche und Filter" id="filters">
     <div class="filter-toolbar">
 
       <!-- Zeile 1: Hauptsuche und Grundfilter -->
@@ -95,7 +95,7 @@
             <input id="q" type="text" name="q" placeholder="Name oder Beschreibung suchen…" value="{{ request.query_params.get('q','') }}" maxlength="120"
                   data-initial-q="{{ request.query_params.get('q','') }}"
                   data-confirmed-q="{{ request.query_params.get('q','') }}"
-                  hx-get="/"
+                  hx-get="/list"
                   hx-trigger="keyup changed delay:300ms, search"
                   hx-include="#filters"
                   hx-target="#items-table"
@@ -150,21 +150,40 @@
             <option value="0" {% if cur_prio=='0' %}selected{% endif %}>⚪ Keine</option>
           </select>
         </div>
+        
+        <div class="field">
+          <label for="min_prio">Mindest-Prio</label>
+          {% set cur_min_prio = request.query_params.get('min_prio','') %}
+          <select id="min_prio" name="min_prio" title="Mindestpriorität filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle</option>
+            <option value="1" {% if cur_min_prio=='1' %}selected{% endif %}>≥ Niedrig</option>
+            <option value="2" {% if cur_min_prio=='2' %}selected{% endif %}>≥ Normal</option>
+            <option value="3" {% if cur_min_prio=='3' %}selected{% endif %}>≥ Hoch</option>
+            <option value="4" {% if cur_min_prio=='4' %}selected{% endif %}>≥ Kritisch</option>
+            <option value="5" {% if cur_min_prio=='5' %}selected{% endif %}>≥ Blockierend</option>
+          </select>
+        </div>
       </div>
 
       <!-- Zeile 2: Erweiterte Filter und Optionen -->
       <div class="filter-row row-advanced">
         <div class="field field-tags">
           <label for="filter-tags">Tags</label>
-          <div class="input">
-            <input id="filter-tags" type="text" name="tags" placeholder="#tag1, #tag2…" autocomplete="off" value="{{ tags }}" 
-                   hx-get="/tags/suggest"
-                   hx-trigger="keyup changed delay:200ms"
-                   hx-params="*"
-                   hx-include="#filter-tags"
-                   hx-target="next .tags-filter-suggest"
-                   hx-swap="innerHTML">
-            <div class="tags-filter-suggest"></div>
+          <div class="input-group">
+            <div class="input">
+              <input id="filter-tags" type="text" name="tags" placeholder="#tag1, #tag2…" autocomplete="off" value="{{ tags }}" 
+                     hx-get="/tags/suggest"
+                     hx-trigger="keyup changed delay:200ms"
+                     hx-params="*"
+                     hx-include="#filter-tags"
+                     hx-target="next .tags-filter-suggest"
+                     hx-swap="innerHTML">
+              <div class="tags-filter-suggest"></div>
+            </div>
+            <select name="tag_mode" title="Tag-Verknüpfung" onchange="this.form.requestSubmit()" class="tag-mode-select">
+              <option value="all" {% if request.query_params.get('tag_mode','all')=='all' %}selected{% endif %}>UND</option>
+              <option value="any" {% if request.query_params.get('tag_mode','all')=='any' %}selected{% endif %}>ODER</option>
+            </select>
           </div>
         </div>
 
@@ -180,6 +199,49 @@
               <span>📜 Vergangene</span>
             </label>
           </div>
+        </div>
+        
+        <div class="field">
+          <label for="status_group">Status-Gruppe</label>
+          {% set cur_status_group = request.query_params.get('status_group','') %}
+          <select id="status_group" name="status_group" title="Status-Gruppe filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Status</option>
+            <option value="active" {% if cur_status_group=='active' %}selected{% endif %}>🟢 Aktiv</option>
+            <option value="pending" {% if cur_status_group=='pending' %}selected{% endif %}>🟡 Wartend</option>
+            <option value="completed" {% if cur_status_group=='completed' %}selected{% endif %}>✅ Erledigt</option>
+          </select>
+        </div>
+        
+        <div class="field">
+          <label for="time_range">Zeit-Filter</label>
+          {% set cur_time_range = request.query_params.get('time_range','') %}
+          <select id="time_range" name="time_range" title="Zeitbereich filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Zeiten</option>
+            <option value="overdue" {% if cur_time_range=='overdue' %}selected{% endif %}>⚠️ Überfällig</option>
+            <option value="next_3h" {% if cur_time_range=='next_3h' %}selected{% endif %}>⏰ Nächste 3h</option>
+            <option value="today" {% if cur_time_range=='today' %}selected{% endif %}>🌅 Heute</option>
+            <option value="this_week" {% if cur_time_range=='this_week' %}selected{% endif %}>📆 Diese Woche</option>
+            <option value="next_week" {% if cur_time_range=='next_week' %}selected{% endif %}>➡️ Nächste Woche</option>
+            <option value="this_month" {% if cur_time_range=='this_month' %}selected{% endif %}>📅 Dieser Monat</option>
+          </select>
+        </div>
+        
+        <div class="field">
+          <label for="created_by">Ersteller</label>
+          {% set cur_created_by = request.query_params.get('created_by','') %}
+          <select id="created_by" name="created_by" title="Nach Ersteller filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Ersteller</option>
+            <option value="me" {% if cur_created_by=='me' %}selected{% endif %}>👤 Von mir</option>
+          </select>
+        </div>
+        
+        <div class="field">
+          <label for="assigned_to">Zugewiesen</label>
+          {% set cur_assigned_to = request.query_params.get('assigned_to','') %}
+          <select id="assigned_to" name="assigned_to" title="Nach Zuweisung filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Zuweisungen</option>
+            <option value="me" {% if cur_assigned_to=='me' %}selected{% endif %}>🎯 An mich</option>
+          </select>
         </div>
 
         <!-- Verbesserte Vorkommen-Vorschau -->
@@ -255,7 +317,7 @@
     const data = new FormData(form);
     const o = {};
     for (const [k,v] of data.entries()) {
-      if (k === 'q' || k === 'types' || k === 'status' || k === 'show_private' || k === 'tags' || k === 'include_past' || k === 'range' || k === 'prio') {
+      if (k === 'q' || k === 'types' || k === 'status' || k === 'show_private' || k === 'tags' || k === 'include_past' || k === 'range' || k === 'prio' || k === 'min_prio' || k === 'tag_mode' || k === 'status_group' || k === 'time_range' || k === 'created_by' || k === 'assigned_to') {
         o[k] = v;
       }
     }
@@ -303,6 +365,24 @@
 
     const prioSel = form.querySelector('select[name="prio"]');
     if (prioSel && o.prio !== undefined) prioSel.value = o.prio || '';
+    
+    const minPrioSel = form.querySelector('select[name="min_prio"]');
+    if (minPrioSel && o.min_prio !== undefined) minPrioSel.value = o.min_prio || '';
+    
+    const tagModeSel = form.querySelector('select[name="tag_mode"]');
+    if (tagModeSel && o.tag_mode !== undefined) tagModeSel.value = o.tag_mode || 'all';
+    
+    const statusGroupSel = form.querySelector('select[name="status_group"]');
+    if (statusGroupSel && o.status_group !== undefined) statusGroupSel.value = o.status_group || '';
+    
+    const timeRangeSel = form.querySelector('select[name="time_range"]');
+    if (timeRangeSel && o.time_range !== undefined) timeRangeSel.value = o.time_range || '';
+    
+    const createdBySel = form.querySelector('select[name="created_by"]');
+    if (createdBySel && o.created_by !== undefined) createdBySel.value = o.created_by || '';
+    
+    const assignedToSel = form.querySelector('select[name="assigned_to"]');
+    if (assignedToSel && o.assigned_to !== undefined) assignedToSel.value = o.assigned_to || '';
   }
 
   function syncURL(o){
@@ -395,9 +475,21 @@
 
       const statusSel = form.querySelector('select[name="status"]');
       const prioSel   = form.querySelector('select[name="prio"]');
+      const minPrioSel = form.querySelector('select[name="min_prio"]');
+      const tagModeSel = form.querySelector('select[name="tag_mode"]');
+      const statusGroupSel = form.querySelector('select[name="status_group"]');
+      const timeRangeSel = form.querySelector('select[name="time_range"]');
+      const createdBySel = form.querySelector('select[name="created_by"]');
+      const assignedToSel = form.querySelector('select[name="assigned_to"]');
 
       if (statusSel) o.status = statusSel.value || '';
       if (prioSel)   o.prio   = prioSel.value || '';
+      if (minPrioSel) o.min_prio = minPrioSel.value || '';
+      if (tagModeSel) o.tag_mode = tagModeSel.value || 'all';
+      if (statusGroupSel) o.status_group = statusGroupSel.value || '';
+      if (timeRangeSel) o.time_range = timeRangeSel.value || '';
+      if (createdBySel) o.created_by = createdBySel.value || '';
+      if (assignedToSel) o.assigned_to = assignedToSel.value || '';
 
       localStorage.setItem(FILTER_KEY, JSON.stringify(o));
 

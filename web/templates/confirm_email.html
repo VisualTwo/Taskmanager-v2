@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Mail bestätigen - TaskManager</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <style>
+        .confirmation-container {
+            max-width: 500px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .confirmation-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        .confirmation-icon.success {
+            color: #28a745;
+        }
+        .confirmation-icon.error {
+            color: #dc3545;
+        }
+        .confirmation-title {
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+        .confirmation-message {
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .confirmation-button {
+            display: inline-block;
+            padding: 0.875rem 2rem;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .confirmation-button:hover {
+            background: var(--primary-dark);
+        }
+        body {
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+        .auth-logo {
+            margin-bottom: 2rem;
+        }
+        .auth-logo h1 {
+            color: var(--primary);
+            margin: 0;
+            font-size: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="confirmation-container">
+        <div class="auth-logo">
+            <h1>📋 TaskManager</h1>
+        </div>
+        
+        {% if success %}
+        <div class="confirmation-icon success">✅</div>
+        <h1 class="confirmation-title">E-Mail erfolgreich bestätigt!</h1>
+        <div class="confirmation-message">
+            <p>Vielen Dank! Ihre E-Mail-Adresse wurde erfolgreich bestätigt.</p>
+            <p><strong>Wichtiger Hinweis:</strong> Ihr Konto muss noch von einem Administrator aktiviert werden, bevor Sie sich anmelden können.</p>
+            <p>Sie erhalten eine Benachrichtigung, sobald Ihr Konto aktiviert wurde.</p>
+        </div>
+        {% else %}
+        <div class="confirmation-icon error">❌</div>
+        <h1 class="confirmation-title">Bestätigung fehlgeschlagen</h1>
+        <div class="confirmation-message">
+            <p>{{ error or "Der Bestätigungslink ist ungültig oder bereits abgelaufen." }}</p>
+            <p>Möglicherweise ist Ihre E-Mail-Adresse bereits bestätigt oder der Link ist nicht mehr gültig.</p>
+        </div>
+        {% endif %}
+        
+        <a href="/login" class="confirmation-button">Zur Anmeldung</a>
+    </div>
+</body>
+</html>

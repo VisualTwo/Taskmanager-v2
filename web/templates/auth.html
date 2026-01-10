@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if is_register %}Registrierung{% else %}Anmeldung{% endif %} - TaskManager</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <style>
+        .auth-container {
+            max-width: 400px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .auth-header h1 {
+            color: var(--color-primary);
+            margin-bottom: 0.5rem;
+        }
+        .auth-header p {
+            color: var(--color-muted);
+            margin: 0;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--color-fg);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--color-border);
+            border-radius: 4px;
+            font-size: 1rem;
+            background: var(--color-bg);
+            color: var(--color-fg);
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: var(--focus-ring);
+        }
+        .auth-button {
+            width: 100%;
+            padding: 0.875rem;
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .auth-button:hover {
+            background: var(--color-primary-hover);
+        }
+        .auth-button:disabled {
+            background: var(--color-muted);
+            cursor: not-allowed;
+        }
+        .auth-links {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--color-border);
+        }
+        .auth-links a {
+            color: var(--color-primary);
+            text-decoration: none;
+        }
+        .auth-links a:hover {
+            text-decoration: underline;
+        }
+        .error-message {
+            background: var(--alert-error-bg);
+            border: 1px solid var(--alert-error-border);
+            color: var(--alert-error-fg);
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        .success-message {
+            background: var(--alert-success-bg);
+            border: 1px solid var(--alert-success-border);
+            color: var(--alert-success-fg);
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        .password-requirements {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+        .auth-logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .auth-logo h1 {
+            color: var(--primary);
+            margin: 0;
+            font-size: 2rem;
+        }
+        body {
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-logo">
+            <h1>📋 TaskManager</h1>
+        </div>
+        
+        <div class="auth-header">
+            <h1>{% if is_register %}Konto erstellen{% else %}Anmelden{% endif %}</h1>
+            <p>
+                {% if is_register %}
+                    Erstellen Sie Ihr TaskManager-Konto
+                {% else %}
+                    Willkommen zurück! Melden Sie sich an.
+                {% endif %}
+            </p>
+        </div>
+
+        {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        {% if success %}
+        <div class="success-message">
+            {{ success }}
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% if is_register %}/auth/register{% else %}/auth/login{% endif %}" data-cache-bust="2026-01-08">
+            <!-- Force browser to use updated form action -->
+            <div class="form-group">
+                <label for="login">Benutzername</label>
+                <input type="text" id="login" name="login" required 
+                       value="{{ request_data.get('login', '') }}"
+                       placeholder="Ihr Benutzername">
+            </div>
+
+            {% if is_register %}
+            <div class="form-group">
+                <label for="email">E-Mail-Adresse</label>
+                <input type="email" id="email" name="email" required
+                       value="{{ request_data.get('email', '') }}"
+                       placeholder="ihre@email.de">
+            </div>
+
+            <div class="form-group">
+                <label for="full_name">Vollständiger Name</label>
+                <input type="text" id="full_name" name="full_name" required
+                       value="{{ request_data.get('full_name', '') }}"
+                       placeholder="Ihr vollständiger Name">
+            </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label for="password">Passwort</label>
+                <input type="password" id="password" name="password" required
+                       placeholder="{% if is_register %}Mindestens 6 Zeichen{% else %}Ihr Passwort{% endif %}">
+                {% if is_register %}
+                <div class="password-requirements">
+                    Mindestens 6 Zeichen erforderlich
+                </div>
+                {% endif %}
+            </div>
+
+            {% if is_register %}
+            <div class="form-group">
+                <label for="password_confirm">Passwort bestätigen</label>
+                <input type="password" id="password_confirm" name="password_confirm" required
+                       placeholder="Passwort wiederholen">
+            </div>
+            {% endif %}
+
+            <button type="submit" class="auth-button">
+                {% if is_register %}
+                    Konto erstellen
+                {% else %}
+                    Anmelden
+                {% endif %}
+            </button>
+        </form>
+
+        <div class="auth-links">
+            {% if is_register %}
+                <p>Bereits ein Konto vorhanden? <a href="/auth/login">Hier anmelden</a></p>
+            {% else %}
+                <p>Noch kein Konto? <a href="/auth/register">Hier registrieren</a></p>
+                <p><a href="/auth/forgot-password">Passwort vergessen?</a></p>
+            {% endif %}
+        </div>
+
+        {% if is_register %}
+        <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.875rem; color: var(--text-muted);">
+            <strong>Hinweise zur Registrierung:</strong>
+            <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                <li>Nach der Registrierung erhalten Sie eine Bestätigungs-E-Mail</li>
+                <li>Ihr Konto muss zusätzlich von einem Administrator aktiviert werden</li>
+                <li>Erst nach beiden Schritten können Sie sich anmelden</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Client-side validation for registration
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            const isRegister = {{ 'true' if is_register else 'false' }};
+            
+            if (isRegister) {
+                form.addEventListener('submit', function(e) {
+                    const password = document.getElementById('password').value;
+                    const passwordConfirm = document.getElementById('password_confirm').value;
+                    
+                    if (password.length < 6) {
+                        e.preventDefault();
+                        alert('Das Passwort muss mindestens 6 Zeichen lang sein.');
+                        return false;
+                    }
+                    
+                    if (password !== passwordConfirm) {
+                        e.preventDefault();
+                        alert('Die Passwörter stimmen nicht überein.');
+                        return false;
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

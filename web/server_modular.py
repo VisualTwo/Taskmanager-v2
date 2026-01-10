@@ -11,8 +11,9 @@ import logging
 
 # Import routers
 from web.routers.main import router as main_router
+from web.routers.auth import router as auth_router
 from web.routers.items import router as items_router
-from web.routers.tags import router as tags_router, tags_router
+from web.routers.tags import router as tags_router
 from web.routers.links import router as links_router
 
 # Import configuration and error handling
@@ -64,9 +65,9 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(main_router)
+app.include_router(auth_router, prefix="/auth")
 app.include_router(items_router)
 app.include_router(tags_router)
-app.include_router(tags_router)  # For global tags endpoints
 app.include_router(links_router)
 
 # Application lifecycle events
