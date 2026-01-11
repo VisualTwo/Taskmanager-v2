@@ -20,7 +20,7 @@ def sort_key_time(it):
     else:
         return _aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None) or datetime.max)
 
-class TestItem:
+class _TestItem:
     def __init__(self, type, due_utc=None, start_utc=None, reminder_utc=None, name='Test'):
         self.type = type
         self.due_utc = due_utc
@@ -34,9 +34,9 @@ def test_sorting():
     # Test 1: Tasks mit due_utc
     print("\n1. Test: Tasks mit due_utc (sollten 10:00 → 12:00 → 14:00 sortiert werden)")
     tasks = [
-        TestItem('task', due_utc=datetime(2026, 1, 7, 14, 0, tzinfo=timezone.utc), name='Task 14:00'),
-        TestItem('task', due_utc=datetime(2026, 1, 7, 10, 0, tzinfo=timezone.utc), name='Task 10:00'),
-        TestItem('task', due_utc=datetime(2026, 1, 7, 12, 0, tzinfo=timezone.utc), name='Task 12:00'),
+        _TestItem('task', due_utc=datetime(2026, 1, 7, 14, 0, tzinfo=timezone.utc), name='Task 14:00'),
+        _TestItem('task', due_utc=datetime(2026, 1, 7, 10, 0, tzinfo=timezone.utc), name='Task 10:00'),
+        _TestItem('task', due_utc=datetime(2026, 1, 7, 12, 0, tzinfo=timezone.utc), name='Task 12:00'),
     ]
 
     print("Vor Sortierung:")
@@ -51,9 +51,9 @@ def test_sorting():
     # Test 2: Appointments mit start_utc  
     print("\n2. Test: Appointments mit start_utc (sollten 09:00 → 11:00 → 15:00 sortiert werden)")
     appointments = [
-        TestItem('appointment', start_utc=datetime(2026, 1, 7, 15, 0, tzinfo=timezone.utc), name='Termin 15:00'),
-        TestItem('appointment', start_utc=datetime(2026, 1, 7, 9, 0, tzinfo=timezone.utc), name='Termin 09:00'),
-        TestItem('appointment', start_utc=datetime(2026, 1, 7, 11, 0, tzinfo=timezone.utc), name='Termin 11:00'),
+        _TestItem('appointment', start_utc=datetime(2026, 1, 7, 15, 0, tzinfo=timezone.utc), name='Termin 15:00'),
+        _TestItem('appointment', start_utc=datetime(2026, 1, 7, 9, 0, tzinfo=timezone.utc), name='Termin 09:00'),
+        _TestItem('appointment', start_utc=datetime(2026, 1, 7, 11, 0, tzinfo=timezone.utc), name='Termin 11:00'),
     ]
 
     print("Vor Sortierung:")
@@ -68,10 +68,10 @@ def test_sorting():
     # Test 3: Gemischte Items
     print("\n3. Test: Gemischte Items (Tasks und Appointments)")
     mixed = [
-        TestItem('task', due_utc=datetime(2026, 1, 7, 13, 0, tzinfo=timezone.utc), name='Task 13:00'),
-        TestItem('appointment', start_utc=datetime(2026, 1, 7, 8, 0, tzinfo=timezone.utc), name='Termin 08:00'),
-        TestItem('reminder', reminder_utc=datetime(2026, 1, 7, 16, 0, tzinfo=timezone.utc), name='Reminder 16:00'),
-        TestItem('task', due_utc=datetime(2026, 1, 7, 11, 30, tzinfo=timezone.utc), name='Task 11:30'),
+        _TestItem('task', due_utc=datetime(2026, 1, 7, 13, 0, tzinfo=timezone.utc), name='Task 13:00'),
+        _TestItem('appointment', start_utc=datetime(2026, 1, 7, 8, 0, tzinfo=timezone.utc), name='Termin 08:00'),
+        _TestItem('reminder', reminder_utc=datetime(2026, 1, 7, 16, 0, tzinfo=timezone.utc), name='Reminder 16:00'),
+        _TestItem('task', due_utc=datetime(2026, 1, 7, 11, 30, tzinfo=timezone.utc), name='Task 11:30'),
     ]
 
     print("Vor Sortierung:")

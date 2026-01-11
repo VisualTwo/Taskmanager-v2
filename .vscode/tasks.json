@@ -1,0 +1,33 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "pytest test_holidays.py",
+			"type": "shell",
+			"command": "pytest tests/test_holidays.py -v",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest test_multitenant.py",
+			"type": "shell",
+			"command": "pytest tests/test_multitenant.py -v",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest all",
+			"type": "shell",
+			"command": "pytest -v",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest all",
+			"type": "shell",
+			"command": "pytest -v",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

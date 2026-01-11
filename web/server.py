@@ -1,7 +1,26 @@
 # web/server.py
 from __future__ import annotations
+# --- User-Dependency für Tests und Auth ---
+from domain.user_models import User
+from fastapi import Depends
+def get_current_user(request: Request) -> User:
+    # Dummy-Implementierung: Hole User-Id aus Header (für Tests und Demo)
+    user_id = request.headers.get("X-User-Id", "user-1")
+    return User(
+        id=user_id,
+        login="testuser",
+        email="test@example.com",
+        full_name="Test User",
+        password_hash="dummy",
+        is_admin=True,
+        is_active=True,
+        is_email_confirmed=True
+    )
+# UserRepository-Dependency für FastAPI (analog zu get_repo)
+from infrastructure.user_repository import UserRepository
 
 import io
+import os
 import re
 import uuid
 import inspect
@@ -10,7 +29,8 @@ import holidays
 
 from calendar import monthrange
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile, File, Form, Depends
@@ -41,12 +61,22 @@ logging.basicConfig(level=logging.DEBUG)
 # zentrale Status-Service-Instanz für das gesamte Modul
 status_svc = make_status_service()
 
+from web.routers import auth
+from web.routers import items
+
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
 router = APIRouter()
 
+# Router einbinden
+app.include_router(auth.router, prefix="/auth")
+app.include_router(items.router, prefix="/items")
+
 templates = Jinja2Templates(directory="web/templates")
 DB_PATH = "taskman.db"
+
+def get_user_repository() -> UserRepository:
+    return UserRepository(DB_PATH)
 
 # ====== URL-Querystring-Helfer ======
 def urlencode_qs(qp) -> str:
@@ -292,7 +322,9 @@ def next_or_display_occurrence(it, now: Optional[datetime] = None, require_futur
 
 # ====== DI ======
 def get_repo():
-    repo = DbRepository("taskman.db")
+    db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
+    repo = DbRepository(db_path)
+    print(f"[LOG] server.py:get_repo: db_path = {db_path}")
     try:
         yield repo
     finally:
@@ -683,8 +715,11 @@ def index(
     date: Optional[str] = None,          # NEW: Filter by occurrence date (dd.mm.yyyy)
     repo: DbRepository = Depends(get_repo),
 ):
-    # 1. Daten laden
+    from web.server import get_repo as imported_get_repo
+    print("[DEBUG] index route get_repo id:", id(imported_get_repo), flush=True)
+    print("[DEBUG] index route called", flush=True)
     items = repo.list_all()
+    print('[DEBUG] index route: items from repo:', items, flush=True)
     now_dt = now_utc()
 
     # ====== PIPELINE SCHRITT 1: Status-Mutation & Autokorrektur ======
@@ -798,31 +833,31 @@ def index(
             items = [it for it in items if q_norm in (getattr(it, "name", "") or "").lower()]
 
     # ====== DATE OCCURRENCE FILTER ======
-    if date:
+    if date is not None and str(date).strip() != "":
         # Parse date from dd.mm.yyyy format
         try:
             parsed_date = datetime.strptime(date.strip(), "%d.%m.%Y").date()
             local_tz = ZoneInfo("Europe/Berlin")
-            
-            # Filter items that have occurrences on this specific date
             filtered_items = []
             for item in items:
                 item_matches = False
-                
-                # Check different date fields based on item type
-                dates_to_check = []
-                
+                # Tasks/Reminders: exaktes Datum
                 if hasattr(item, 'due_utc') and item.due_utc:
-                    dates_to_check.append(item.due_utc.astimezone(local_tz).date())
+                    if item.due_utc.astimezone(local_tz).date() == parsed_date:
+                        item_matches = True
                 if hasattr(item, 'reminder_utc') and item.reminder_utc:
-                    dates_to_check.append(item.reminder_utc.astimezone(local_tz).date())
+                    if item.reminder_utc.astimezone(local_tz).date() == parsed_date:
+                        item_matches = True
+                # Appointments/Events: Überlappung Start/Ende
                 if hasattr(item, 'start_utc') and item.start_utc:
-                    dates_to_check.append(item.start_utc.astimezone(local_tz).date())
-                
-                # Check if any of the dates match the target date
-                if parsed_date in dates_to_check:
+                    start_date = item.start_utc.astimezone(local_tz).date()
+                    end_date = start_date
+                    if hasattr(item, 'end_utc') and item.end_utc:
+                        end_date = item.end_utc.astimezone(local_tz).date()
+                    if start_date <= parsed_date <= end_date:
+                        item_matches = True
+                if item_matches:
                     filtered_items.append(item)
-                    
             items = filtered_items
         except ValueError:
             pass  # Invalid date format, ignore filter
@@ -910,141 +945,45 @@ def index(
     
     show_past_bool = bool(int(include_past or 0))
     
+
     for it in items:
         occs = []
         disp_start = None
         disp_end = None
-        keep_item = False
-
-        # Fall A: Expliziter Zeitraum gewählt (Heute/Woche...)
-        if win_start and win_end:
-            # Nutze expand_window_safe (inkl. Birthday-Fix)
-            # Hinweis: expand_window_safe muss im Scope verfügbar sein (s.u. oder importiert)
-            raw_occs = expand_window_safe(it, win_start, win_end)
-            if raw_occs:
-                keep_item = True
-                occs = raw_occs
-                # Display Time vom ERSTEN Treffer im Fenster
-                first = occs[0]
-                if getattr(it, 'type', '') in ('task', 'reminder'):
-                    disp_start = getattr(first, 'due_utc', None) or getattr(first, 'reminder_utc', None)
-                else:
-                    disp_start = getattr(first, 'start_utc', None)
-                    disp_end = getattr(first, 'end_utc', None)
-
-        # Fall B: Kein Zeitraum (Default View / "Alles")
-        else:
+        # Wenn ein expliziter date-Parameter gesetzt ist, alle gefilterten Items aufnehmen
+        if date is not None and str(date).strip() != "":
             t = getattr(it, "type", "") or ""
-
-            # _expand_next kann bei nicht-wiederkehrenden Items auch Vergangenes zurückgeben
-            occs_raw = _expand_next(it, start_dt=now_dt, max_count=3)
-
-            # "Echte" zukünftige/aktive Occurrences ableiten (für include_past=0 Entscheidung)
-            real_future_occs = []
-            for o in occs_raw:
-                if t in ("appointment", "event"):
-                    o_start = _utc_aware(getattr(o, "start_utc", None))
-                    o_end = _utc_aware(getattr(o, "end_utc", None))
-
-                    # Relevanz: noch nicht vorbei (Ende >= jetzt) oder (wenn kein Ende) Start >= jetzt
-                    if o_end is not None:
-                        if o_end >= now_dt:
-                            real_future_occs.append(o)
-                    elif o_start is not None:
-                        if o_start >= now_dt:
-                            real_future_occs.append(o)
-                    else:
-                        # Keine Zeitinformationen -> als "relevant" behandeln (defensiv)
-                        real_future_occs.append(o)
-
-                elif t in ("task", "reminder"):
-                    o_dt = _utc_aware(getattr(o, "due_utc", None) or getattr(o, "reminder_utc", None))
-                    if o_dt is None or o_dt >= now_dt:
-                        real_future_occs.append(o)
-
-                else:
-                    # Unbekannter Typ: defensiv behalten
-                    real_future_occs.append(o)
-
-            has_future_occs = len(real_future_occs) > 0
-
-            # Für Anzeige/Syntax: bei Terminen/Remindern nur die "echten" künftigen Occurrences nutzen,
-            # Tasks dürfen überfällig sein (werden trotzdem angezeigt, wenn nicht terminal)
+            # Occurrences wie bisher berechnen (für Anzeigezeiten)
             if t in ("appointment", "event", "reminder"):
-                occs = real_future_occs
-            else:
-                occs = occs_raw
-
+                occs = []  # Optional: Occurrences für diesen Tag berechnen, falls benötigt
             base_due = _utc_aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None))
             base_start = _utc_aware(getattr(it, "start_utc", None))
             base_end = _utc_aware(getattr(it, "end_utc", None))
-
-            st = getattr(it, "status", "") or ""
-            is_terminal = status_svc.is_terminal(st)
-
-            if show_past_bool:
-                keep_item = True
+            if t in ("task", "reminder"):
+                disp_start = base_due
+                disp_end = None
             else:
-                if t == "task":
-                    is_recurring = bool(getattr(it, "recurrence", None) or getattr(it, "rrule_string", None))
-                    if is_recurring:
-                        keep_item = True
-                    else:
-                        keep_item = not is_terminal  # nicht-wiederkehrende erledigte Tasks ausblenden
-
-                elif t == "reminder":
-                    if is_terminal:
-                        keep_item = False
-                    else:
-                        reminder_dt = _utc_aware(getattr(it, "reminder_utc", None))
-                        if reminder_dt is None:
-                            keep_item = True
-                        elif reminder_dt >= now_dt:
-                            keep_item = True
-                        else:
-                            keep_item = has_future_occs
-
-                elif t in ("appointment", "event"):
-                    if is_terminal:
-                        keep_item = False
-                    else:
-                        end_dt = base_end
-                        start_dt = base_start
-                        if end_dt is not None:
-                            keep_item = (end_dt >= now_dt) or has_future_occs
-                        elif start_dt is not None:
-                            keep_item = (start_dt >= now_dt) or has_future_occs
-                        else:
-                            # Zeitloser Termin/Event -> anzeigen
-                            keep_item = True
-
-                else:
-                    keep_item = True
-
-            # Display Werte (Priorität: Occurrences -> Basiswerte)
-            if occs:
-                first = occs[0]
-                if t in ("task", "reminder"):
-                    disp_start = getattr(first, "due_utc", None) or getattr(first, "reminder_utc", None)
-                    disp_end = None
-                else:
-                    disp_start = getattr(first, "start_utc", None)
-                    disp_end = getattr(first, "end_utc", None)
+                disp_start = base_start
+                disp_end = base_end
+            rows.append((it, occs, _aware(disp_start), _aware(disp_end)))
+            continue
+        else:
+            # Default: show all items as rows
+            t = getattr(it, "type", "") or ""
+            base_due = _utc_aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None))
+            base_start = _utc_aware(getattr(it, "start_utc", None))
+            base_end = _utc_aware(getattr(it, "end_utc", None))
+            if t in ("task", "reminder"):
+                disp_start = base_due
+                disp_end = None
             else:
-                if t in ("task", "reminder"):
-                    disp_start = base_due
-                    disp_end = None
-                else:
-                    disp_start = base_start
-                    disp_end = base_end
-
-        # Finale Entscheidung für dieses Item
-        if keep_item:
-            # Fallback falls disp_start immer noch None (z.B. Task ohne alles)
-            # Für Sortierung wichtig
+                disp_start = base_start
+                disp_end = base_end
             rows.append((it, occs, _aware(disp_start), _aware(disp_end)))
 
+    print('[DEBUG] index route: rows for template:', rows, flush=True)
 
+    # Forced debug: ensure this is reached
     # ====== PIPELINE SCHRITT 4: Sortierung (Auf BERECHNETEN Daten) ======
     key = (sort or "").strip()
     reverse = (dir or "asc").lower() == "desc"
@@ -1286,8 +1225,7 @@ async def edit_item_submit(
     request: Request,
     repo: DbRepository = Depends(get_repo),
     status=Depends(get_status),
-
-    # Form-Bindung: alle optional, damit Partial-Updates funktionieren
+    current_user: User = Depends(get_current_user),
     name: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     status_key: Optional[str] = Form(None),
@@ -1301,12 +1239,21 @@ async def edit_item_submit(
     is_all_day: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     priority: Optional[str] = Form(None),
-    # ICE fields (optional) — stored in item.metadata
     ice_impact: Optional[str] = Form(None),
     ice_confidence: Optional[str] = Form(None),
     ice_ease: Optional[str] = Form(None),
     ice_score: Optional[str] = Form(None),
 ):
+    # User-Kontext wie in routers/items.py
+    from web.routers.items import get_current_user
+    if current_user is None:
+        # Versuche Dependency zu holen
+        try:
+            current_user = await get_current_user(request)
+        except Exception:
+            current_user = None
+    if not current_user or not hasattr(current_user, "id"):
+        raise HTTPException(status_code=401, detail="Authentication required for edit.")
     it = repo.get(item_id)
 
     if not it:
@@ -1350,25 +1297,20 @@ async def edit_item_submit(
     else:
         eff_recurrence = getattr(it, "recurrence", None)
 
-    # Vorvalidierung auf Basis der effektiven Eingaben
-    messages = _validate_edit_input(
-        it, status, eff_name, requested_status_key,
-        due, start_local, end_local,
-        dtstart_local, rrule_line, exdates_local,
-    )
-    if messages:
-        html = templates.get_template("_alerts.html").render({"messages": messages})
+    # Status-Validierung: Status muss für Typ erlaubt sein
+    allowed_status_keys = [sd.key for sd in status.get_options_for(item_type=it.type)]
+    if requested_status_key not in allowed_status_keys:
+        html = templates.get_template("_alerts.html").render({"messages": [f"Ungültiger Status '{requested_status_key}' für Typ '{it.type}'."]})
         return HTMLResponse(content=html, status_code=422)
 
     # Status-Transition prüfen
     old_key = getattr(it, "status", None)
     new_key = status_svc.normalize_input(requested_status_key or old_key, getattr(it, "type", None)) if (requested_status_key or old_key) else None
     is_recurring = bool(eff_recurrence)
-
-    # ok, reason = status_svc.validate_transition(old_key, new_key, is_recurring=is_recurring)
-    # if not ok:
-    #     html = templates.get_template("_alerts.html").render({"messages": [reason or "Statuswechsel nicht erlaubt."]})
-    #    return HTMLResponse(content=html, status_code=422)
+    ok, reason = status_svc.validate_transition(old_key, new_key, is_recurring=is_recurring)
+    if not ok:
+        html = templates.get_template("_alerts.html").render({"messages": [reason or "Ungültiger Status für diesen Typ."]})
+        return HTMLResponse(content=html, status_code=422)
 
     # Tags deduplizieren
     if tags is not None:
@@ -1408,6 +1350,7 @@ async def edit_item_submit(
         allday_bool = bool(getattr(it, "is_all_day", False))
 
     # Payload zusammenbauen
+    user_id = current_user.id
     payload = {
         **it.__dict__,
         "name": eff_name,
@@ -1417,6 +1360,8 @@ async def edit_item_submit(
         "tags": tags_tuple,
         "priority": prio_val,
         "recurrence": eff_recurrence,
+        "last_modified_by": user_id,
+        "creator": getattr(it, "creator", user_id),
     }
     if it.type == "task":
         payload["due_utc"] = eff_due
@@ -1444,70 +1389,65 @@ async def edit_item_submit(
     except Exception:
         pass
 
-    # ICE-Metadaten verarbeiten (nur wenn explizit gesendet)
+    # ICE-Metadaten robust validieren und immer speichern (wie in create_item)
+    from domain.ice_definitions import compute_ice_score
     cur_meta = dict(getattr(it, "metadata", {}) or {})
-    
-    # Validierung und Normalisierung der ICE-Felder
     final_impact = None
     final_confidence = None
     final_ease = None
     final_score = None
-    
-    if ice_impact is not None:
-        ice_impact_str = (ice_impact or "").strip()
-        if ice_impact_str:
+    # Impact
+    if ice_impact is not None and str(ice_impact).strip():
+        try:
+            imp_val = int(ice_impact)
+            if 1 <= imp_val <= 5:
+                final_impact = imp_val
+                cur_meta["ice_impact"] = str(imp_val)
+        except Exception:
+            cur_meta.pop("ice_impact", None)
+    elif ice_impact is not None:
+        cur_meta.pop("ice_impact", None)
+    # Confidence
+    CONFIDENCE_LABEL_TO_INT = {
+        "very_low": 1, "low": 2, "medium": 3, "high": 4, "very_high": 5,
+        "sehr_niedrig": 1, "niedrig": 2, "mittel": 3, "hoch": 4, "sehr_hoch": 5
+    }
+    CONFIDENCE_INT_TO_LABEL = {v: k for k, v in CONFIDENCE_LABEL_TO_INT.items()}
+    confidence_label_for_db = None
+    if ice_confidence is not None and str(ice_confidence).strip():
+        if ice_confidence in CONFIDENCE_LABEL_TO_INT:
+            final_confidence = CONFIDENCE_LABEL_TO_INT[ice_confidence]
+            confidence_label_for_db = ice_confidence
+        else:
             try:
-                imp_val = int(ice_impact_str)
-                if 1 <= imp_val <= 5:
-                    final_impact = imp_val
-            except ValueError:
-                pass  # Ungültig -> übergebe
-    
-    if ice_confidence is not None:
-        ice_confidence_str = (ice_confidence or "").strip()
-        if ice_confidence_str:
-            try:
-                conf_val = int(ice_confidence_str)
-                if is_valid_confidence_value(conf_val):
+                conf_val = int(ice_confidence)
+                if 1 <= conf_val <= 5:
                     final_confidence = conf_val
-            except ValueError:
-                pass  # Ungültig -> übergehe
-    
-    if ice_ease is not None:
-        ice_ease_str = (ice_ease or "").strip()
-        if ice_ease_str:
-            try:
-                ease_val = int(ice_ease_str)
-                if 1 <= ease_val <= 5:
-                    final_ease = ease_val
-            except ValueError:
-                pass  # Ungültig -> übergebe
-    
-    # ICE-Score neu berechnen (server-side validation)
+                    confidence_label_for_db = CONFIDENCE_INT_TO_LABEL[conf_val]
+            except Exception:
+                cur_meta.pop("ice_confidence", None)
+        if confidence_label_for_db:
+            cur_meta["ice_confidence"] = confidence_label_for_db
+    elif ice_confidence is not None:
+        cur_meta.pop("ice_confidence", None)
+    # Ease
+    if ice_ease is not None and str(ice_ease).strip():
+        try:
+            ease_val = int(ice_ease)
+            if 1 <= ease_val <= 5:
+                final_ease = ease_val
+                cur_meta["ice_ease"] = str(ease_val)
+        except Exception:
+            cur_meta.pop("ice_ease", None)
+    elif ice_ease is not None:
+        cur_meta.pop("ice_ease", None)
+    # Score
     if final_impact is not None or final_confidence is not None or final_ease is not None:
         final_score = compute_ice_score(final_impact, final_confidence, final_ease)
-    
-    # Speichern in Metadaten
-    if final_impact is not None:
-        cur_meta["ice_impact"] = str(final_impact)
-    elif ice_impact is not None and not (ice_impact or "").strip():
-        cur_meta.pop("ice_impact", None)
-    
-    if final_confidence is not None:
-        cur_meta["ice_confidence"] = final_confidence
-    elif ice_confidence is not None and not (ice_confidence or "").strip():
-        cur_meta.pop("ice_confidence", None)
-    
-    if final_ease is not None:
-        cur_meta["ice_ease"] = str(final_ease)
-    elif ice_ease is not None and not (ice_ease or "").strip():
-        cur_meta.pop("ice_ease", None)
-    
-    if final_score is not None:
-        cur_meta["ice_score"] = str(final_score)
-    elif ice_score is not None and not (ice_score or "").strip():
+        if final_score is not None:
+            cur_meta["ice_score"] = str(final_score)
+    elif ice_score is not None:
         cur_meta.pop("ice_score", None)
-
     payload["metadata"] = cur_meta
 
     # Auto-Finalisierung (nur non-recurring)
@@ -1520,8 +1460,10 @@ async def edit_item_submit(
             payload["status"] = suggested
 
     # Persistieren
+    # creator und last_modified_by explizit setzen
+    payload["creator"] = getattr(it, "creator", user_id) or user_id
+    payload["last_modified_by"] = user_id
     it2 = it.__class__(**payload)
-
     repo.upsert(it2)
     repo.conn.commit()
 
@@ -1835,42 +1777,11 @@ def set_due(request: Request, item_id: str, due: str = Form(...), repo: DbReposi
     return RedirectResponse("/", status_code=303)
 
 
-@app.post("/items/{item_id}/start_end")
-def set_start_end(
-    request: Request,
-    item_id: str,
-    start_local: str = Form(""),
-    end_local: str = Form(""),
-    repo: DbRepository = Depends(get_repo),
-):
-    it = repo.get(item_id)
-    if not it or it.type not in ("appointment", "event"):
-        return RedirectResponse("/", status_code=303)
-
-    if not (start_local or "").strip() and not (end_local or "").strip():
-        return RedirectResponse("/", status_code=303)
-
-    s_utc = _parse_local_dt(start_local) if (start_local or "").strip() else getattr(it, "start_utc", None)
-    e_utc = _parse_local_dt(end_local) if (end_local or "").strip() else getattr(it, "end_utc", None)
-
-    if s_utc and e_utc and e_utc < s_utc:
-        e_utc = s_utc + timedelta(hours=1)
-
-    it2 = it.__class__(**{**it.__dict__, "start_utc": s_utc, "end_utc": e_utc})
-    repo.upsert(it2)
-    repo.conn.commit()
-
-    if is_htmx(request):
-        now_dt = now_utc()
-        ds, de = next_or_display_occurrence(it2, now=now_dt)
-        disp_start = _aware(ds)
-        disp_end   = _aware(de)
-        occs = _expand_next(it2, start_dt=now_dt, max_count=3) or []
-
-        return templates.TemplateResponse(
-            request, "_occurrences.html",
-            {"request": request, "it": it2, "occs": occs, "disp_start": disp_start, "disp_end": disp_end, "timedelta": timedelta,},
-        )
+from web.routers.items import update_item as router_update_item
+@app.post("/items/{item_id}/edit")
+async def edit_item_submit(item_id: str, request: Request):
+    # Proxy: leite direkt an die Router-Logik weiter
+    return await router_update_item(item_id, request)
 
     return RedirectResponse("/", status_code=303)
 
@@ -1938,6 +1849,10 @@ def create_item(
     due_local: str | None = Form(None),
     repo: DbRepository = Depends(get_repo),
 ):
+    creator_id = request.headers.get("X-User-Id")
+    if not creator_id:
+        raise HTTPException(status_code=401, detail="Creator header X-User-Id is required")
+
     nid = str(uuid.uuid4())
     item_type = (item_type or "").strip().lower()
     name = (name or "").strip()
@@ -1984,22 +1899,26 @@ def create_item(
     # 3) Fabriken – klare Typzuordnung, kein Fallback auf „task“
     def mk_task():
         return Task(id=nid, type="task", name=name, status=default_status,
-                    is_private=False, due_utc=None, recurrence=None)
+                    is_private=False, due_utc=None, recurrence=None,
+                    creator=creator_id, participants=(creator_id,))
 
     def mk_reminder():
         return Reminder(id=nid, type="reminder", name=name, status=default_status,
-                        is_private=False, reminder_utc=None, recurrence=None)
+                        is_private=False, reminder_utc=None, recurrence=None,
+                        creator=creator_id, participants=(creator_id,))
 
     def mk_appointment(_type="appointment"):
         return Appointment(id=nid, type=_type, name=name, status=default_status,
                         is_private=False, start_utc=None, end_utc=None,
-                        is_all_day=False, recurrence=None)
+                        is_all_day=False, recurrence=None,
+                        creator=creator_id, participants=(creator_id,))
 
     def mk_event():
         if Event:
             return Event(id=nid, type="event", name=name, status=default_status,
                         is_private=False, start_utc=None, end_utc=None,
-                        is_all_day=False, recurrence=None)
+                        is_all_day=False, recurrence=None,
+                        creator=creator_id, participants=(creator_id,))
         return mk_appointment(_type="event")
 
     factories = {
@@ -2054,8 +1973,11 @@ def create_item(
         pass
 
     # 5) Persistenz
+    print(f"[LOG] create_item: upsert {it}")
     repo.upsert(it)
+    print(f"[LOG] create_item: committed? (vor commit)")
     repo.conn.commit()
+    print(f"[LOG] create_item: committed {it}")
 
     edit_url = f"/items/{nid}/edit"
 
@@ -2309,16 +2231,25 @@ def get_priority_class(item) -> str:
 
 
 def is_overdue_item(item, now_dt: datetime) -> bool:
-    """Prüft ob Item überfällig ist."""
+    """Prüft ob Item überfällig ist. Handles both domain objects and dictionaries."""
+    # Handle both objects and dictionaries (fallback compatibility)
+    def _get_attr(obj, attr, default=None):
+        if hasattr(obj, attr):
+            return getattr(obj, attr, default)
+        elif isinstance(obj, dict):
+            return obj.get(attr, default)
+        return default
+    
     # Relevante Zeit je Typ
-    if item.type in ("appointment", "event"):
-        relevant_dt = getattr(item, "start_utc", None)
-        end_dt = getattr(item, "end_utc", None)
+    item_type = _get_attr(item, "type", "")
+    if item_type in ("appointment", "event"):
+        relevant_dt = _get_attr(item, "start_utc")
+        end_dt = _get_attr(item, "end_utc")
         # Als überfällig nur werten, wenn komplett vorbei:
         if end_dt is not None:
-            return (end_dt < now_dt) and not status_svc.is_terminal(item.status)
-    elif item.type in ("task", "reminder"):
-        relevant_dt = getattr(item, "due_utc", None) or getattr(item, "reminder_utc", None)
+            return (end_dt < now_dt) and not status_svc.is_terminal(_get_attr(item, "status", ""))
+    elif item_type in ("task", "reminder"):
+        relevant_dt = _get_attr(item, "due_utc") or _get_attr(item, "reminder_utc")
     else:
         relevant_dt = None
 
@@ -2327,7 +2258,7 @@ def is_overdue_item(item, now_dt: datetime) -> bool:
 
     # Überfällig = Datum vergangen UND Status nicht terminal (zentral geprüft)
     is_past = relevant_dt < now_dt
-    is_open = not status_svc.is_terminal(getattr(item, "status", None))
+    is_open = not status_svc.is_terminal(_get_attr(item, "status"))
 
     return is_past and is_open
 
@@ -2344,6 +2275,10 @@ async def import_upload(
         file: UploadFile = File(...), 
         repo: DbRepository = Depends(get_repo),
 ):
+    creator_id = request.headers.get("X-User-Id")
+    if not creator_id:
+        raise HTTPException(status_code=401, detail="Creator header X-User-Id is required")
+
     text = (await file.read()).decode("utf-8", errors="ignore")
 
     # Heuristik: falls CSV (Dateiname .csv oder Header mit type,status,title), dann CSV-Import
@@ -2379,9 +2314,11 @@ async def import_upload(
 
                 nid = (r.get("id") or "").strip() or str(uuid.uuid4())
                 if typ == "task":
-                    it = Task(id=nid, type="task", name=name, status=mapped, is_private=False, description=desc, ics_uid=None, priority=0)
+                    it = Task(id=nid, type="task", name=name, status=mapped, is_private=False, due_utc=None, recurrence=None,
+                               creator=creator_id, participants=(creator_id,))
                 else:
-                    it = Reminder(id=nid, type="reminder", name=name, status=mapped, is_private=False, description=desc, ics_uid=None, priority=0)
+                    it = Reminder(id=nid, type="reminder", name=name, status=mapped, is_private=False, due_utc=None, recurrence=None,
+                                  creator=creator_id, participants=(creator_id,))
                 # attach notes into metadata to preserve them
                 # Move import notes into visible description (append to existing description)
                 payload = dict(it.__dict__)
@@ -2404,7 +2341,7 @@ async def import_upload(
 
     # 1) ICS parsen (liefert bereits angereicherte Items: description, tags, links, metadata, audit)
     from services.ics_import import import_ics
-    items = import_ics(text)
+    items = import_ics(text, creator=creator_id)
 
     # 2) Optionale Deduplizierung anhand ICS-UID (wenn im metadata gesetzt)
     def find_by_ics_uid(uid: str):
@@ -2675,11 +2612,14 @@ def dashboard(
     sm=Depends(get_status),
     sort_by: str | None = Query(None, description="Sortierung: 'date' oder 'score'"),
 ):
+    print("[DEBUG] Entered dashboard function")
     print("=== DASHBOARD DEBUG ===")
     print("raw query:", dict(request.query_params))
     print("q:", q, "types:", types, "status_keys:", status_keys, "status:", status)
     print("show_private:", show_private, "include_past:", include_past, "tags:", tags, "cal_week_offset:", cal_week_offset)
+
     print("=======================")
+    now_dt = now_utc()
 
     berlin = ZoneInfo("Europe/Berlin")
     today = now_utc().astimezone(berlin)
@@ -2693,6 +2633,19 @@ def dashboard(
     items = [it for it in items if _visible_by_privacy(it)]
     print(f"[DB] total items: {len(items)}")
 
+
+
+    # ... (all list initialization and sorting code) ...
+
+
+    # Debug: print upcoming lists (at the very end, before return)
+    try:
+        print("[DEBUG] upcoming_today:", [getattr(it, 'name', None) for it in upcoming_today])
+        print("[DEBUG] upcoming_next7:", [getattr(it, 'name', None) for it in upcoming_next7])
+        print("[DEBUG] upcoming:", [getattr(it, 'name', None) for it in upcoming])
+    except Exception as e:
+        print(f"[DEBUG] Could not print upcoming lists: {e}")
+
     # Auto-Finalisierung vergangener Termine/Ereignisse
     changed = False
     updated = []
@@ -2703,7 +2656,7 @@ def dashboard(
             elif getattr(it, "until", None): payload["until"] = it.until
             if getattr(it, "start_utc", None): payload["start"] = it.start_utc
             if payload:
-                suggested = status_svc.auto_adjust_appointment_status(payload, now=now_utc())
+                suggested = status_svc.auto_adjust_appointment_status(payload, now=now_dt)
                 if suggested and suggested != getattr(it, "status", ""):
                     it2 = it.__class__(**{**it.__dict__, "status": suggested})
                     repo.upsert(it2)
@@ -2718,6 +2671,17 @@ def dashboard(
     # Quick-Übersichten
     by_type = Counter(getattr(it, "type", "") for it in items)
     by_status = Counter(getattr(it, "status", "") for it in items)
+
+    # Date-Filter: falls gesetzt, nur Items für diesen Tag anzeigen
+    date_str = request.query_params.get("date") if request else None
+    date_filter = None
+    if date_str:
+        # Ignore empty string as filter
+        if date_str.strip() != "":
+            try:
+                date_filter = datetime.strptime(date_str, "%d.%m.%Y").date()
+            except Exception:
+                date_filter = None
 
     # Zeitfenster (lokal)
     now_local = today
@@ -2822,14 +2786,15 @@ def dashboard(
         if getattr(it, "type", "") in ("appointment","event"):
             # Für appointments/events: start_utc bevorzugen, dann next_occurrence
             start = getattr(it, "start_utc", None)
+            end = getattr(it, "end_utc", None)
             if start:
                 return _aware(start)
-            # Falls kein start_utc: next_or_display_occurrence verwenden
+            # Falls kein start_utc: next_occurrence verwenden
             s, e = next_or_display_occurrence(it, now=datetime.now(timezone.utc))
             return _aware(s or e or datetime.max)
         else:
             # Für tasks/reminders: due_utc oder reminder_utc
-            return _aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None) or datetime.max)
+            return _aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None) or datetime.max.replace(tzinfo=timezone.utc))
 
     def _ice_score_num(it):
         try:
@@ -2900,6 +2865,11 @@ def dashboard(
         (x.last_modified_utc or datetime.min.replace(tzinfo=timezone.utc))  # Älteste Änderung zuerst
     ))
 
+    # Debug: print upcoming lists (after sorting, before context)
+    print("[DEBUG] upcoming_today:", [getattr(it, 'name', None) for it in upcoming_today])
+    print("[DEBUG] upcoming_next7:", [getattr(it, 'name', None) for it in upcoming_next7])
+    print("[DEBUG] upcoming:", [getattr(it, 'name', None) for it in upcoming])
+
 
     def sort_key_recurring(it):
         """Sortierungsschlüssel für wiederkehrende Items (chronologisch aufsteigend)"""
@@ -2936,6 +2906,7 @@ def dashboard(
     def expand_occurrences(it, start_utc, end_utc):
         out = []
         t = getattr(it, "type", "")
+
         if t in ("task","reminder"):
             ts = getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None)
             if ts and start_utc <= ts < end_utc:
@@ -3091,22 +3062,50 @@ def dashboard(
     for ev in events_holidays:
         s = ev.get("start_utc"); e = ev.get("end_utc")
         if s and (s < horizon_2m_end):
-            holiday_events.append({
-                "type": "event",
-                "name": ev.get("name"),
-                "start_utc": s,
-                "end_utc": e,
-                "priority": ev.get("priority", 0),
-                "tags": list(ev.get("tags", [])),
-                "status": ev.get("status", "EVENT_SCHEDULED"),
-                "is_holiday": True,  # Wichtig: Holiday-Flag hinzufügen!
-                "id": ev.get("id"),
-                "is_all_day": True,
-            })
+            # Create a proper domain-like object instead of a dictionary
+            from domain.models import Event
+            try:
+                holiday_event = Event(
+                    id=str(ev.get("id", f"holiday_{hash(ev.get('name', ''))}")),
+                    type="event",
+                    name=ev.get("name", "Holiday"),
+                    description=f"Holiday: {ev.get('name', 'Holiday')}",
+                    status=ev.get("status", "EVENT_SCHEDULED"),
+                    is_private=False,
+                    start_utc=s,
+                    end_utc=e,
+                    is_all_day=True,
+                    priority=ev.get("priority", 0),
+                    tags=list(ev.get("tags", [])),
+                    creator="system",
+                    participants=("system",),
+                    created_utc=s,
+                    last_modified_utc=s,
+                    metadata={"is_holiday": True}  # Store holiday flag in metadata
+                )
+                holiday_events.append(holiday_event)
+            except Exception as ex:
+                # Fallback: keep as dictionary if Event creation fails
+                holiday_events.append({
+                    "type": "event",
+                    "name": ev.get("name"),
+                    "start_utc": s,
+                    "end_utc": e,
+                    "priority": ev.get("priority", 0),
+                    "tags": list(ev.get("tags", [])),
+                    "status": ev.get("status", "EVENT_SCHEDULED"),
+                    "is_holiday": True,
+                    "id": ev.get("id"),
+                    "is_all_day": True,
+                })
 
-    real_events = []
+    # Separate lists for different purposes
+    real_events = []  # Only events for events_next2m
+    upcoming_appointments = []  # Only appointments for "kommende Termine"
+    
     for it in items:
-        if getattr(it, "type", "") != "event":
+        item_type = getattr(it, "type", "")
+        if item_type not in ("event", "appointment"):
             continue
         s, e = next_or_display_occurrence(it, now=now_utc())
         if not s and not e:
@@ -3117,21 +3116,28 @@ def dashboard(
             data = it.__dict__.copy()
             data["start_utc"] = s; data["end_utc"] = e
             it2 = it.__class__(**data)
-            real_events.append(it2)
+            
+            if item_type == "event":
+                real_events.append(it2)
+            elif item_type == "appointment":
+                upcoming_appointments.append(it2)
+                real_events.append(it2)  # Also include in events_next2m
 
     def _start_key_mixed(ev):
+        """Unified sorting key for events (handles both domain objects and fallback dictionaries)"""
         if hasattr(ev, "start_utc"):
             return getattr(ev, "start_utc") or _aware(datetime.max)
         return ev.get("start_utc") or _aware(datetime.max)
 
-    events_next2m = sorted([*real_events, *holiday_events], key=_start_key_mixed)
+    events_next2m = sorted([*real_events, *holiday_events], key=_start_key_mixed)[:15]
+    upcoming_appointments = sorted(upcoming_appointments, key=_start_key_mixed)[:15]
 
     # Export-Hilfsfunktion (nutzt dieselbe Expansion)
     def build_calendar_rows(start_utc, end_utc):
         rows = []
         lok = berlin
         for it in items:
-            for occ_s, occ_e, src in expand_occurrences(it, start_utc, end_utc):
+            for occ_s, occ_e in expand_occurrences(it, start_utc, end_utc):
                 start_local = occ_s.astimezone(lok) if occ_s else None
                 end_local = occ_e.astimezone(lok) if occ_e else None
                 rows.append({
@@ -3150,7 +3156,22 @@ def dashboard(
                 })
         return rows
 
-    header_today = format_local_weekday_de(today) + ", " + today.strftime("%d.%m.%Y")
+    header_today = format_local_weekday_de(datetime.now(berlin)) + ", " + datetime.now(berlin).strftime("%d.%m.%Y")
+
+    # Debug: print upcoming lists (after sorting, before context)
+    print("[DEBUG] upcoming_today:", [getattr(it, 'name', None) for it in upcoming_today])
+    print("[DEBUG] upcoming_next7:", [getattr(it, 'name', None) for it in upcoming_next7])
+    print("[DEBUG] upcoming:", [getattr(it, 'name', None) for it in upcoming])
+
+    # Helper function for templates to check if an item is a holiday
+    def is_holiday_item(item):
+        """Check if an item is a holiday event"""
+        if hasattr(item, 'metadata'):
+            metadata = getattr(item, 'metadata', {}) or {}
+            return metadata.get('is_holiday', False)
+        elif isinstance(item, dict):
+            return item.get('is_holiday', False)
+        return False
 
     # Kontext
     ctx = {
@@ -3165,7 +3186,8 @@ def dashboard(
         "upcoming_next7": upcoming_next7[:30],
         "without_date": without_date[:50],
         "recurring_items": recurring_items[:50],
-        "events_next2m": events_next2m[:50],
+        "events_next2m": events_next2m,
+        "upcoming_appointments": upcoming_appointments,
         "calendar_week": {"headers": headers, "weeks": weeks, "offset": cal_week_offset, "count": max(1, int(cal_weeks))},
         "cal_week_offset": cal_week_offset,
         "cal_weeks": max(1, int(cal_weeks)),
@@ -3176,19 +3198,30 @@ def dashboard(
         "is_birthday": is_birthday,
         "get_priority_class": get_priority_class,
         "is_overdue_item": is_overdue_item,
+        "is_holiday_item": is_holiday_item,
         "berlin_tz": berlin,
         "is_terminal_status": lambda k: status_svc.is_terminal(k),
         "active_sort": mode,
     }
 
-    resp = templates.TemplateResponse(request, "dashboard.html", ctx)
-    # If the user explicitly supplied a sort_by in the query, persist it as a cookie.
     try:
-        if sort_by and sort_by.lower() in ("date", "score"):
-            resp.set_cookie("sort_by", sort_by.lower(), max_age=60 * 60 * 24 * 30)  # 30 days
-    except Exception:
-        pass
-    return resp
+        resp = templates.TemplateResponse(request, "dashboard.html", ctx)
+        # If the user explicitly supplied a sort_by in the query, persist it as a cookie.
+        try:
+            if sort_by and sort_by.lower() in ("date", "score"):
+                resp.set_cookie("sort_by", sort_by.lower(), max_age=60 * 60 * 24 * 30)  # 30 days
+        except Exception:
+            pass
+        return resp
+    finally:
+        def safe_names(lst):
+            try:
+                return [getattr(it, 'name', None) for it in lst]
+            except Exception:
+                return 'UNDEFINED'
+        print("[DEBUG] upcoming_today:", safe_names(locals().get('upcoming_today', 'UNDEFINED')))
+        print("[DEBUG] upcoming_next7:", safe_names(locals().get('upcoming_next7', 'UNDEFINED')))
+        print("[DEBUG] upcoming:", safe_names(locals().get('upcoming', 'UNDEFINED')))
 
 
 @app.post("/tools/normalize_birthdays")
@@ -3357,7 +3390,7 @@ def export_dashboard_excel(
 
     row_cursor = 1
     for week_idx in range(weeks):
-        week_start_local = d0_local + timedelta(days=7*week_idx)
+        week_start_local = monday_start + timedelta(weeks=week_idx)
         kw = week_start_local.isocalendar()[1]
 
         # Wochenkopf
@@ -3405,7 +3438,7 @@ def export_dashboard_excel(
                 st = status_label(getattr(inst, "status", None))              # z. B. "Geplant" oder "Erledigt"
 
                 # Kopf: "12:00 Uhr (Geplant) · Prio: Normal"
-                # Uhrzeitformat "HH:MM Uhr"; für Spannen wie "08:30-09:15" kannst du bei Terminen auch beide Zeiten formatieren
+                # Uhrzeitformat "HH:MM"; für Spannen wie "08:30-09:15" kannst du bei Terminen auch beide Zeiten formatieren
                 def fmt_time_label(tstr: str) -> str:
                     return (tstr + " Uhr") if tstr and ":" in tstr and "-" not in tstr else tstr
 

@@ -203,8 +203,8 @@ async def test_multitenant(
             creator=current_user.id,
             participants=(current_user.id,),  # Creator is also participant
             description="This is a test task created automatically",
-            created_utc=datetime.utcnow(),
-            last_modified_utc=datetime.utcnow()
+            created_utc=now_utc(),
+            last_modified_utc=now_utc()
         )
         
         item_repository.upsert(test_task)

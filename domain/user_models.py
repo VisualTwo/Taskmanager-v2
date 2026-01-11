@@ -13,7 +13,8 @@ def now_utc():
         return _now_utc()
     except (ImportError, NameError):
         # Fallback implementation
-        return datetime.utcnow().replace(tzinfo=None)
+        from datetime import UTC
+        return datetime.now(UTC)
 
 @dataclass(frozen=True)
 class User:
@@ -30,12 +31,10 @@ class User:
     email_confirmation_token: Optional[str] = None
     password_reset_token: Optional[str] = None
     password_reset_expires: Optional[datetime] = None
-    
     # Audit fields
     created_utc: Optional[datetime] = None
     last_modified_utc: Optional[datetime] = None
     last_login_utc: Optional[datetime] = None
-    
     # Metadata for extensibility
     metadata: Dict[str, str] = field(default_factory=dict)
     
@@ -142,7 +141,7 @@ class User:
             password_reset_token=self.password_reset_token,
             password_reset_expires=self.password_reset_expires,
             created_utc=self.created_utc,
-            last_modified_utc=datetime.utcnow(),
+            last_modified_utc=now_utc(),
             last_login_utc=self.last_login_utc,
             metadata=self.metadata
         )
@@ -162,7 +161,7 @@ class User:
             password_reset_token=self.password_reset_token,
             password_reset_expires=self.password_reset_expires,
             created_utc=self.created_utc,
-            last_modified_utc=datetime.utcnow(),
+            last_modified_utc=now_utc(),
             last_login_utc=self.last_login_utc,
             metadata=self.metadata
         )

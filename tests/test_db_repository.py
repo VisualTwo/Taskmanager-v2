@@ -29,6 +29,7 @@ def test_upsert_and_get_task_complete_roundtrip(repo):
         name="Complete Task",
         status="TASK_OPEN",
         is_private=True,
+        creator="user-1",
         description="Full desc",
         tags=("work", "urgent"),
         links=("http://example.com",),
@@ -64,6 +65,7 @@ def test_upsert_and_get_appointment_with_recurrence(repo):
         name="Weekly Meeting",
         status="APPOINTMENT_CONFIRMED",
         is_private=False,
+        creator="user-1",
         description="",
         is_all_day=False,
         start_utc=now,
@@ -90,6 +92,7 @@ def test_upsert_with_malformed_json_in_metadata_falls_back_gracefully(repo):
         name="Task",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         created_utc=datetime.now(timezone.utc),
         last_modified_utc=datetime.now(timezone.utc),
     )
@@ -113,6 +116,7 @@ def test_priority_validation_constraints(repo):
         name="Task",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         priority=3,  # Valid
         created_utc=datetime.now(timezone.utc),
         last_modified_utc=datetime.now(timezone.utc),
@@ -138,6 +142,7 @@ def test_ics_uid_uniqueness_constraint(repo):
         name="Task 1",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         ics_uid="uid-123",
         created_utc=now,
         last_modified_utc=now,
@@ -148,6 +153,7 @@ def test_ics_uid_uniqueness_constraint(repo):
         name="Task 2",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         ics_uid="uid-123",  # Same UID
         created_utc=now,
         last_modified_utc=now,
@@ -170,6 +176,7 @@ def test_reminder_roundtrip_with_null_recurrence(repo):
         name="Remind me",
         status="REMINDER_ACTIVE",
         is_private=False,
+        creator="user-1",
         reminder_utc=now + timedelta(hours=2),
         recurrence=None,
         created_utc=now,
@@ -193,6 +200,7 @@ def test_event_all_day_flag(repo):
         name="Birthday",
         status="EVENT_SCHEDULED",
         is_private=False,
+        creator="user-1",
         is_all_day=True,
         start_utc=now,
         end_utc=now + timedelta(days=1),
@@ -209,8 +217,8 @@ def test_event_all_day_flag(repo):
 def test_list_by_type_filters_correctly(repo):
     """list_by_type returns only items of specified type."""
     now = datetime.now(timezone.utc)
-    t = Task(id="t1", type="task", name="T", status="TASK_OPEN", is_private=False, created_utc=now, last_modified_utc=now)
-    r = Reminder(id="r1", type="reminder", name="R", status="REMINDER_ACTIVE", is_private=False, created_utc=now, last_modified_utc=now)
+    t = Task(id="t1", type="task", name="T", status="TASK_OPEN", is_private=False, creator="user-1", created_utc=now, last_modified_utc=now)
+    r = Reminder(id="r1", type="reminder", name="R", status="REMINDER_ACTIVE", is_private=False, creator="user-1", created_utc=now, last_modified_utc=now)
     
     repo.upsert(t)
     repo.upsert(r)
@@ -234,6 +242,7 @@ def test_metadata_preserves_unicode_and_special_chars(repo):
         name="Task",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         metadata={"note": "🎯 Wichtig: ä, ö, ü, €", "symbols": '{"key": "value"}'},
         created_utc=now,
         last_modified_utc=now,
@@ -255,6 +264,7 @@ def test_copy_item_resets_audit_and_ids(repo):
         name="Original",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         metadata={"key": "value"},
         priority=2,
         created_utc=now - timedelta(days=1),
@@ -283,6 +293,7 @@ def test_null_fields_do_not_break_loading(repo):
         name="Minimal",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         created_utc=now,
         last_modified_utc=now,
         # All other fields are None/default

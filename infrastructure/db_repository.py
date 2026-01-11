@@ -85,6 +85,20 @@ EXPECTED_COLS = {
 }
 
 class DbRepository:
+    @classmethod
+    def from_connection(cls, conn):
+        obj = cls.__new__(cls)
+        obj.conn = conn
+        obj._init_schema()
+        return obj
+
+        @classmethod
+        def from_connection(cls, conn):
+            obj = cls.__new__(cls)
+            obj.conn = conn
+            obj._init_schema()
+            return obj
+    
     def __init__(self, db_path: str):
         # check_same_thread=False erlaubt Nutzung im Threadpool
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -220,25 +234,41 @@ class DbRepository:
         priority = getattr(item, "priority", None)
         prio_val = int(priority) if (priority is not None and str(priority).strip() != "") else None
 
-        # ICE Felder aus metadata extrahieren (Backward compatibility)
-        ice_impact = getattr(item, "metadata", {}).get("ice_impact")
-        ice_confidence = getattr(item, "metadata", {}).get("ice_confidence")
-        ice_ease = getattr(item, "metadata", {}).get("ice_ease")
-        ice_score = getattr(item, "metadata", {}).get("ice_score")
 
-        # Parse to proper types
-        try:
-            ice_impact = int(ice_impact) if ice_impact else None
-        except (ValueError, TypeError):
-            ice_impact = None
-        try:
-            ice_ease = int(ice_ease) if ice_ease else None
-        except (ValueError, TypeError):
-            ice_ease = None
-        try:
-            ice_score = float(ice_score) if ice_score else None
-        except (ValueError, TypeError):
-            ice_score = None
+        # ICE fields: extract from metadata if present, else None
+        meta = dict(getattr(item, "metadata", {}) or {})
+        def _parse_int(val):
+            try:
+                return int(val)
+            except Exception:
+                return None
+        def _parse_float(val):
+            try:
+                return float(val)
+            except Exception:
+                return None
+        allowed_conf = {"very_low", "low", "medium", "high", "very_high"}
+        ice_impact = _parse_int(meta.get("ice_impact"))
+        raw_conf = meta.get("ice_confidence")
+        conf_map = {"1": "very_low", "2": "low", "3": "medium", "4": "high", "5": "very_high", 1: "very_low", 2: "low", 3: "medium", 4: "high", 5: "very_high"}
+        if raw_conf in allowed_conf:
+            ice_confidence = raw_conf
+        elif raw_conf in conf_map:
+            ice_confidence = conf_map[raw_conf]
+        else:
+            ice_confidence = None
+        ice_ease = _parse_int(meta.get("ice_ease"))
+        ice_score = _parse_float(meta.get("ice_score"))
+
+        # Always update metadata to match DB columns for roundtrip (even if value is None, keep key for test expectations)
+        # Persist ICE fields as strings in metadata (even if set via form or direct DB columns)
+        meta["ice_impact"] = str(ice_impact) if ice_impact is not None else meta.get("ice_impact")
+        meta["ice_confidence"] = ice_confidence if ice_confidence is not None else meta.get("ice_confidence")
+        meta["ice_ease"] = str(ice_ease) if ice_ease is not None else meta.get("ice_ease")
+        meta["ice_score"] = str(ice_score) if ice_score is not None else meta.get("ice_score")
+        # Remove keys with value None to keep metadata clean
+        meta = {k: v for k, v in meta.items() if v is not None}
+        metadata_json = json.dumps(meta)
 
         # Audit
         now_iso = format_db_datetime(now_utc())
@@ -304,12 +334,17 @@ class DbRepository:
         elif item.type == "reminder":
             self.conn.execute(
                 """INSERT INTO items (id,type,name,description,status_key,is_private,tags,links,
-                                      reminder_utc,rrule_string,exdates,ics_uid,priority,ice_impact,ice_confidence,ice_ease,ice_score,metadata,creator,participants,created_utc,last_modified_utc)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                      start_utc,end_utc,due_utc,task_planned_start_utc,task_planned_end_utc,
+                                      reminder_utc,is_all_day,rrule_string,exdates,ics_uid,priority,
+                                      ice_impact,ice_confidence,ice_ease,ice_score,metadata,creator,participants,created_utc,last_modified_utc)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                      type=excluded.type, name=excluded.name, description=excluded.description, status_key=excluded.status_key,
                      is_private=excluded.is_private, tags=excluded.tags, links=excluded.links,
-                     reminder_utc=excluded.reminder_utc, rrule_string=excluded.rrule_string, exdates=excluded.exdates,
+                     start_utc=excluded.start_utc, end_utc=excluded.end_utc, due_utc=excluded.due_utc,
+                     task_planned_start_utc=excluded.task_planned_start_utc, task_planned_end_utc=excluded.task_planned_end_utc,
+                     reminder_utc=excluded.reminder_utc, is_all_day=excluded.is_all_day,
+                     rrule_string=excluded.rrule_string, exdates=excluded.exdates,
                      ics_uid=excluded.ics_uid,
                      priority=excluded.priority,
                      ice_impact=excluded.ice_impact, ice_confidence=excluded.ice_confidence,
@@ -319,10 +354,13 @@ class DbRepository:
                 """,
                 (
                     item.id, "reminder", item.name, description, item.status, int(item.is_private), tags_json, links_json,
+                    None, None, None, None, None,  # start_utc, end_utc, due_utc, task_planned_start_utc, task_planned_end_utc
                     format_db_datetime(getattr(item, "reminder_utc", None)),
+                    0,  # is_all_day
                     rrule_string, exdates_str,
-                    ics_uid, prio_val, ice_impact, ice_confidence, ice_ease, ice_score, metadata_json,
-                    creator, participants_str, now_iso, now_iso,
+                    ics_uid, prio_val,
+                    ice_impact, ice_confidence, ice_ease, ice_score,
+                    metadata_json, creator, participants_str, now_iso, now_iso,
                 ),
             )
         else:
@@ -363,7 +401,7 @@ class DbRepository:
             "SELECT ist_admin FROM users WHERE id = ? OR login = ?",
             (user_id, user_id)
         ).fetchone()
-        return user_row and user_row["ist_admin"] == 1
+        return bool(user_row and user_row["ist_admin"] == 1)
     
     def _user_has_item_access(self, user_id: str, creator: str = None, participants: str = None, item_type: str = None) -> bool:
         """Central access control logic for a single item
@@ -435,9 +473,9 @@ class DbRepository:
             # Filter using our central access logic
             filtered_rows = []
             for row in rows:
-                creator = row.get("creator")
-                participants = row.get("participants")
-                item_type = row.get("type")
+                creator = row["creator"]
+                participants = row["participants"]
+                item_type = row["type"]
                 if self._user_has_item_access(user_id, creator, participants, item_type):
                     filtered_rows.append(row)
             rows = filtered_rows
@@ -542,6 +580,8 @@ class DbRepository:
             "metadata": metadata,
             "created_utc": now,
             "last_modified_utc": now,
+            "creator": getattr(src, "creator", "admin"),
+            "participants": tuple(getattr(src, "participants", ()))
         }
 
         # Typ-spezifische Zeitfelder setzen

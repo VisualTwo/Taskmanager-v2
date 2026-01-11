@@ -15,7 +15,8 @@ def now_utc():
         return _now_utc()
     except (ImportError, NameError):
         # Fallback implementation
-        return datetime.utcnow().replace(tzinfo=None)
+        from datetime import UTC
+        return datetime.now(UTC)
 
 class AuthenticationError(Exception):
     """Exception raised for authentication errors"""

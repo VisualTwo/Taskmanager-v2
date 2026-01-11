@@ -1,6 +1,3 @@
-"""
-Main Routes - Homepage, dashboard, navigation
-"""
 
 from fastapi import APIRouter, Request, Query, Depends, HTTPException, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -8,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 from typing import List, Optional
 from urllib.parse import urlencode
 from datetime import datetime, timedelta, date
+import re
 import pytz
 import logging
 import csv
@@ -46,6 +44,15 @@ TYPE_STATUS_OPTIONS = {
     'appointment': [(k, v['display_name']) for k, v in STATUS_DEFINITIONS.items() if 'appointment' in v.get('relevant_for_types', [])],
     'event': [(k, v['display_name']) for k, v in STATUS_DEFINITIONS.items() if 'event' in v.get('relevant_for_types', [])]
 }
+
+def is_holiday_item(item):
+    """Check if an item is a holiday event"""
+    if hasattr(item, 'metadata'):
+        metadata = getattr(item, 'metadata', {}) or {}
+        return metadata.get('is_holiday', False)
+    elif isinstance(item, dict):
+        return item.get('is_holiday', False)
+    return False
 
 # Import additional helper functions (assuming they exist in the codebase)
 def get_priority_class(item):
@@ -156,6 +163,22 @@ def status_display(status):
     }
     return status_map.get(status, status)
 
+
+def split_filter(value, sep=" ", maxsplit=0):
+    """Safe split filter for Jinja templates"""
+    try:
+        return (value or "").split(sep, maxsplit)
+    except Exception:
+        return []
+
+
+def regex_replace(value: str, pattern: str, repl: str) -> str:
+    """Regex replace filter compatible with legacy templates"""
+    try:
+        return re.sub(pattern, repl, value or "")
+    except re.error:
+        return value or ""
+
 def format_local(dt: Optional[datetime], fmt: str = "%d.%m.%Y %H:%M") -> str:
     """Format datetime to local Berlin time"""
     if not dt:
@@ -199,6 +222,8 @@ templates.env.filters['format_local_weekday_de'] = format_local_weekday_de
 templates.env.filters['format_local_short_weekday_de'] = format_local_short_weekday_de
 templates.env.filters['format_dashboard_time'] = format_dashboard_time
 templates.env.filters['status_display'] = status_display
+templates.env.filters['split'] = split_filter
+templates.env.filters['regex_replace'] = regex_replace
 
 # Make Python functions available in templates
 templates.env.globals['timedelta'] = timedelta
@@ -518,6 +543,43 @@ async def dashboard(
             remaining_slots = max(0, 30 - len(birthdays))
             events_next2m = birthdays + others[:remaining_slots]
         
+        # Build calendarTasks for JS (all relevant items for the calendar)
+        def serialize_task(task, overdue_flag=False):
+            if task.type == 'task' and getattr(task, 'due_utc', None):
+                date_str = task.due_utc.strftime('%Y-%m-%d')
+                time_str = task.due_utc.strftime('%H:%M')
+            elif task.type == 'reminder' and getattr(task, 'reminder_utc', None):
+                date_str = task.reminder_utc.strftime('%Y-%m-%d')
+                time_str = task.reminder_utc.strftime('%H:%M')
+            else:
+                date_str = ''
+                time_str = ''
+            return {
+                "type": "task",
+                "id": str(task.id),
+                "date": date_str,
+                "title": getattr(task, 'name', ''),
+                "time": time_str,
+                "priority": getattr(task, 'priority', ''),
+                "overdue": overdue_flag,
+                "allDay": False,
+                "status": getattr(task, 'status', ''),
+                "description": getattr(task, 'description', ''),
+                "tags": getattr(task, 'tags', []),
+                "recurrence": getattr(task, 'recurrence', None).rrule_string if getattr(task, 'recurrence', None) else ''
+            }
+
+        calendarTasks = []
+        for task in overdue:
+            if task.type in ('task', 'reminder'):
+                calendarTasks.append(serialize_task(task, overdue_flag=True))
+        for task in upcoming_today:
+            if task.type in ('task', 'reminder'):
+                calendarTasks.append(serialize_task(task, overdue_flag=False))
+        for task in undated:
+            if task.type in ('task', 'reminder'):
+                calendarTasks.append(serialize_task(task, overdue_flag=False))
+
         # Basic template context
         context = {
             "request": request,
@@ -539,8 +601,10 @@ async def dashboard(
             "is_birthday": is_birthday,
             "is_overdue_item": lambda item, today_date: is_overdue_item(item, today_date),
             "is_terminal_status": is_terminal_status,
+            "is_holiday_item": is_holiday_item,
             # Verwende StatusManager.get_options_for(), sortiert nach ui_order
-            "status_choices": [(sd.key, sd.display_name) for sd in _status_service.sm.get_options_for(None)]
+            "status_choices": [(sd.key, sd.display_name) for sd in _status_service.sm.get_options_for(None)],
+            "calendarTasks": calendarTasks
         }
         
         return templates.TemplateResponse("dashboard.html", context)
@@ -653,7 +717,7 @@ async def import_upload(
         else:
             # ICS Import
             from services.ics_import import import_ics
-            items = import_ics(text)
+            items = import_ics(text, creator=current_user.id)
             
             try:
                 repository.conn.execute("BEGIN")
@@ -872,7 +936,7 @@ async def import_upload(
             "debug": debug,
             "sort_mode": mode,  # Add current sort mode
             # Filter parameters and choices
-            "status_choices": [(sd.key, sd.label) for sd in _status_service.sm.all_status_defs()],
+            "status_choices": [(sd.key, sd.display_name) for sd in _status_service.options_for(None)],
             "tags": tags or "",
             # Template functions
             "get_priority_class": get_priority_class,

@@ -1,3 +1,38 @@
+/* Status color classes for dashboard */
+.status-chip,
+.btn-simple[class*="status-"] {
+  color: #fff !important;
+}
+.status-task-offen, .status-reminder-REMINDER_ACTIVE, .status-appointment-APPOINTMENT_PLANNED, .status-event-EVENT_SCHEDULED {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+}
+.status-task-erledigt, .status-reminder-REMINDER_DISMISSED, .status-appointment-APPOINTMENT_DONE, .status-event-EVENT_DONE {
+  background: #10b981 !important;
+  border-color: #10b981 !important;
+}
+.status-task-bearbeitung, .status-task-TASK_IN_PROGRESS {
+  background: #f59e0b !important;
+  border-color: #f59e0b !important;
+}
+.status-task-warten, .status-task-TASK_BLOCKED {
+  background: #6b7280 !important;
+  border-color: #6b7280 !important;
+}
+.status-appointment-offen {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+.status-event-offen {
+  background: #8b5cf6 !important;
+  border-color: #8b5cf6 !important;
+}
+/* Default fallback */
+.status-chip,
+.btn-simple[class*="status-"] {
+  background: #6b7280 !important;
+  border-color: #6b7280 !important;
+}
 /* ===== PROFESSIONAL DASHBOARD - THEME INTEGRATED ===== */
 
 /* Main container using app theme */

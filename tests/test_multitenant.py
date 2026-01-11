@@ -180,7 +180,7 @@ class TestMultiTenantRepository:
         multitenant_repo.upsert(item)
         
         # Test retrieval
-        retrieved = multitenant_repo.get_by_id(item.id)
+        retrieved = multitenant_repo.get(item.id)
         assert retrieved is not None
         assert retrieved.name == "Test Item"
         assert retrieved.creator == user1.id
@@ -201,8 +201,8 @@ class TestMultiTenantRepository:
             is_private=False,
             creator=user1.id,
             participants=(user1.id,),
-            created_utc=datetime.utcnow(),
-            last_modified_utc=datetime.utcnow()
+            created_utc=now_utc(),
+            last_modified_utc=now_utc()
         )
         multitenant_repo.upsert(item)
         
@@ -234,8 +234,8 @@ class TestMultiTenantRepository:
             is_private=False,
             creator=user1.id,
             participants=(user1.id,),
-            created_utc=datetime.utcnow(),
-            last_modified_utc=datetime.utcnow()
+            created_utc=now_utc(),
+            last_modified_utc=now_utc()
         )
         multitenant_repo.upsert(item1)
         
@@ -262,11 +262,8 @@ class TestMultiTenantRepository:
             is_private=False,
             creator=user1.id,
             participants=(user1.id, user2.id),
-            created_utc=datetime.utcnow(),
-            last_modified_utc=datetime.utcnow()
-        )
-            created_utc=datetime.utcnow(),
-            last_modified_utc=datetime.utcnow()
+            created_utc=now_utc(),
+            last_modified_utc=now_utc()
         )
         multitenant_repo.upsert(shared_item)
         

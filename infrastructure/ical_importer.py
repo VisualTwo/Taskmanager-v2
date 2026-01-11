@@ -201,7 +201,7 @@ def _choose_created_for_upsert(existing_created: Optional[datetime], incoming_cr
         return existing_created if existing_created <= incoming_created else existing_created
     return existing_created or incoming_created
 
-def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> List[object]:
+def import_ics(ics_text: str, *, creator: str, existing_lookup: Dict[str, dict] = None) -> List[object]:
     """
     existing_lookup: dict[ics_uid] -> bestehender DB-Datensatz (als dict) mit mindestens:
         {
@@ -209,6 +209,9 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         }
     Rückgabe: Domain-Instanzen (Task/Appointment/Event/Reminder) mit gefüllten Feldern inkl. priority, status etc.
     """
+    if not creator:
+        raise ValueError("creator is required for ICS import")
+    
     existing_lookup = existing_lookup or {}
     items: List[object] = []
 
@@ -249,6 +252,7 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
             ics_uid=uid,
             created_utc=format_db_datetime(created) if created else None,
             last_modified_utc=format_db_datetime(last_mod) if last_mod else None,
+            creator=creator,
         )
 
         # Note: keep status_key as determined above (prefer X-APP-STATUS when present)
@@ -335,6 +339,7 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
             ics_uid=uid,
             created_utc=format_db_datetime(created) if created else None,
             last_modified_utc=format_db_datetime(last_mod) if last_mod else None,
+            creator=creator,
         )
 
         # Upsert: älteres CREATED bewahren

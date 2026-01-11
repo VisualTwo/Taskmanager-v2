@@ -103,10 +103,13 @@ def _clamp_priority_0_5(p: Optional[int]) -> Optional[int]:
     if v > 5: v = 5
     return v
 
-def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
+def import_ics(text: str, *, creator: str) -> List[Event | Appointment | Task | Reminder]:
     """
     Parst den ICS-Text und liefert angereicherte Domain-Items zurück.
     """
+    if not creator:
+        raise ValueError("creator is required for ICS import")
+
     from icalendar import Calendar
     cal = Calendar.from_ical(text)
     out: List[Event | Appointment | Task | Reminder] = []
@@ -273,6 +276,8 @@ def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
                     last_modified_utc=last_modified_utc,
                     ics_uid=ics_uid,
                     priority=priority,
+                    creator=creator,
+                    participants=(creator,),
                 )
             else:
                 it = Task(
@@ -291,6 +296,8 @@ def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
                 last_modified_utc=last_modified_utc,
                 ics_uid=ics_uid,
                 priority=priority,
+                creator=creator,
+                participants=(creator,),
             )
             out.append(it)
 

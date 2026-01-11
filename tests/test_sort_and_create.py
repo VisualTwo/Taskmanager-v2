@@ -24,15 +24,21 @@ def repo_tmp(tmp_path):
 
 
 @pytest.fixture
-def client(repo_tmp):
-    # Override dependency to use the test repo
+
+def client(repo_tmp, monkeypatch):
+    # Ensure TEST_DB_PATH is set so get_repo uses the test DB
+    db_path = repo_tmp.conn.execute('PRAGMA database_list').fetchone()[2]
+    monkeypatch.setenv("TEST_DB_PATH", db_path)
     def _get_repo_override():
         try:
             yield repo_tmp
         finally:
             pass
 
+    # Patch both get_repo (web.server) and get_repository (web.routers.items)
+    import web.routers.items
     app.dependency_overrides[get_repo] = _get_repo_override
+    app.dependency_overrides[web.routers.items.get_repository] = lambda: repo_tmp
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -41,13 +47,13 @@ def client(repo_tmp):
 def test_overdue_sorted_by_ice_then_priority(client, repo_tmp):
     # Create three overdue tasks: A(high score, low prio), B(low score, high prio), C(no score, medium prio)
     now = datetime.now(timezone.utc)
-    a = Task(id="a", type="task", name="A-highscore", status="open", is_private=False,
+    a = Task(id="a", type="task", name="A-highscore", status="open", is_private=False, creator="user-1",
              due_utc=now - timedelta(days=2), priority=1,
              metadata={"ice_score": "20", "ice_impact": "5", "ice_confidence": "very_high", "ice_ease": "4"})
-    b = Task(id="b", type="task", name="B-highprio", status="open", is_private=False,
+    b = Task(id="b", type="task", name="B-highprio", status="open", is_private=False, creator="user-1",
              due_utc=now - timedelta(days=1), priority=5,
              metadata={"ice_score": "2", "ice_impact": "1", "ice_confidence": "low", "ice_ease": "2"})
-    c = Task(id="c", type="task", name="C-noice", status="open", is_private=False,
+    c = Task(id="c", type="task", name="C-noice", status="open", is_private=False, creator="user-1",
              due_utc=now - timedelta(days=3), priority=3, metadata={})
 
     repo_tmp.upsert(a)
@@ -68,12 +74,12 @@ def test_overdue_sorted_by_ice_then_priority(client, repo_tmp):
 
 def test_upcoming_sort_by_date_and_score(client, repo_tmp):
     now = datetime.now(timezone.utc)
-    # item1 earlier date but lower score
-    item1 = Task(id="i1", type="task", name="Item-early-lowscore", status="open", is_private=False,
+    # item1: present/future
+    item1 = Task(id="i1", type="task", name="Item-early-lowscore", status="open", is_private=False, creator="user-1",
                  due_utc=now + timedelta(days=1), priority=2,
                  metadata={"ice_score": "1"})
-    # item2 later date but higher score
-    item2 = Task(id="i2", type="task", name="Item-late-highscore", status="open", is_private=False,
+    # item2: future
+    item2 = Task(id="i2", type="task", name="Item-late-highscore", status="open", is_private=False, creator="user-1",
                  due_utc=now + timedelta(days=3), priority=2,
                  metadata={"ice_score": "10"})
 
@@ -81,20 +87,45 @@ def test_upcoming_sort_by_date_and_score(client, repo_tmp):
     repo_tmp.upsert(item2)
     repo_tmp.conn.commit()
 
-    # Default (date): early should come before late
+    # Default (date): early should come before late (only present/future)
     r = client.get('/dashboard')
     assert r.status_code == 200
     html = r.text
-    assert html.find('Item-early-lowscore') < html.find('Item-late-highscore')
+    print("[DASHBOARD HTML]", html)
+    # Check both upcoming_today and upcoming_next7 panels
+    assert ('Item-early-lowscore' in html) or ('Item-early-lowscore' in html)
+    assert ('Item-late-highscore' in html) or ('Item-late-highscore' in html)
+    # Ensure correct order if both are present
+    idx_early = html.find('Item-early-lowscore')
+    idx_late = html.find('Item-late-highscore')
+    if idx_early != -1 and idx_late != -1:
+        assert idx_early < idx_late
 
     # With sort_by=score, highscore should appear before early
     r2 = client.get('/dashboard?sort_by=score')
     assert r2.status_code == 200
     html2 = r2.text
-    assert html2.find('Item-late-highscore') < html2.find('Item-early-lowscore')
+    assert ('Item-late-highscore' in html2) or ('Item-late-highscore' in html2)
+    assert ('Item-early-lowscore' in html2) or ('Item-early-lowscore' in html2)
+    idx_late2 = html2.find('Item-late-highscore')
+    idx_early2 = html2.find('Item-early-lowscore')
+    if idx_late2 != -1 and idx_early2 != -1:
+        assert idx_late2 < idx_early2
 
 
 def test_create_item_with_ice_and_due(client, repo_tmp):
+    # Try direct SQL insert to check DB accessibility
+    try:
+        repo_tmp.conn.execute(
+            "INSERT INTO items (id, type, name, status_key, is_private, tags, links, creator, participants, created_utc, last_modified_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("debug-id", "task", "DEBUG-ITEM", "open", 0, "[]", "[]", "user-1", "user-1", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z")
+        )
+        repo_tmp.conn.commit()
+        debug_items = repo_tmp.list_all()
+        print(f"[DEBUG] test: items after direct SQL insert = {[it.name for it in debug_items]}")
+    except Exception as e:
+        print(f"[DEBUG] test: direct SQL insert failed: {e}")
+
     # Create via POST form (simulate quick-create)
     form = {
         'name': 'POSTed Item',
@@ -106,12 +137,16 @@ def test_create_item_with_ice_and_due(client, repo_tmp):
         'ice_ease': '4'
     }
 
-    r = client.post('/items/new', data=form)
+    r = client.post('/items/new', data=form, headers={"X-User-Id": "user-1"})
     # Should redirect to edit (303 or HX 204+HX-Redirect); accept both
     assert r.status_code in (200, 303, 204)
 
+    # Print repo_tmp and connection ids for debug
+    print(f"[DEBUG] test: repo_tmp id = {id(repo_tmp)}; conn id = {id(repo_tmp.conn)}; conn repr = {repr(repo_tmp.conn)}")
+
     # Find created item in repo
     items = repo_tmp.list_all()
+    print(f"[DEBUG] test: items after POST = {[it.name for it in items]}")
     found = [it for it in items if it.name == 'POSTed Item']
     assert len(found) == 1
     it = found[0]
@@ -129,6 +164,7 @@ def test_chronological_sorting_functionality(repo_tmp):
         name="Morning Task",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         due_utc=make_dt().replace(hour=8, minute=0, second=0, microsecond=0)
     )
     
@@ -138,6 +174,7 @@ def test_chronological_sorting_functionality(repo_tmp):
         name="Afternoon Task",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         due_utc=make_dt().replace(hour=14, minute=30, second=0, microsecond=0)
     )
     
@@ -147,6 +184,7 @@ def test_chronological_sorting_functionality(repo_tmp):
         name="Evening Task",
         status="TASK_OPEN",
         is_private=False,
+        creator="user-1",
         due_utc=make_dt().replace(hour=18, minute=45, second=0, microsecond=0)
     )
     

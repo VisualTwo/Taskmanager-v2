@@ -14,7 +14,7 @@ from domain.models import (
 
 
 def test_baseitem_defaults():
-    b = BaseItem(id="1", type="task", name="T", status="TASK_OPEN", is_private=False)
+    b = BaseItem(id="1", type="task", name="T", status="TASK_OPEN", is_private=False, creator="user-1")
     assert b.name == "T"
     assert b.description is None
     assert b.tags == ()
@@ -26,7 +26,7 @@ def test_baseitem_defaults():
 
 
 def test_task_optional_fields():
-    t = Task(id="t1", type="task", name="Task1", status="TASK_OPEN", is_private=False)
+    t = Task(id="t1", type="task", name="Task1", status="TASK_OPEN", is_private=False, creator="user-1")
     assert t.due_utc is None
     assert t.recurrence is None
     assert t.planned_start_utc is None
@@ -43,7 +43,7 @@ def test_recurrence_exdates_are_tuple_and_immutable():
 
 
 def test_metadata_mutation_but_no_reassignment_allowed():
-    t = Task(id="t2", type="task", name="T2", status="TASK_OPEN", is_private=False)
+    t = Task(id="t2", type="task", name="T2", status="TASK_OPEN", is_private=False, creator="user-1")
     # Mutating underlying dict is allowed
     t.metadata["k"] = "v"
     assert t.metadata.get("k") == "v"
@@ -60,13 +60,13 @@ def test_occurrence_structure():
 
 
 def test_reminder_and_appointment_defaults():
-    r = Reminder(id="r1", type="reminder", name="Rem", status="REMINDER_SCHEDULED", is_private=False)
+    r = Reminder(id="r1", type="reminder", name="Rem", status="REMINDER_SCHEDULED", is_private=False, creator="user-1")
     assert r.reminder_utc is None
     assert r.recurrence is None
 
-    a = Appointment(id="a1", type="appointment", name="A", status="APPOINTMENT_SCHEDULED", is_private=False)
+    a = Appointment(id="a1", type="appointment", name="A", status="APPOINTMENT_SCHEDULED", is_private=False, creator="user-1")
     assert a.start_utc is None
     assert a.end_utc is None
 
-    e = Event(id="e1", type="event", name="E", status="EVENT_SCHEDULED", is_private=False)
+    e = Event(id="e1", type="event", name="E", status="EVENT_SCHEDULED", is_private=False, creator="user-1")
     assert e.start_utc is None

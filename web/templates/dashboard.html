@@ -3,6 +3,7 @@
 {% block title %}Dashboard - Task Manager{% endblock %}
 
 {% block content %}
+<!-- Kalenderdaten für JS: tasks werden im Hauptscript gesetzt -->
 <!-- Dashboard Content -->
 
 <!-- Date and Time Header -->
@@ -37,27 +38,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"></circle>
                 <path d="21 21l-4.35-4.35"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {% set current_types = (request.query_params.get('types','') or '').split(',') if request.query_params.get('types') else [] %}
-        {% set current_type = current_types[0] if current_types else '' %}
-        <div class="field">
-          <label for="types-select">Typ</label>
-          <select id="types-select" title="Item-Typ auswählen"
-                  onchange="this.form.querySelector('input[name=types]').value = this.value; this.form.requestSubmit();">
-            <option value="">Alle Typen</option>
-            <option value="task" {% if current_type=='task' %}selected{% endif %}>📋 Aufgaben</option>
-            <option value="reminder" {% if current_type=='reminder' %}selected{% endif %}>⏰ Erinnerungen</option>
-            <option value="appointment" {% if current_type=='appointment' %}selected{% endif %}>📅 Termine</option>
-            <option value="event" {% if current_type=='event' %}selected{% endif %}>🎉 Ereignisse</option>
-          </select>
-          <input type="hidden" name="types" value="{{ current_type }}">
-        </div>
-
-        <div class="field">
+              <!-- ...existing button markup... -->
           <label for="status_key">Status</label>
           {% set cur_status = request.query_params.get('status','') %}
           <select id="status_key" name="status" title="Status filtern" onchange="this.form.requestSubmit()">
@@ -175,7 +156,7 @@
                 {% endif %}
               </div>
             </div>
-            <span class="status-chip" style="background: {{ type_status_colors.get(item.type, {}).get(item.status, '#6b7280') }}; color: white; border: 1px solid {{ type_status_colors.get(item.type, {}).get(item.status, '#6b7280') }};">
+            <span class="status-chip status-{{ item.type }}-{{ item.status }}">
               {{ status_display(item.status) }}
             </span>
           </li>
@@ -221,7 +202,7 @@
                 {{ format_dashboard_time((item.start_utc if item.type != 'task' else None) or (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None), "today", berlin_tz) if ((item.start_utc if item.type != 'task' else None) or (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None)) }}
               </div>
             </div>
-            <span class="btn-simple" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; background: {{ type_status_colors.get(item.type, {}).get(item.status, '#6b7280') }}; color: white;">
+            <span class="btn-simple status-{{ item.type }}-{{ item.status }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
               {{ status_display(item.status) }}
             </span>
           </li>
@@ -233,25 +214,65 @@
     </div>
   </div>
 
-  <!-- Upcoming Events -->
+
+  <!-- Next 7 Days Panel -->
   <div class="dashboard-card">
     <div class="card-header">
-      <span>🎉</span>
+      <span>⏳</span>
       <h2 class="card-title">
-        {% if events_next2m|length == 1 %}
-          1 kommender Termin
+        {% if upcoming_next7|length == 1 %}
+          1 Termin in den nächsten 7 Tagen
         {% else %}
-          {{ events_next2m|length }} kommende Termine
+          {{ upcoming_next7|length }} Termine in den nächsten 7 Tagen
         {% endif %}
       </h2>
     </div>
-    {% if events_next2m %}
+    {% if upcoming_next7 %}
       <ul class="priority-list">
-        {% for item in events_next2m %}
+        {% for item in upcoming_next7 %}
           <li class="priority-item">
             <div class="item-info">
               <div class="item-name">
-                {% if item.is_holiday %}
+                <a href="/items/{{ item.id }}/edit" target="_blank">{{ item.name }}</a>
+              </div>
+              <div class="item-time">
+                {% if item.type == 'task' and item.due_utc %}
+                  {{ item.due_utc.astimezone(berlin_tz).strftime('%d.%m.%Y %H:%M') }}
+                {% elif item.type == 'appointment' and item.start_utc %}
+                  {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y %H:%M') }}
+                {% endif %}
+              </div>
+            </div>
+            <span class="btn-simple status-{{ item.type }}-{{ item.status }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+              {{ status_display(item.status) }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">📭 Keine Termine in den nächsten 7 Tagen</p>
+    {% endif %}
+  </div>
+
+  <!-- Upcoming Events -->
+  <div class="dashboard-card">
+    <div class="card-header">
+      <span>📅</span>
+      <h2 class="card-title">
+        {% if upcoming_appointments|length == 1 %}
+          1 kommender Termin
+        {% else %}
+          {{ upcoming_appointments|length }} kommende Termine
+        {% endif %}
+      </h2>
+    </div>
+    {% if upcoming_appointments %}
+      <ul class="priority-list">
+        {% for item in upcoming_appointments %}
+          <li class="priority-item">
+            <div class="item-info">
+              <div class="item-name">
+                {% if is_holiday_item(item) %}
                   🎌 {{ item.name }}
                 {% else %}
                 <a href="/items/{{ item.id }}/edit" target="_blank" title="{{ item.type|title }}: {{ item.name }}{% if is_birthday(item) %} | Geburtstag{% endif %}{% if item.type != 'task' and item.start_utc %} | {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y') }}{% if item.start_utc and item.type != 'task' and item.end_utc and not (item.is_all_day or (item.start_utc.astimezone(berlin_tz).hour <= 1 and item.end_utc.astimezone(berlin_tz).hour >= 23)) %} {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }}-{{ item.end_utc.astimezone(berlin_tz).strftime('%H:%M') }}{% endif %}{% endif %}">
@@ -279,7 +300,7 @@
         {% endfor %}
       </ul>
     {% else %}
-      <p class="empty-state">📭 Keine Ereignisse</p>
+      <p class="empty-state">📭 Keine Termine</p>
     {% endif %}
   </div>
 
@@ -288,16 +309,16 @@
     <div class="card-header">
       <span>⏳</span>
       <h2 class="card-title">
-        {% if undated|length == 1 %}
+        {% if without_date|length == 1 %}
           1 Aufgabe ohne Termin
         {% else %}
-          {{ undated|length }} Aufgaben ohne Termin
+          {{ without_date|length }} Aufgaben ohne Termin
         {% endif %}
       </h2>
     </div>
-    {% if undated %}
+    {% if without_date %}
       <ul class="priority-list">
-        {% for item in undated %}
+        {% for item in without_date %}
           <li class="priority-item priority-{{ item.priority or 'medium' }}">
             <div class="item-info">
               <div class="item-name">
@@ -315,7 +336,7 @@
                 {% endif %}
               </div>
             </div>
-            <span class="btn-simple" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; background: {{ type_status_colors.get(item.type, {}).get(item.status, '#6b7280') }}; color: white;">
+            <span class="btn-simple status-{{ item.type }}-{{ item.status }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
               {{ status_display(item.status) }}
             </span>
           </li>
@@ -344,21 +365,30 @@
           <li class="priority-item {% if is_overdue_item(item, today) %}overdue{% endif %}">
             <div class="item-info">
               <div class="item-name">
-                {% if item.is_holiday %}
+                {% if is_holiday_item(item) %}
                   🎌 {{ item.name }}
                 {% else %}
-                  <a href="/items/{{ item.id }}/edit" target="_blank" title="{{ item.type|title }}: {{ item.name }}{% if item.priority %} | Priorität: {{ item.priority|title }}{% endif %}{% if (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None) or (item.start_utc if item.type != 'task' else None) %} | {{ format_dashboard_time((item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None) or (item.start_utc if item.type != 'task' else None), 'next_7_days', berlin_tz) }}{% endif %}">
-                    {{ item.name }}
-                  </a>
+                <a href="/items/{{ item.id }}/edit" target="_blank" title="{{ item.type|title }}: {{ item.name }}{% if is_birthday(item) %} | Geburtstag{% endif %}{% if item.type != 'task' and item.start_utc %} | {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y') }}{% if item.start_utc and item.type != 'task' and item.end_utc and not (item.is_all_day or (item.start_utc.astimezone(berlin_tz).hour <= 1 and item.end_utc.astimezone(berlin_tz).hour >= 23)) %} {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }}-{{ item.end_utc.astimezone(berlin_tz).strftime('%H:%M') }}{% endif %}{% endif %}">
+                  {% if is_birthday(item) %}🎂{% endif %}
+                  {{ item.name }}
+                </a>
                 {% endif %}
               </div>
               <div class="item-time">
-                {{ format_dashboard_time((item.start_utc if item.type != 'task' else None) or (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None), "next_7_days", berlin_tz) if ((item.start_utc if item.type != 'task' else None) or (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None)) }}
+                {% if item.type != 'task' and item.start_utc %}
+                  {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y') }}
+                  {% set is_all_day = item.is_all_day or (item.start_utc and item.type != 'task' and item.end_utc and ((item.start_utc.astimezone(berlin_tz).hour <= 1 and item.end_utc.astimezone(berlin_tz).hour >= 23) or (item.end_utc.astimezone(berlin_tz) - item.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
+                  {% if not is_all_day %}
+                    {% if item.start_utc and item.type != 'task' and item.end_utc %}
+                      {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }} - {{ item.end_utc.astimezone(berlin_tz).strftime('%H:%M') }}
+                    {% elif item.type != 'task' and item.start_utc %}
+                      {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
               </div>
             </div>
-            <span class="btn-simple" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; background: {{ type_status_colors.get(item.type, {}).get(item.status, '#6b7280') }}; color: white;">
-              {{ status_display(item.status) }}
-            </span>
+
           </li>
         {% endfor %}
       </ul>
@@ -398,7 +428,6 @@ let currentViewDate = new Date();  // For today view navigation
 function changeDay(delta) {
   currentViewDate.setDate(currentViewDate.getDate() + delta);
   updateTodayView();
-}
 
 function updateTodayView() {
   const today = new Date();
@@ -493,117 +522,14 @@ function updateTodayView() {
 
 // Calendar data from backend - include ALL items for calendar display
 let calendarEvents = {
-  tasks: [
-    {% for task in overdue %}
-      {% if (task.due_utc if task.type == 'task' else None) or (task.reminder_utc if task.type == 'reminder' else None) %}
-        { type: 'task', id: '{{ task.id }}', date: '{{ ((task.due_utc if task.type == "task" else None) or (task.reminder_utc if task.type == "reminder" else None)).strftime("%Y-%m-%d") }}', title: {{ task.name|tojson }}, time: '{{ ((task.due_utc if task.type == "task" else None) or (task.reminder_utc if task.type == "reminder" else None)).strftime("%H:%M") }}', priority: '{{ task.priority }}', overdue: true, allDay: false, status: {{ task.status|default("")|tojson }}, description: {{ (task.description or "")|tojson }}, tags: {{ task.tags|default([])|list|tojson }}, recurrence: {{ (task.recurrence.rrule_string if task.recurrence else "")|tojson }} },
-      {% endif %}
-    {% endfor %}
-    {% for task in upcoming_today %}
-      {% if task.type in ('task', 'reminder') and ((task.due_utc if task.type == 'task' else None) or (task.reminder_utc if task.type == 'reminder' else None)) %}
-        { type: 'task', id: '{{ task.id }}', date: '{{ ((task.due_utc if task.type == "task" else None) or (task.reminder_utc if task.type == "reminder" else None)).strftime("%Y-%m-%d") }}', title: {{ task.name|tojson }}, time: '{{ ((task.due_utc if task.type == "task" else None) or (task.reminder_utc if task.type == "reminder" else None)).strftime("%H:%M") }}', priority: '{{ task.priority }}', overdue: false, allDay: false, status: {{ task.status|default("")|tojson }}, description: {{ (task.description or "")|tojson }}, tags: {{ task.tags|default([])|list|tojson }}, recurrence: {{ (task.recurrence.rrule_string if task.recurrence else "")|tojson }} },
-      {% endif %}
-    {% endfor %}
-    {% for task in undated %}
-      {% if task.type in ('task', 'reminder') %}
-        { type: 'task', id: '{{ task.id }}', date: '', title: {{ task.name|tojson }}, time: '', priority: '{{ task.priority }}', overdue: false, allDay: false, status: {{ task.status|default("")|tojson }}, description: {{ (task.description or "")|tojson }}, tags: {{ task.tags|default([])|list|tojson }}, recurrence: {{ (task.recurrence.rrule_string if task.recurrence else "")|tojson }} },
-      {% endif %}
-    {% endfor %}
-  ],
-  appointments: [
-    {% for appt in upcoming_today %}
-      {% if appt.type == 'appointment' and appt.start_utc %}
-        {% set is_all_day = appt.is_all_day or (appt.start_utc and appt.end_utc and ((appt.start_utc.astimezone(berlin_tz).hour <= 1 and appt.end_utc.astimezone(berlin_tz).hour >= 23) or (appt.end_utc.astimezone(berlin_tz) - appt.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
-        { type: 'appointment', id: '{{ appt.id }}', date: '{{ appt.start_utc.astimezone(berlin_tz).strftime("%Y-%m-%d") }}', title: {{ appt.name|tojson }}, time: '{% if not is_all_day %}{{ appt.start_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', endTime: '{% if not is_all_day and appt.end_utc %}{{ appt.end_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', allDay: {{ 'true' if is_all_day else 'false' }} },
-      {% endif %}
-    {% endfor %}
-    {% for appt in events_next2m %}
-      {% if appt.type == 'appointment' and appt.start_utc %}
-        {% set is_all_day = appt.is_all_day or (appt.start_utc and appt.end_utc and ((appt.start_utc.astimezone(berlin_tz).hour <= 1 and appt.end_utc.astimezone(berlin_tz).hour >= 23) or (appt.end_utc.astimezone(berlin_tz) - appt.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
-        { type: 'appointment', id: '{{ appt.id }}', date: '{{ appt.start_utc.astimezone(berlin_tz).strftime("%Y-%m-%d") }}', title: {{ appt.name|tojson }}, time: '{% if not is_all_day %}{{ appt.start_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', endTime: '{% if not is_all_day and appt.end_utc %}{{ appt.end_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', allDay: {{ 'true' if is_all_day else 'false' }} },
-      {% endif %}
-    {% endfor %}
-  ],
-  events: [
-    {% for event in upcoming_today %}
-      {% if event.type == 'event' and event.start_utc %}
-        {% set is_all_day = event.is_all_day or (event.start_utc and event.end_utc and ((event.start_utc.astimezone(berlin_tz).hour <= 1 and event.end_utc.astimezone(berlin_tz).hour >= 23) or (event.end_utc.astimezone(berlin_tz) - event.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
-        { type: 'event', id: '{{ event.id }}', date: '{{ event.start_utc.astimezone(berlin_tz).strftime("%Y-%m-%d") }}', title: {{ event.name|tojson }}, time: '{% if not is_all_day %}{{ event.start_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', endTime: '{% if not is_all_day and event.end_utc %}{{ event.end_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', is_birthday: {{ 'true' if is_birthday(event) else 'false' }}, is_holiday: {{ 'true' if event.is_holiday else 'false' }}, allDay: {{ 'true' if is_all_day else 'false' }} },
-      {% endif %}
-    {% endfor %}
-    {% for event in events_next2m %}
-      {% if event.type == 'event' and event.start_utc %}
-        {% set is_all_day = event.is_all_day or (event.start_utc and event.end_utc and ((event.start_utc.astimezone(berlin_tz).hour <= 1 and event.end_utc.astimezone(berlin_tz).hour >= 23) or (event.end_utc.astimezone(berlin_tz) - event.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
-        { type: 'event', id: '{{ event.id }}', date: '{{ event.start_utc.astimezone(berlin_tz).strftime("%Y-%m-%d") }}', title: {{ event.name|tojson }}, time: '{% if not is_all_day %}{{ event.start_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', endTime: '{% if not is_all_day and event.end_utc %}{{ event.end_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', is_birthday: {{ 'true' if is_birthday(event) else 'false' }}, is_holiday: {{ 'true' if event.is_holiday else 'false' }}, allDay: {{ 'true' if is_all_day else 'false' }} },
-      {% endif %}
-    {% endfor %}
-    {% for event in upcoming_next7 %}
-      {% if event.type == 'event' and event.start_utc %}
-        {% set is_all_day = event.is_all_day or (event.start_utc and event.end_utc and ((event.start_utc.astimezone(berlin_tz).hour <= 1 and event.end_utc.astimezone(berlin_tz).hour >= 23) or (event.end_utc.astimezone(berlin_tz) - event.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
-        { type: 'event', id: '{{ event.id }}', date: '{{ event.start_utc.astimezone(berlin_tz).strftime("%Y-%m-%d") }}', title: {{ event.name|tojson }}, time: '{% if not is_all_day %}{{ event.start_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', endTime: '{% if not is_all_day and event.end_utc %}{{ event.end_utc.astimezone(berlin_tz).strftime("%H:%M") }}{% endif %}', is_birthday: {{ 'true' if is_birthday(event) else 'false' }}, is_holiday: {{ 'true' if event.is_holiday else 'false' }}, allDay: {{ 'true' if is_all_day else 'false' }} },
-      {% endif %}
-    {% endfor %}
-  ]
+  tasks: calendarTasks,
+  appointments: [], // TODO: Provide appointments as needed
+  events: [] // TODO: Provide events as needed
 };
 
 function changeMonth(delta) {
   console.log('Changing month by:', delta);
   currentDate.setMonth(currentDate.getMonth() + delta);
-  renderCalendar();
-}
-
-function getEventsForDate(dateKey) {
-  let allItems = [];
-
-  // Collect all items for the date
-  calendarEvents.tasks.filter(task => task.date === dateKey)
-    .forEach(task => allItems.push({...task, itemType: 'task'}));
-  
-  calendarEvents.appointments.filter(appt => appt.date === dateKey)
-    .forEach(appt => allItems.push({...appt, itemType: 'appointment'}));
-  
-  calendarEvents.events.filter(event => event.date === dateKey)
-    .forEach(event => allItems.push({...event, itemType: 'event'}));
-
-  // Sort: all-day items first, then by time
-  allItems.sort((a, b) => {
-    // All-day items first
-    if (a.allDay && !b.allDay) return -1;
-    if (!a.allDay && b.allDay) return 1;
-    
-    // If both all-day or both timed, sort by time
-    if (a.time && b.time) {
-      return a.time.localeCompare(b.time);
-    }
-    
-    // Items without time go last among timed items
-    if (!a.time && b.time) return 1;
-    if (a.time && !b.time) return -1;
-    
-    return 0;
-  });
-
-  return allItems;
-}
-
-// ===== CRITICAL: Calendar rendering function =====
-// Diese Funktion wird bei DOMContentLoaded und bei Monats-Navigation aufgerufen
-function renderCalendar() {
-  console.log('🗓️ Starting calendar render for:', currentDate);
-  
-  const months = [
-    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
-    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
-  ];
-  
-  const monthHeader = document.getElementById('calendar-month');
-  const daysContainer = document.getElementById('calendar-days');
-  
-  if (!monthHeader) {
-    console.error('❌ Calendar month header not found (#calendar-month)');
-    return;
-  }
-  if (!daysContainer) {
     console.error('❌ Calendar days container not found (#calendar-days)');
     return;
   }

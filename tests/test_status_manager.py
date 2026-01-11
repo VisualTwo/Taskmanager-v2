@@ -42,3 +42,26 @@ def test_get_options_for_filters_by_type():
     assert any('TASK_' in sd.key for sd in opts_task)
     opts_rem = svc.get_options_for('reminder')
     assert all(('reminder' in ''.join(sd.relevant_for_types) or not sd.relevant_for_types) or sd.key.startswith('REMINDER_') for sd in opts_rem)
+
+
+# --- Erweiterte Negativ-Tests für StatusManager ---
+def test_status_manager_get_display_name_invalid():
+    mgr = make_manager()
+    assert mgr.get_display_name(None) == ""
+    assert mgr.get_display_name("UNKNOWN") == "UNKNOWN"
+
+
+def test_status_manager_auto_adjust_appointment_status_invalid():
+    mgr = make_manager()
+    # Kein end_utc
+    item = {"status": "TASK_OPEN"}
+    assert mgr.auto_adjust_appointment_status(item) is None
+    # Kein status
+    from utils.datetime_helpers import now_utc
+    item2 = {"end_utc": now_utc()}
+    assert mgr.auto_adjust_appointment_status(item2) is None
+
+
+def make_manager():
+    # Nutzt zentrale Definitionsquelle wie make_status_service
+    return make_status_service()

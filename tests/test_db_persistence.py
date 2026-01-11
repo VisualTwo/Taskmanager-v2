@@ -14,6 +14,7 @@ def make_repo():
 def test_upsert_and_row_to_item_roundtrip():
     repo = make_repo()
     item = Task(id=str(uuid.uuid4()), type='task', name='Roundtrip', status='TASK_OPEN', is_private=False,
+                creator="user-1",
                 metadata={'foo': 'bar', 'ice_impact': '4', 'ice_confidence': 'medium', 'ice_ease': '5', 'ice_score': '10.0'})
     repo.upsert(item)
     repo.conn.commit()
@@ -53,6 +54,7 @@ def test_ice_columns_check_constraints():
 def test_persisting_ice_from_metadata_to_columns():
     repo = make_repo()
     item = Task(id=str(uuid.uuid4()), type='task', name='PersistICE', status='TASK_OPEN', is_private=False,
+                creator="user-1",
                 metadata={'ice_impact': '5', 'ice_confidence': 'low', 'ice_ease': '5', 'ice_score': '9.0'})
     repo.upsert(item)
     repo.conn.commit()
@@ -71,6 +73,7 @@ def test_query_sort_by_ice_score():
     # create three items with different ice_score via metadata
     for score, impact, conf, ease in ((10.0, 5, 'medium', 4), (30.0, 4, 'high', 5), (5.0, 3, 'low', 2)):
         it = Task(id=str(uuid.uuid4()), type='task', name=f'Sort{score}', status='TASK_OPEN', is_private=False,
+                  creator="user-1",
                   metadata={'ice_impact': str(impact), 'ice_confidence': conf, 'ice_ease': str(ease), 'ice_score': str(score)})
         repo.upsert(it)
         ids.append(it.id)
@@ -88,9 +91,9 @@ def test_backward_compatibility_metadata_only_items():
     item_id = str(uuid.uuid4())
     metadata = {'ice_impact': '3', 'ice_confidence': 'medium', 'ice_ease': '4', 'ice_score': '6.0', 'legacy':'yes'}
     cur.execute(
-        """INSERT INTO items (id,type,name,status_key,is_private,tags,links,created_utc,last_modified_utc,metadata)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (item_id, 'task', 'Legacy', 'TASK_OPEN', 0, '[]', '[]', now, now, json.dumps(metadata)),
+        """INSERT INTO items (id,type,name,status_key,is_private,tags,links,created_utc,last_modified_utc,creator,metadata)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (item_id, 'task', 'Legacy', 'TASK_OPEN', 0, '[]', '[]', now, now, 'user-1', json.dumps(metadata)),
     )
     repo.conn.commit()
 
