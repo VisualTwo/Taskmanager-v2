@@ -386,7 +386,7 @@ async def list_view(
         context = {
             "request": request,
             "current_user": current_user,
-            "rows": [(item, [], None, None) for item in all_items],  # Simplified for now
+            "rows": [{"item": item, "occurrences": [], "disp_start": None, "disp_end": None} for item in all_items],
             "current_q": filter_params.q or "",
             "current_types": filter_params.types or "",
             "current_status": filter_params.status or "",

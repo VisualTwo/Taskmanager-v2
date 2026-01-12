@@ -48,7 +48,6 @@ from urllib.parse import urlencode
 from web.dependencies import status_svc
 
 from web.routers import auth
-from web.routers import items
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
@@ -56,7 +55,8 @@ router = APIRouter()
 
 # Router einbinden
 app.include_router(auth.router, prefix="/auth")
-app.include_router(items.router, prefix="/items")
+from web.routers.items import router as items_router
+app.include_router(items_router, prefix="/items")
 
 templates = Jinja2Templates(directory="web/templates")
 DB_PATH = "taskman.db"

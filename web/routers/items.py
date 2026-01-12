@@ -593,8 +593,17 @@ async def get_item_occurrences(
     try:
         item = repository.get(str(item_id))
         if not item:
+            logger.debug(f"Item not found: {item_id}")
             raise HTTPException(status_code=404, detail="Item not found")
-        if not repository.user_has_access(current_user.id, str(item_id)):
+        # Zugriffsprüfung mit Logging
+        has_access = repository.user_has_access(current_user.id, str(item_id))
+        db_creator = getattr(item, 'creator', None)
+        db_participants = getattr(item, 'participants', None)
+        logger.debug(f"Checking access for user {current_user.id} to item {item_id}")
+        logger.debug(f"Schema check: creator={hasattr(item, 'creator')}, participants={hasattr(item, 'participants')}")
+        logger.debug(f"DB creator: '{db_creator}', participants: '{db_participants}', type: '{getattr(item, 'type', None)}'")
+        logger.debug(f"Access {'granted' if has_access else 'denied'} by central logic")
+        if not has_access:
             raise HTTPException(status_code=403, detail="Access denied")
         if item.recurrence:
             occurrences = expand_item(item, now_utc(), now_utc() + timedelta(days=365))
