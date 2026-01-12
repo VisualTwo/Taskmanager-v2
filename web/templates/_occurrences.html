@@ -12,9 +12,7 @@
 {% macro iso(dt) -%} {{ dt | format_local(fmt_iso) }}{%- endmacro %}
 {% macro day_key(dt) -%} {{ dt | format_local(fmt_day) }}{%- endmacro %}
 
-{% macro has_birthday_tag(it) -%}
-  {% if it.type == 'event' and (it.tags or []) and ('geburtstag' in it.tags) %}true{% else %}false{% endif %}
-{%- endmacro %}
+{# macro has_birthday_tag removed: not used in new context #}
 
 {% macro is_all_day_disp(ds,de) -%}
   {% if not ds or not de %}{{ false }}{% else %}
@@ -64,12 +62,8 @@
       {% set e = occ.end_utc if occ.item_type != 'task' else None %}
 
       {# Hole Original-Item für Tag-Prüfung #}
+      {# occ_item lookup removed: not needed with new row structure #}
       {% set occ_item = none %}
-      {% for item_tuple in rows %}
-        {% if item_tuple[0].id == occ.item_id %}
-          {% set occ_item = item_tuple[0] %}
-        {% endif %}
-      {% endfor %}
 
       {% if s %}
         {# Effektive Anzeigezeiten: pro Occurrence, nicht aus dem Item-Kontext #}

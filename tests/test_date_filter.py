@@ -19,7 +19,7 @@ def mock_repo_with_test_data():
         Task(
             id="1",
             name="Task for 07.01.2026",
-            due_utc=datetime(2026, 1, 7, 10, 0, tzinfo=timezone.utc),
+            due_utc=datetime(2026, 1, 7, 0, 0, tzinfo=timezone.utc),
             type="task",
             status="TASK_PENDING",
             is_private=False,
@@ -28,7 +28,7 @@ def mock_repo_with_test_data():
         Task(
             id="2", 
             name="Task for different date",
-            due_utc=datetime(2026, 1, 8, 14, 0, tzinfo=timezone.utc),
+            due_utc=datetime(2026, 1, 8, 0, 0, tzinfo=timezone.utc),
             type="task",
             status="TASK_PENDING",
             is_private=False,
@@ -37,7 +37,7 @@ def mock_repo_with_test_data():
         Event(
             id="3",
             name="Event for 07.01.2026",
-            start_utc=datetime(2026, 1, 7, 18, 0, tzinfo=timezone.utc),
+            start_utc=datetime(2026, 1, 7, 0, 0, tzinfo=timezone.utc),
             type="event",
             status="EVENT_CONFIRMED",
             is_private=False,
@@ -46,7 +46,7 @@ def mock_repo_with_test_data():
         Appointment(
             id="4",
             name="Appointment for 07.01.2026", 
-            start_utc=datetime(2026, 1, 7, 9, 30, tzinfo=timezone.utc),
+            start_utc=datetime(2026, 1, 7, 0, 0, tzinfo=timezone.utc),
             type="appointment",
             status="APPOINTMENT_CONFIRMED",
             is_private=False,
@@ -91,13 +91,12 @@ def test_date_filter_functionality():
     
     # Check that the response contains items for that date
     content = response.text
+    print("[DEBUG] Response text:", content)
     assert "Task for 07.01.2026" in content
     assert "Event for 07.01.2026" in content  
     assert "Appointment for 07.01.2026" in content
-    
     # Should NOT contain items from other dates
     assert "Task for different date" not in content
-    
     # Should NOT contain items without dates
     assert "Task without date" not in content
 

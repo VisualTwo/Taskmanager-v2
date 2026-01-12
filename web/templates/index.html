@@ -131,7 +131,7 @@
           {% set cur_status = request.query_params.get('status','') %}
           <select id="status_key" name="status" title="Status filtern" onchange="this.form.requestSubmit()">
             <option value="">Alle Status</option>
-            {% for key, label in status_choices %}
+            {% for key, label, type in status_choices %}
               <option value="{{ key }}" {% if cur_status==key %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>

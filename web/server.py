@@ -1,23 +1,12 @@
 # web/server.py
 from __future__ import annotations
-# --- User-Dependency für Tests und Auth ---
 from domain.user_models import User
-from fastapi import Depends
-def get_current_user(request: Request) -> User:
-    # Dummy-Implementierung: Hole User-Id aus Header (für Tests und Demo)
-    user_id = request.headers.get("X-User-Id", "user-1")
-    return User(
-        id=user_id,
-        login="testuser",
-        email="test@example.com",
-        full_name="Test User",
-        password_hash="dummy",
-        is_admin=True,
-        is_active=True,
-        is_email_confirmed=True
-    )
-# UserRepository-Dependency für FastAPI (analog zu get_repo)
 from infrastructure.user_repository import UserRepository
+from bootstrap import make_status_service
+from services.recurrence_service import expand_item
+from infrastructure.ical_mapper import to_ics
+# --- User-Dependency für Tests und Auth ---
+from web.dependencies import get_current_user, get_user_repository
 
 import io
 import os
@@ -41,6 +30,7 @@ from fastapi.templating import Jinja2Templates
 from zoneinfo import ZoneInfo
 from urllib.parse import urlencode
 
+
 # Projektmodule
 from domain.models import Task, Reminder, Appointment, Event
 from domain.ice_definitions import compute_ice_score, is_valid_confidence_value
@@ -48,18 +38,14 @@ from infrastructure.db_repository import DbRepository
 from services.filter_service import filter_items
 from utils.datetime_helpers import now_utc
 
+# Nachhaltige, zentrale Hilfsfunktionen für Status und Recurrence
+from web.htmx_helpers import get_keys_for_status_label, _parse_local_dt, _normalize_rrule_input, _build_recurrence
+
 from typing import Annotated
 from urllib.parse import urlencode
 
-from bootstrap import make_status_service
-from services.recurrence_service import expand_item
-from infrastructure.ical_mapper import to_ics
-from infrastructure.ical_importer import import_ics
 
-logging.basicConfig(level=logging.DEBUG)
-
-# zentrale Status-Service-Instanz für das gesamte Modul
-status_svc = make_status_service()
+from web.dependencies import status_svc
 
 from web.routers import auth
 from web.routers import items
@@ -223,7 +209,7 @@ def format_local(dt: Optional[datetime], fmt: str = "%d.%m.%Y %H:%M") -> str:
 def _de_weekday_map(s: str) -> str:
     # Kurzformen EN->DE
     return (s.replace("Mon", "Mo").replace("Tue", "Di").replace("Wed", "Mi")
-             .replace("Thu", "Do").replace("Fri", "Fr").replace("Sat", "Sa").replace("Sun", "So"))
+             .replace("Thu", "Do").replace("Fri", "Fr").replace("Sat", "Sa").replace("Sun", "So")[0:2])
 
 templates.env.filters["urlencode_qs"] = urlencode_qs
 templates.env.filters["format_local"] = format_local
@@ -385,142 +371,6 @@ def _status_display(status, key: str) -> str:
     return key
 
 # ====== Zeit-/RRULE-Helfer ======
-def _parse_local_dt(s: str) -> Optional[datetime]:
-    try:
-        dt_local = datetime.strptime(s.strip(), "%d.%m.%Y %H:%M").replace(tzinfo=ZoneInfo("Europe/Berlin"))
-        return dt_local.astimezone(ZoneInfo("UTC"))
-    except Exception:
-        return None
-
-def _byday_de_to_en(rr: str) -> str:
-    if not rr: return rr
-    return (rr.replace("BYDAY=DI", "BYDAY=TU")
-              .replace("BYDAY=MI", "BYDAY=WE")
-              .replace("BYDAY=DO", "BYDAY=TH")
-              .replace("BYDAY=SO", "BYDAY=SU"))
-
-def _normalize_rrule_input(dtstart_local: str, rrule_line: str, exdates_local: str):
-    dtstart_utc = _parse_local_dt(dtstart_local) if (dtstart_local or "").strip() else None
-    rrule_line = _byday_de_to_en((rrule_line or "").strip())
-    if not dtstart_utc and not rrule_line and not (exdates_local or "").strip():
-        return None, None
-    rrule_string = None
-    if rrule_line:
-        if dtstart_utc:
-            rrule_string = f"DTSTART:{dtstart_utc.strftime('%Y%m%dT%H%M%SZ')}\nRRULE:{rrule_line}"
-        else:
-            rrule_string = f"RRULE:{rrule_line}"
-    exdates_utc = []
-    if (exdates_local or "").strip():
-        for part in exdates_local.split(","):
-            d = _parse_local_dt(part.strip())
-            if d:
-                exdates_utc.append(d)
-    return rrule_string, tuple(exdates_utc) if exdates_utc else None
-
-def _build_recurrence(rrule_string: Optional[str], exdates_utc: Optional[tuple]):
-    from domain.models import Recurrence
-    if not rrule_string and not exdates_utc:
-        return None
-    return Recurrence(rrule_string=rrule_string or "", exdates_utc=exdates_utc or ())
-
-def _validate_edit_input(it, status, name, status_key, due, start_local, end_local, dtstart_local, rrule_line, exdates_local) -> list[str]:
-    msgs = []
-
-    # Name prüfen
-    if not (name or "").strip():
-        msgs.append("Name darf nicht leer sein.")
-
-    # Erlaubte Keys je Typ aus zentralem Service
-    opts = status_svc.get_options_for(getattr(it, "type", None))
-    allowed_keys = {sd.key for sd in opts}  # Set für schnellen Lookup
-
-    # Status typbewusst normalisieren (Altformen + Präfix-Garantie)
-    normalized = status_svc.normalize_input(status_key or "", getattr(it, "type", None)) if status_key else None
-
-    # Allowed-Prüfung
-    if allowed_keys and normalized and normalized not in allowed_keys:
-        msgs.append("Ungültiger Status für diesen Typ.")
-
-    # Übergangsregel validieren (nur wenn ein neuer Status angegeben ist)
-    if normalized:
-        is_recurring = bool(getattr(it, "recurrence", None) or getattr(it, "rrule_string", None))
-        ok, reason = status_svc.validate_transition(getattr(it, "status", None), normalized, is_recurring=is_recurring)
-
-    # Datumshilfsprüfer
-    def _try_dt(label: str, val: Optional[str]):
-        if (val or "").strip() and _parse_local_dt(val) is None:
-            msgs.append(f"Ungültiges Datum '{label}': {val}")
-
-    # Feldprüfungen je Typ
-    if it.type == "task":
-        _try_dt("Fällig", due)
-    elif it.type in ("appointment", "event"):
-        _try_dt("Start", start_local)
-        _try_dt("Ende", end_local)
-    elif it.type == "reminder":
-        _try_dt("Erinnerung", due)
-
-    # RRule-Form prüfen
-    if (rrule_line or "").strip():
-        if not rrule_line.strip().upper().startswith("FREQ="):
-            msgs.append("Wiederholung muss mit FREQ=... beginnen (z. B. FREQ=DAILY, FREQ=WEEKLY).")
-
-    _try_dt("DTSTART", dtstart_local)
-
-    # EXDATE-Liste prüfen
-    if (exdates_local or "").strip():
-        for p in exdates_local.split(","):
-            _try_dt("EXDATE", (p or "").strip())
-
-    return msgs
-
-def build_status_choices(type_status_options: Dict[str, List[Tuple[str, str]]]) -> List[Tuple[str, str]]:
-    """
-    Konsolidiert Status-Optionen über alle Item-Typen hinweg.
-    Gleiche Display-Labels werden zusammengefasst (z.B. 'Geplant' aus verschiedenen Typen).
-    """
-    label_to_keys = {}
-    seen_labels = {}
-    
-    # Sammle alle Labels und deren zugehörige Keys
-    for item_type, opts in (type_status_options or {}).items():
-        for key, label in (opts or []):
-            if label not in label_to_keys:
-                label_to_keys[label] = []
-                seen_labels[label] = key  # Nimm den ersten Key als Repräsentant
-            label_to_keys[label].append(key)
-    
-    # Erstelle konsolidierte Liste mit repräsentativen Keys
-    result = []
-    for label, representative_key in seen_labels.items():
-        result.append((representative_key, label))
-    
-    # Sortiere nach Priorität: niedrigste Indexwerte zuerst, terminale Status am Ende
-    order = {
-        "open": 10, "in_progress": 20, "planned": 30, "active": 40, 
-        "waiting": 50, "postponed": 60, "review": 70,
-        "done": 90, "canceled": 91, "completed": 92, "cancelled": 93
-    }
-    
-    def sort_key(item):
-        key, label = item
-        # Extrahiere Base-Status (ohne Typ-Prefix)
-        base_status = key.split('_')[-1].lower() if '_' in key else key.lower()
-        priority = order.get(base_status, 50)
-        return (priority, label.lower())
-    
-    return sorted(result, key=sort_key)
-
-def get_keys_for_status_label(status_key: str, type_status_options: Dict[str, List[Tuple[str, str]]]) -> List[str]:
-    """
-    Findet alle Keys die zu einem gewählten Status-Label gehören.
-    Z.B. wenn "TASK_PLANNED" gewählt wird, findet alle Keys mit dem Label "Geplant".
-    """
-    if not status_key or not type_status_options:
-        return []
-    
-    # Finde das Label für den gewählten Key
     target_label = None
     for item_type, opts in type_status_options.items():
         for key, label in opts:
@@ -950,36 +800,25 @@ def index(
         occs = []
         disp_start = None
         disp_end = None
-        # Wenn ein expliziter date-Parameter gesetzt ist, alle gefilterten Items aufnehmen
-        if date is not None and str(date).strip() != "":
-            t = getattr(it, "type", "") or ""
-            # Occurrences wie bisher berechnen (für Anzeigezeiten)
-            if t in ("appointment", "event", "reminder"):
-                occs = []  # Optional: Occurrences für diesen Tag berechnen, falls benötigt
-            base_due = _utc_aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None))
-            base_start = _utc_aware(getattr(it, "start_utc", None))
-            base_end = _utc_aware(getattr(it, "end_utc", None))
-            if t in ("task", "reminder"):
-                disp_start = base_due
-                disp_end = None
-            else:
-                disp_start = base_start
-                disp_end = base_end
-            rows.append((it, occs, _aware(disp_start), _aware(disp_end)))
-            continue
+        t = getattr(it, "type", "") or ""
+        # Occurrences wie bisher berechnen (für Anzeigezeiten)
+        if t in ("appointment", "event", "reminder"):
+            occs = []  # Optional: Occurrences für diesen Tag berechnen, falls benötigt
+        base_due = _utc_aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None))
+        base_start = _utc_aware(getattr(it, "start_utc", None))
+        base_end = _utc_aware(getattr(it, "end_utc", None))
+        if t in ("task", "reminder"):
+            disp_start = base_due
+            disp_end = None
         else:
-            # Default: show all items as rows
-            t = getattr(it, "type", "") or ""
-            base_due = _utc_aware(getattr(it, "due_utc", None) or getattr(it, "reminder_utc", None))
-            base_start = _utc_aware(getattr(it, "start_utc", None))
-            base_end = _utc_aware(getattr(it, "end_utc", None))
-            if t in ("task", "reminder"):
-                disp_start = base_due
-                disp_end = None
-            else:
-                disp_start = base_start
-                disp_end = base_end
-            rows.append((it, occs, _aware(disp_start), _aware(disp_end)))
+            disp_start = base_start
+            disp_end = base_end
+        rows.append({
+            "item": it,
+            "occurrences": occs,
+            "disp_start": _aware(disp_start),
+            "disp_end": _aware(disp_end)
+        })
 
     print('[DEBUG] index route: rows for template:', rows, flush=True)
 
@@ -991,39 +830,29 @@ def index(
 
     # Default Sortierung wenn nichts gewählt
     if not key_norm:
-        key_norm = "start_faellig" 
+        key_norm = "start_faellig"
 
     try:
         if key_norm == "type":
-            rows.sort(key=lambda r: (getattr(r[0], "type", "") or "").lower(), reverse=reverse)
-        
+            rows.sort(key=lambda r: (getattr(r["item"], "type", "") or "").lower(), reverse=reverse)
         elif key_norm == "name":
-            rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower(), reverse=reverse)
-        
+            rows.sort(key=lambda r: (getattr(r["item"], "name", "") or "").lower(), reverse=reverse)
         elif key_norm == "status":
-            rows.sort(key=lambda r: (getattr(r[0], "status", "") or "").lower(), reverse=reverse)
-        
+            rows.sort(key=lambda r: (getattr(r["item"], "status", "") or "").lower(), reverse=reverse)
         elif key_norm == "priority":
             def rk_prio(r):
-                it, _, ds, _ = r
+                it = r["item"]
+                ds = r["disp_start"]
                 p = getattr(it, "priority", None)
-                # None nach hinten (999), Hohe Prio (5) vor niedriger (1) -> bei asc umgekehrt? 
-                # Üblich: 5=Hoch, 1=Tief. Sort DESC für Wichtiges oben.
                 p_val = 999 if p is None else p
-                # Sekundär: Datum
                 d_val = ds or datetime.max.replace(tzinfo=timezone.utc)
                 return (p_val, d_val)
             rows.sort(key=rk_prio, reverse=reverse)
-
-
         elif key_norm in ("occ", "vorkommen", "occurrence", "occurrences"):
             def rk_occ(r):
-                # r = (it, occs, disp_start, disp_end)
-                occs = r[1] or []
-                # Finde das erste Occurrence-Datum (start oder due/reminder)
+                occs = r["occurrences"] or []
                 if occs:
                     occ = occs[0]
-                    # Versuche alle sinnvollen Felder in logischer Reihenfolge
                     dt = (
                         getattr(occ, "start_utc", None)
                         or getattr(occ, "due_utc", None)
@@ -1031,41 +860,30 @@ def index(
                     )
                     if dt is not None:
                         return (dt.year, dt.month, dt.day, dt.hour, dt.minute)
-                # Fallback: max-Wert, damit None ans Ende sortiert wird
                 return (9999, 12, 31, 23, 59)
             rows.sort(key=rk_occ, reverse=reverse)
         elif key_norm == "tags":
-            rows.sort(key=lambda r: len(getattr(r[0], "tags", []) or []), reverse=reverse)
-
+            rows.sort(key=lambda r: len(getattr(r["item"], "tags", []) or []), reverse=reverse)
         elif key_norm == "changed":
             def rk_changed(r):
-                it, _, _, _ = r
+                it = r["item"]
                 ch = _utc_aware(getattr(it, "last_modified_utc", None))
                 return ch or datetime.min.replace(tzinfo=timezone.utc)
             rows.sort(key=rk_changed, reverse=reverse)
-
         elif key_norm.startswith("start") or key_norm in ("due","fällig","faellig","start/fällig","start_faellig"):
             def rk_date(r):
-                it, _, ds, _ = r
-                # Primär: Das berechnete Display-Start Datum
-                # Items ohne Datum (ds=None) sollen ans Ende (bei ASC)
+                it = r["item"]
+                ds = r["disp_start"]
                 has_date = 0 if ds is not None else 1
                 dt_val = ds or datetime.max.replace(tzinfo=timezone.utc)
-                
-                # Sekundär: Name für Stabilität
                 name_val = (getattr(it, "name", "") or "").lower()
-                
                 return (has_date, dt_val, name_val)
-            
             rows.sort(key=rk_date, reverse=reverse)
-        
         else:
-            # Fallback Name
-            rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower(), reverse=reverse)
-
+            rows.sort(key=lambda r: (getattr(r["item"], "name", "") or "").lower(), reverse=reverse)
     except Exception as ex:
         print(f"Sort Error ({key_norm}): {ex}")
-        rows.sort(key=lambda r: (getattr(r[0], "name", "") or "").lower())
+        rows.sort(key=lambda r: (getattr(r["item"], "name", "") or "").lower())
 
 
     # ====== PIPELINE SCHRITT 5: UI-Helper laden & Render ======
@@ -3163,6 +2981,7 @@ def dashboard(
     print("[DEBUG] upcoming_next7:", [getattr(it, 'name', None) for it in upcoming_next7])
     print("[DEBUG] upcoming:", [getattr(it, 'name', None) for it in upcoming])
 
+
     # Helper function for templates to check if an item is a holiday
     def is_holiday_item(item):
         """Check if an item is a holiday event"""
@@ -3433,7 +3252,6 @@ def export_dashboard_excel(
                     due = getattr(inst, "due_utc", None) or getattr(inst, "reminder_utc", None)
                     when = due.astimezone(berlin).strftime("%H:%M") if due else ""
                 # Labels
-                # Labels
                 pr = prio_label(getattr(inst, "priority", None))             # z. B. "Prio: Normal"
                 st = status_label(getattr(inst, "status", None))              # z. B. "Geplant" oder "Erledigt"
 
@@ -3537,3 +3355,17 @@ def links_fragment(item_id: str, repo: DbRepository = Depends(get_repo)):
     html.append('<button type="button" class="btn btn-xs add-link" aria-label="Link hinzufügen" title="Link hinzufügen" style="margin-top:.3em;">Hinzufügen</button>')
     html.append('</div>')
     return HTMLResponse("".join(html))
+def build_status_choices(type_status_options):
+    """
+    Konsolidiert Status-Choices für die Filterauswahl:
+    - type_status_options: Dict[str, List[Tuple[str, str]]], z.B. {'task': [('TASK_OPEN', 'Offen'), ...], ...}
+    - Gibt eine Liste von Tupeln (key, display_name, type) zurück, wobei gleiche display_names gruppiert werden.
+    """
+    seen = set()
+    choices = []
+    for t, opts in type_status_options.items():
+        for key, display_name in opts:
+            if (key, display_name, t) not in seen:
+                choices.append((key, display_name, t))
+                seen.add((key, display_name, t))
+    return choices

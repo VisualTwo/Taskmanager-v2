@@ -12,39 +12,40 @@
   5:'var(--prio-color-5, #7f1d1d)' 
 } %}
 
-{# rows: (it, occs, disp_start, disp_end) #}
+
+{# rows: dicts with keys: item, occurrences, disp_start, disp_end #}
 
 
 
 <tbody>
-{% for it, occs, disp_start, disp_end in rows %}
-  <tr id="row-{{ it.id }}">
+{% for row in rows %}
+  <tr id="row-{{ row.item.id }}">
     <!-- Auswahl -->
     <td>
-      <input type="checkbox" class="sel-row" name="ids" value="{{ it.id }}" aria-label="Auswählen">
+      <input type="checkbox" class="sel-row" name="ids" value="{{ row.item.id }}" aria-label="Auswählen">
     </td>
 
     <!-- Name (mit Typ-Icon) -->
     <td class="col-name">
-      {% set icon = "/static/icons/" ~ (it.type) ~ ".svg" %}
+      {% set icon = "/static/icons/" ~ (row.item.type) ~ ".svg" %}
       {% set type_map = {'task':'Aufgabe','reminder':'Erinnerung','appointment':'Termin','event':'Ereignis'} %}
-      {% set type_label = type_map.get(it.type, it.type|capitalize) %}
+      {% set type_label = type_map.get(row.item.type, row.item.type|capitalize) %}
       <span class="name-wrap">
         <img src="{{ icon }}" alt="{{ type_label }}" title="{{ type_label }}" class="type-icon-inline" style="width:1.2em;vertical-align:middle;margin-right:.25em;opacity:0.85;">
         
         <!-- Titel ist Link zur Edit-Ansicht (Hauptaktion) -->
-        <a href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" 
-           class="name-link" 
-           target="_blank" 
-           rel="noopener noreferrer"
-           title="Details bearbeiten">{{ it.name }}</a>
+          <a href="/items/{{ row.item.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}" 
+            class="name-link" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            title="Details bearbeiten">{{ row.item.name }}</a>
         
         <!-- ✅ NEU: Stift-Icon direkt daneben für Inline-Edit (Spezialfall) -->
         <button type="button" 
-                class="inline-edit-btn" 
-                data-for="{{ it.id }}"
-                title="Nur Titel bearbeiten"
-                aria-label="Titel inline bearbeiten">
+          class="inline-edit-btn" 
+          data-for="{{ row.item.id }}"
+          title="Nur Titel bearbeiten"
+          aria-label="Titel inline bearbeiten">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -52,36 +53,36 @@
         </button>
         
         <!-- Inline-Edit Input (versteckt) -->
-        <input id="name-{{ it.id }}" 
-               class="name-input hidden" 
-               type="text" 
-               name="name" 
-               value="{{ it.name }}"
-               data-current="{{ it.name }}"
-               hx-post="/items/{{ it.id }}/rename"
-               hx-trigger="change"
-               hx-params="*"
-               hx-include="#name-{{ it.id }}"
-               hx-swap="none"
-               onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }"
-               aria-label="Titel bearbeiten">
+         <input id="name-{{ row.item.id }}" 
+           class="name-input hidden" 
+           type="text" 
+           name="name" 
+           value="{{ row.item.name }}"
+           data-current="{{ row.item.name }}"
+           hx-post="/items/{{ row.item.id }}/rename"
+           hx-trigger="change"
+           hx-params="*"
+           hx-include="#name-{{ row.item.id }}"
+           hx-swap="none"
+           onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }"
+           aria-label="Titel bearbeiten">
       </span>
     </td>
 
     <!-- Status -->
     <td class="col-status">
-      {% set colmap = type_status_colors.get(it.type, {}) %}
-      {% set opts = type_status_options.get(it.type, []) %}
+      {% set colmap = type_status_colors.get(row.item.type, {}) %}
+      {% set opts = type_status_options.get(row.item.type, []) %}
 
       <span class="status-wrap">
         <!-- Farbpunkt -->
-        <span class="status-dot" style="background: {{ colmap.get(it.status, '#bbb') }};"></span>
+        <span class="status-dot" style="background: {{ colmap.get(row.item.status, '#bbb') }};"></span>
 
         <!-- Badge (klickbar) -->
-        {% set cur_key = it.status %}
+        {% set cur_key = row.item.status %}
         {% set cur_label = status_display(cur_key) if status_display else cur_key %}
         <span class="status-badge"
-              data-for="{{ it.id }}"
+              data-for="{{ row.item.id }}"
               tabindex="0"
               role="button"
               aria-label="Status ändern">
@@ -91,31 +92,31 @@
         <!-- Select (versteckt) -->
         <select class="status-select hidden"
                 name="new_status"
-                data-current="{{ it.status }}"
-                hx-post="/items/{{ it.id }}/status"
+                data-current="{{ row.item.status }}"
+                hx-post="/items/{{ row.item.id }}/status"
                 hx-trigger="change"
                 hx-swap="none"
                 aria-label="Status auswählen">
           {% if opts and opts|length > 0 %}
             {% for key, label in opts %}
               {% set col = colmap.get(key) %}
-              <option value="{{ key }}" {% if col %}data-color="{{ col }}"{% endif %} {% if key == it.status %}selected{% endif %}>
+              <option value="{{ key }}" {% if col %}data-color="{{ col }}"{% endif %} {% if key == row.item.status %}selected{% endif %}>
                 {{ label }}
               </option>
             {% endfor %}
           {% else %}
-            <option value="{{ it.status }}" selected>{{ it.status }}</option>
+            <option value="{{ row.item.status }}" selected>{{ row.item.status }}</option>
           {% endif %}
         </select>
       </span>
     </td>
 
     <!-- Priorität -->
-    {% set pv = it.priority if it.priority is not none else 0 %}
+    {% set pv = row.item.priority if row.item.priority is not none else 0 %}
     <td class="col-priority">
       <span class="prio-wrap">
         <span class="prio-badge" 
-              data-for="{{ it.id }}" 
+              data-for="{{ row.item.id }}" 
               data-priority="{{ pv }}"
               tabindex="0" 
               role="button"
@@ -126,7 +127,7 @@
         <select class="prio-select hidden"
                 name="priority"
                 data-current="{{ pv }}"
-                hx-post="/items/{{ it.id }}/priority"
+                hx-post="/items/{{ row.item.id }}/priority"
                 hx-trigger="change"
                 hx-swap="none"
                 aria-label="Priorität auswählen">
@@ -143,70 +144,71 @@
     <!-- Zeiten -->
     <td class="col-times">
       {# Fallback: Keine Überfällig-Logik, da utcnow im Template nicht verfügbar ist #}
-      {% if it.type == 'task' %}
-        {% set due_text = (disp_start or (it.due_utc if it.type == 'task' else None)) | format_local %}
+      {% if row.item.type == 'task' %}
+        {% set due_text = (row.disp_start or (row.item.due_utc if row.item.type == 'task' else None)) | format_local %}
         <span class="time-edit-wrap">
-          <span class="time-label-inline" data-kind="due" data-for="{{ it.id }}">
+          <span class="time-label-inline" data-kind="due" data-for="{{ row.item.id }}">
             {{ due_text }}
           </span>
           <input class="fp-datetime time-input hidden" type="text" name="due" placeholder="dd.mm.yyyy hh:mm"
                 value="{{ due_text }}"
-                data-endpoint="/items/{{ it.id }}/due"
-                data-target="#occ-{{ it.id }}"
+                data-endpoint="/items/{{ row.item.id }}/due"
+                data-target="#occ-{{ row.item.id }}"
                 aria-label="Fälligkeitsdatum bearbeiten">
         </span>
-      {% elif it.type in ('appointment','event') %}
-        {% set start_text = (disp_start or it.start_utc) | format_local %}
-        {% set end_text = (disp_end or (it.end_utc if it.type != 'task' else None)) | format_local %}
+      {% elif row.item.type in ('appointment','event') %}
+        {% set start_text = (row.disp_start or row.item.start_utc) | format_local %}
+        {% set end_text = (row.disp_end or (row.item.end_utc if row.item.type != 'task' else None)) | format_local %}
         <span class="time-inline-pair">
           <span class="time-edit-wrap">
-            <span class="time-label-inline" data-kind="start" data-for="{{ it.id }}">
+            <span class="time-label-inline" data-kind="start" data-for="{{ row.item.id }}">
               {{ start_text }}
             </span>
             <input class="fp-datetime time-input hidden" type="text" name="start_local" placeholder="Start"
                   value="{{ start_text }}"
-                  data-endpoint="/items/{{ it.id }}/start_end"
+                  data-endpoint="/items/{{ row.item.id }}/start_end"
                   data-param-name="start_local"
-                  data-target="#occ-{{ it.id }}"
+                  data-target="#occ-{{ row.item.id }}"
                   aria-label="Startzeit bearbeiten">
           </span>
           <span>–</span>
           <span class="time-edit-wrap">
-            <span class="time-label-inline" data-kind="end" data-for="{{ it.id }}">{{ end_text }}</span>
+            <span class="time-label-inline" data-kind="end" data-for="{{ row.item.id }}">{{ end_text }}</span>
             <input class="fp-datetime time-input hidden" type="text" name="end_local" placeholder="Ende"
                   value="{{ end_text }}"
-                  data-endpoint="/items/{{ it.id }}/start_end"
+                  data-endpoint="/items/{{ row.item.id }}/start_end"
                   data-param-name="end_local"
-                  data-target="#occ-{{ it.id }}"
+                  data-target="#occ-{{ row.item.id }}"
                   aria-label="Endzeit bearbeiten">
           </span>
         </span>
-      {% elif it.type == 'reminder' %}
-        {% set rem_text = (disp_start or (it.reminder_utc if it.type == 'reminder' else None)) | format_local %}
+      {% elif row.item.type == 'reminder' %}
+        {% set rem_text = (row.disp_start or (row.item.reminder_utc if row.item.type == 'reminder' else None)) | format_local %}
         <span class="time-edit-wrap">
-          <span class="time-label-inline" data-kind="reminder" data-for="{{ it.id }}">
+          <span class="time-label-inline" data-kind="reminder" data-for="{{ row.item.id }}">
             {{ rem_text }}
           </span>
           <input class="fp-datetime time-input hidden" type="text" name="until_local" placeholder="dd.mm.yyyy hh:mm"
                 value="{{ rem_text }}"
-                data-endpoint="/items/{{ it.id }}/snooze"
+                data-endpoint="/items/{{ row.item.id }}/snooze"
                 data-param-name="until_local"
-                data-target="#occ-{{ it.id }}"
+                data-target="#occ-{{ row.item.id }}"
                 aria-label="Erinnerungszeit bearbeiten">
         </span>
       {% endif %}
     </td>
 
     <!-- Vorkommen -->
-    <td class="col-occs" id="occ-{{ it.id }}">
-      {% include "_occurrences.html" with context %}
+    <td class="col-occs" id="occ-{{ row.item.id }}">
+      {% set occs = row.occurrences %}
+      {% include "_occurrences.html" %}
     </td>
 
     <!-- Links -->
-    <td class="col-links" id="links-{{ it.id }}">
-      <div class="links" data-id="{{ it.id }}">
+    <td class="col-links" id="links-{{ row.item.id }}">
+      <div class="links" data-id="{{ row.item.id }}">
         <div class="links-list">
-          {% for u in (it.links or []) %}
+          {% for u in (row.item.links or []) %}
             <span class="link-row" data-url="{{ u }}">
               <a class="link-anchor" href="{{ u }}" target="_blank" rel="noopener noreferrer" title="{{ u }}">
                 <img class="link-favicon" data-url="{{ u }}" alt="" loading="lazy">
@@ -216,10 +218,10 @@
                       class="link-del"
                       title="Entfernen"
                       aria-label="Link entfernen"
-                      hx-post="/items/{{ it.id }}/links/remove"
+                      hx-post="/items/{{ row.item.id }}/links/remove"
                       hx-params="*"
                       hx-include="closest .link-row"
-                      hx-target="#links-{{ it.id }}"
+                      hx-target="#links-{{ row.item.id }}"
                       hx-swap="outerHTML"
                       style="padding:0 .3em; background:none; border:none; cursor:pointer;">×</button>
               <input type="hidden" name="url" value="{{ u }}">
@@ -228,24 +230,24 @@
         </div>
 
         <div class="links-input-row" style="margin-top: 0.3em;">
-          <button type="button" class="btn btn-xs add-link" data-for="{{ it.id }}" style="width: auto;">Hinzufügen</button>
+          <button type="button" class="btn btn-xs add-link" data-for="{{ row.item.id }}" style="width: auto;">Hinzufügen</button>
         </div>
       </div>
     </td>
 
     <!-- Tags -->
     <td class="col-tags">
-      <div class="tags" data-id="{{ it.id }}">
+      <div class="tags" data-id="{{ row.item.id }}">
         <div class="tag-list-with-btn" style="display:flex; align-items:center; justify-content:space-between; gap:.5em;">
           <div class="tag-list" style="display:flex; flex-wrap:wrap; gap:.3em;">
-            {% for t in (it.tags or []) %}
+            {% for t in (row.item.tags or []) %}
             <span class="tag-chip" data-tag="{{ t }}">
               <span class="tag-text">{{ t }}</span>
               <input type="hidden" name="tag" value="{{ t }}">
               <button type="button" class="tag-x"
                       title="Entfernen"
                       aria-label="Tag entfernen"
-                      hx-post="/items/{{ it.id }}/tags/remove"
+                      hx-post="/items/{{ row.item.id }}/tags/remove"
                       hx-params="*"
                       hx-include="closest .tag-chip"
                       hx-swap="none">×</button>
@@ -260,18 +262,18 @@
 
     <!-- Aktionen -->
     <td class="col-action" style="white-space: nowrap;">
-      <a href="/items/{{ it.id }}/zoom" class="icon-btn" title="Zoom" aria-label="In neuem Fenster öffnen" target="_blank" rel="noopener" style="display: inline-block; margin-right: 0.25em;">
+      <a href="/items/{{ row.item.id }}/zoom" class="icon-btn" title="Zoom" aria-label="In neuem Fenster öffnen" target="_blank" rel="noopener" style="display: inline-block; margin-right: 0.25em;">
         <img src="/static/icons/zoom.svg" alt="" width="16" height="16">
       </a>
 
-      <span class="delete-wrap" data-id="{{ it.id }}" style="display: inline-block;">
+      <span class="delete-wrap" data-id="{{ row.item.id }}" style="display: inline-block;">
         <a href="javascript:void(0)" class="icon-btn delete-trigger" title="Löschen" aria-label="Eintrag löschen">
           <img src="/static/icons/delete.svg" alt="" width="16" height="16" data-keep-color="true" class="no-invert">
         </a>
         <span class="delete-confirm hidden">
           <span class="confirm-text">Löschen?</span>
           <button type="button" class="btn btn-danger btn-xs do-delete"
-                  hx-post="/items/{{ it.id }}/delete" hx-swap="none">Ja</button>
+                  hx-post="/items/{{ row.item.id }}/delete" hx-swap="none">Ja</button>
           <button type="button" class="btn btn-secondary btn-xs cancel-delete">Nein</button>
         </span>
       </span>

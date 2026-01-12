@@ -25,6 +25,7 @@ from web.routers import auth
 from web.routers import main
 from web.routers import items
 from fastapi import Form
+from utils.datetime_helpers import now_utc
 
 # Configure logging
 logging.basicConfig(

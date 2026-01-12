@@ -1,3 +1,14 @@
+def get_keys_for_status_label(label, type_status_options):
+    """
+    Given a status label (display name) and a dict of type_status_options,
+    return all status keys (across all types) that have this label.
+    """
+    keys = []
+    for type_opts in type_status_options.values():
+        for key, display in type_opts:
+            if display == label:
+                keys.append(key)
+    return keys
 """
 Imports, App-Initialisierung und Helper Functions
 werden an den Anfang der Datei verschoben, damit alle Symbole

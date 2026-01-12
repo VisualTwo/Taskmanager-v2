@@ -1,10 +1,13 @@
-
 # --- Standard Library Imports ---
 import os
 import logging
 import re
 from dataclasses import replace
 from datetime import datetime, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None  # Fallback for Python <3.9
 from typing import List, Optional, Annotated
 from urllib.parse import urlencode
 
@@ -24,7 +27,7 @@ from services.recurrence_service import expand_item
 from web.handlers.error_handler import ErrorHandler
 from web.handlers.config import config
 from utils.datetime_helpers import now_utc
-from web.server import get_current_user
+from web.dependencies import get_current_user, get_user_repository
 
 # --- Logger ---
 logger = logging.getLogger(__name__)
@@ -55,10 +58,44 @@ def get_repository():
 # --- Utility Functions ---
 def urlencode_qs(params):
     """URL encode query string"""
+    from urllib.parse import urlencode
     return urlencode(params) if params else ""
 
 def format_local(dt, fmt: str = "%d.%m.%Y %H:%M") -> str:
-    return dt.strftime(fmt) if dt else ""
+    if not dt:
+        return ""
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.astimezone(ZoneInfo("Europe/Berlin")).strftime(fmt)
+    except Exception:
+        return ""
+
+def format_local_weekday_de(dt, fmt_date: str = "%a %d.%m.%Y %H:%M") -> str:
+    if not dt:
+        return ""
+    try:
+        from zoneinfo import ZoneInfo
+        weekday = dt.astimezone(ZoneInfo("Europe/Berlin")).strftime("%a")
+        weekday_de = weekday.replace("Mon", "Mo").replace("Tue", "Di").replace("Wed", "Mi").replace("Thu", "Do").replace("Fri", "Fr").replace("Sat", "Sa").replace("Sun", "So")
+        return f"{weekday_de} {dt.strftime('%d.%m.%Y %H:%M')}"
+    except Exception:
+        return ""
+
+def format_local_short_weekday_de(dt, fmt_date: str = "%a %d.%m.%Y %H:%M") -> str:
+    if not dt:
+        return ""
+    try:
+        from zoneinfo import ZoneInfo
+        weekday = dt.astimezone(ZoneInfo("Europe/Berlin")).strftime("%a")
+        weekday_de = weekday.replace("Mon", "Mo").replace("Tue", "Di").replace("Wed", "Mi").replace("Thu", "Do").replace("Fri", "Fr").replace("Sat", "Sa").replace("Sun", "So")
+        return weekday_de
+    except Exception:
+        return ""
+
+templates.env.filters["urlencode_qs"] = urlencode_qs
+templates.env.filters["format_local"] = format_local
+templates.env.filters["format_local_weekday_de"] = format_local_weekday_de
+templates.env.filters["format_local_short_weekday_de"] = format_local_short_weekday_de
 
 def render_participants_html(current_participants, all_users, current_user, item_id):
     """Render participants HTML for HTMX updates"""
@@ -605,7 +642,7 @@ async def update_item(
             new_values["name"] = name.strip()
         status_key = form.get("status_key")
         if status_key is not None:
-            from web.server import status_svc
+            from web.dependencies import status_svc
             valid_statuses = [s.key if hasattr(s, 'key') else s[0] for s in status_svc.get_options_for(item.type)]
             if status_key not in valid_statuses:
                 raise HTTPException(status_code=422, detail=f"Ungültiger Status für diesen Typ: '{status_key}' für '{item.type}'")
@@ -646,3 +683,53 @@ async def update_item(
         logger.error(f"Error updating item {item_id}: {e}")
         error_response = error_handler.handle_database_error("update_item", e)
         raise HTTPException(status_code=500, detail=error_response["message"])
+
+
+@router.get("/{item_id}/edit", response_class=HTMLResponse)
+async def edit_item_page(
+    item_id: str,
+    request: Request,
+    repository: DbRepository = Depends(get_repository),
+    status=Depends(lambda: None),  # Passe ggf. an, falls Status-Service benötigt
+):
+    it = repository.get(item_id)
+    if not it:
+        raise HTTPException(404, "Item nicht gefunden")
+
+    # Status-Optionen (Dummy, falls kein Status-Service)
+    status_options = [(it.status, it.status)]
+
+    # Recurrence-Form vorbereiten
+    rrule_line = ""
+    dtstart_local = ""
+    exdates_local = ""
+    if getattr(it, "recurrence", None) and it.recurrence.rrule_string:
+        for line in it.recurrence.rrule_string.splitlines():
+            if line.startswith("DTSTART:"):
+                try:
+                    if ZoneInfo:
+                        dt = datetime.strptime(line.split(":", 1)[1], "%Y%m%dT%H%M%SZ").replace(tzinfo=ZoneInfo("UTC"))
+                    else:
+                        dt = datetime.strptime(line.split(":", 1)[1], "%Y%m%dT%H%M%SZ")
+                    dtstart_local = dt.strftime("%d.%m.%Y %H:%M")
+                    dtstart_local = dt.strftime("%d.%m.%Y %H:%M")
+                except Exception:
+                    pass
+            if line.startswith("RRULE:"):
+                rrule_line = line.split(":", 1)[1]
+    if getattr(it, "recurrence", None) and it.recurrence.exdates_utc:
+        exdates_local = ", ".join(d.strftime("%d.%m.%Y %H:%M") for d in it.recurrence.exdates_utc)
+
+    status_color = None
+    back_qs = urlencode(list(request.query_params.multi_items()))
+
+    return templates.TemplateResponse("edit.html", {
+        "request": request,
+        "it": it,
+        "status_options": status_options,
+        "dtstart_local": dtstart_local,
+        "rrule_line": rrule_line,
+        "exdates_local": exdates_local,
+        "status_color": status_color,
+        "back_qs": back_qs,
+    })
