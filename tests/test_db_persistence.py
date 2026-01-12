@@ -28,7 +28,7 @@ def test_upsert_and_row_to_item_roundtrip():
     assert meta.get('ice_impact') == '4'
     assert meta.get('ice_confidence') == 'medium'
     assert meta.get('ice_ease') == '5'
-    assert meta.get('ice_score') == '10.0'
+    assert meta.get('ice_score') == '60.0'
 
 
 def test_ice_columns_check_constraints():
@@ -64,7 +64,8 @@ def test_persisting_ice_from_metadata_to_columns():
     assert row['ice_impact'] == 5
     assert row['ice_confidence'] == 'low'
     assert row['ice_ease'] == 5
-    assert abs(float(row['ice_score']) - 9.0) < 1e-6
+    # 5 (impact) * 2 (low) * 5 (ease) = 50.0
+    assert abs(float(row['ice_score']) - 50.0) < 1e-6
 
 
 def test_query_sort_by_ice_score():

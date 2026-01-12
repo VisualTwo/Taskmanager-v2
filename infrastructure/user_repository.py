@@ -57,19 +57,30 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_utc);
 """
 
 class UserRepository:
+    def __init__(self, db_path):
+        import sqlite3
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self._db_path = db_path
+        print(f"[DEBUG UserRepository] __init__ conn id={id(self.conn)} db_path={db_path}", flush=True)
+        self._init_schema()
+
     @classmethod
-    def from_connection(cls, conn):
+    def from_connection(cls, conn, db_path=None):
         obj = cls.__new__(cls)
         obj.conn = conn
-        obj._init_schema()
-        return obj
-
-        @classmethod
-        def from_connection(cls, conn):
-            obj = cls.__new__(cls)
-            obj.conn = conn
+        if db_path:
+            obj._db_path = db_path
+        else:
+            obj._db_path = getattr(conn, '_db_path', None)
+        # Prevent schema re-init if already initialized (check for 'users' table)
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        if not cur.fetchone():
+            print(f"[DEBUG UserRepository] from_connection: initializing schema on conn id={id(conn)}", flush=True)
             obj._init_schema()
-            return obj
+        else:
+            print(f"[DEBUG UserRepository] from_connection: schema already present on conn id={id(conn)}", flush=True)
+        return obj
     def get_user_by_login(self, login: str) -> Optional[User]:
         """Retrieve a user by their login name."""
         cursor = self.conn.execute("SELECT * FROM users WHERE login = ?", (login,))
@@ -82,14 +93,22 @@ class UserRepository:
         row = cursor.fetchone()
         return self._row_to_user(row) if row else None
 
-    def __init__(self, db_path: str):
         # check_same_thread=False erlaubt Nutzung im Threadpool
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        print(f"[DEBUG UserRepository] __init__ conn id={id(self.conn)} db_path={db_path}", flush=True)
         self._init_schema()
 
     def _init_schema(self):
         """Initialize user and session tables"""
+        self.conn.executescript(USERS_DDL)
+        self.conn.commit()
+        self._ensure_columns()
+
+        print(f"[DEBUG UserRepository] _init_schema conn id={id(self.conn)}", flush=True)
+        
+    def _init_schema(self):
+        print(f"[DEBUG UserRepository] _init_schema conn id={id(self.conn)}")
         self.conn.executescript(USERS_DDL)
         self.conn.commit()
         self._ensure_columns()

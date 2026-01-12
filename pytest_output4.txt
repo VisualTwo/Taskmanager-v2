@@ -1,0 +1,69 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.11, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\andre\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Skripts\taskmanagerv2
+plugins: anyio-4.12.1
+collecting ... collected 113 items / 6 errors
+
+=================================== ERRORS ====================================
+_________________ ERROR collecting test_edit_functionality.py _________________
+test_edit_functionality.py:9: in <module>
+    from run_multitenant_simple import app
+run_multitenant_simple.py:24: in <module>
+    from web.routers import main
+web\routers\main.py:279: in <module>
+    def get_common_service(repository: DbRepository = Depends(get_repository)):
+                                                              ^^^^^^^^^^^^^^
+E   NameError: name 'get_repository' is not defined
+_____________________ ERROR collecting test_formatting.py _____________________
+test_formatting.py:4: in <module>
+    from web.routers.main import format_dashboard_time, format_local, format_local_weekday_de, format_local_short_weekday_de
+web\routers\main.py:279: in <module>
+    def get_common_service(repository: DbRepository = Depends(get_repository)):
+                                                              ^^^^^^^^^^^^^^
+E   NameError: name 'get_repository' is not defined
+________________ ERROR collecting tests/test_access_control.py ________________
+tests\test_access_control.py:3: in <module>
+    from run_multitenant_simple import app
+run_multitenant_simple.py:24: in <module>
+    from web.routers import main
+web\routers\main.py:279: in <module>
+    def get_common_service(repository: DbRepository = Depends(get_repository)):
+                                                              ^^^^^^^^^^^^^^
+E   NameError: name 'get_repository' is not defined
+_________________ ERROR collecting tests/test_date_filter.py __________________
+tests\test_date_filter.py:10: in <module>
+    from web.server_modular import app
+web\server_modular.py:13: in <module>
+    from web.routers.main import router as main_router
+web\routers\main.py:279: in <module>
+    def get_common_service(repository: DbRepository = Depends(get_repository)):
+                                                              ^^^^^^^^^^^^^^
+E   NameError: name 'get_repository' is not defined
+____________ ERROR collecting tests/test_integration_edit_route.py ____________
+tests\test_integration_edit_route.py:4: in <module>
+    import run_multitenant_simple as appmod
+run_multitenant_simple.py:24: in <module>
+    from web.routers import main
+web\routers\main.py:279: in <module>
+    def get_common_service(repository: DbRepository = Depends(get_repository)):
+                                                              ^^^^^^^^^^^^^^
+E   NameError: name 'get_repository' is not defined
+_______________ ERROR collecting tests/test_sort_and_create.py ________________
+tests\test_sort_and_create.py:6: in <module>
+    from run_multitenant_simple import app
+run_multitenant_simple.py:24: in <module>
+    from web.routers import main
+web\routers\main.py:279: in <module>
+    def get_common_service(repository: DbRepository = Depends(get_repository)):
+                                                              ^^^^^^^^^^^^^^
+E   NameError: name 'get_repository' is not defined
+=========================== short test summary info ===========================
+ERROR test_edit_functionality.py - NameError: name 'get_repository' is not de...
+ERROR test_formatting.py - NameError: name 'get_repository' is not defined
+ERROR tests/test_access_control.py - NameError: name 'get_repository' is not ...
+ERROR tests/test_date_filter.py - NameError: name 'get_repository' is not def...
+ERROR tests/test_integration_edit_route.py - NameError: name 'get_repository'...
+ERROR tests/test_sort_and_create.py - NameError: name 'get_repository' is not...
+!!!!!!!!!!!!!!!!!!! Interrupted: 6 errors during collection !!!!!!!!!!!!!!!!!!!
+============================= 6 errors in 12.72s ==============================

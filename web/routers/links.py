@@ -98,10 +98,10 @@ async def remove_link(
             error_handler.log_operation("link_removed", item_id, f"url='{url}'")
         
         # Return updated links fragment
-        return templates.TemplateResponse("_links_fragment.html", {
-            "request": request,
-            "item": item
-        })
+            return templates.TemplateResponse(request, "_links_fragment.html", {
+                "request": request,
+                "item": item
+            })
         
     except HTTPException:
         raise
@@ -124,9 +124,9 @@ async def get_links_fragment(
             raise HTTPException(status_code=404, detail="Item not found")
             
         return templates.TemplateResponse("_links_fragment.html", {
-            "request": request,
-            "item": item
-        })
+                "request": request,
+                "item": item
+            })
         
     except HTTPException:
         raise

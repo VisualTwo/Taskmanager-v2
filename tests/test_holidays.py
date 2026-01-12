@@ -20,7 +20,7 @@ def test_german_holidays_integration():
 
 def test_get_holidays_for_period():
     """Test the get_holidays_for_period function."""
-    from web.server import get_holidays_for_period
+    from web.holidays_helper import get_holidays_for_period
     
     # Test getting holidays for a specific period
     start_date = date(2026, 1, 1)
@@ -89,7 +89,7 @@ def test_holiday_translation_coverage():
 
 def test_holiday_period_boundary_conditions():
     """Test edge cases for holiday period calculations."""
-    from web.server import get_holidays_for_period
+    from web.holidays_helper import get_holidays_for_period
     
     # Test single day period
     single_day = date(2026, 1, 1)
@@ -116,7 +116,7 @@ def test_holiday_period_boundary_conditions():
 
 def test_dynamic_holiday_loading():
     """Test that holidays are loaded dynamically based on calendar range."""
-    from web.server import get_holidays_for_period
+    from web.holidays_helper import get_holidays_for_period
     
     # Test different years
     holidays_2025 = get_holidays_for_period(date(2025, 12, 20), date(2025, 12, 31))

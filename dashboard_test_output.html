@@ -1,0 +1,74 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.11, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\andre\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Skripts\taskmanagerv2
+plugins: anyio-4.12.1
+collecting ... collected 4 items
+
+test_edit_functionality.py::test_minimal_item_creation_undated [DEBUG] Admin user after insert: User(id='admin-001', login='admin', email='admin@test.com', full_name='Administrator', password_hash='$2b$12$7kn5GleOh7V6os3uCsrUa.ls/I5MeUor79psovER13GXwF7svhska', role='user', is_admin=True, is_active=True, is_email_confirmed=True, email_confirmation_token=None, password_reset_token=None, password_reset_expires=None, created_utc=datetime.datetime(2026, 1, 11, 22, 22, 43, 223970, tzinfo=datetime.timezone.utc), last_modified_utc=datetime.datetime(2026, 1, 11, 22, 22, 43, 223974, tzinfo=datetime.timezone.utc), last_login_utc=None, metadata={})
+[DEBUG UPSERT AFTER EXECUTE] item.id: 00540e95-03f4-4ff2-9840-c898a0e38ad9 metadata: {}
+[DEBUG] Status von 'Minimal-Test' nach Insert: TASK_OPEN
+[DASHBOARD DEBUG] current_user.id=admin-001; all_items count=1
+  - 00540e95-03f4-4ff2-9840-c898a0e38ad9: Minimal-Test (type=task, due=None, prio=0, meta={})
+[DASHBOARD DEBUG] Overdue tasks:
+FAILED
+test_edit_functionality.py::test_minimal_item_creation_with_due [DEBUG UPSERT AFTER EXECUTE] item.id: de29a5b5-c298-41e2-85ae-e8bb2bb7e970 metadata: {}
+[DEBUG UPSERT AFTER EXECUTE] item.id: de29a5b5-c298-41e2-85ae-e8bb2bb7e970 metadata: {}
+[DASHBOARD DEBUG] current_user.id=admin-001; all_items count=2
+  - 00540e95-03f4-4ff2-9840-c898a0e38ad9: Minimal-Test (type=task, due=None, prio=0, meta={})
+  - de29a5b5-c298-41e2-85ae-e8bb2bb7e970: Minimal-Test (type=task, due=2026-01-11 22:22:00+00:00, prio=0, meta={})
+[DASHBOARD DEBUG] Overdue tasks:
+PASSED
+test_edit_functionality.py::test_login_and_ice_update [DEBUG UPSERT AFTER EXECUTE] item.id: 7b46ce13-4eed-42ba-93c0-72fd410a8516 metadata: {}
+DEBUG - Checking access for user user-1 to item 7b46ce13-4eed-42ba-93c0-72fd410a8516
+DEBUG - Schema check: creator=True, participants=True
+DEBUG - DB creator: 'admin-001', participants: '["admin-001"]', type: 'task'
+DEBUG - Access denied by central logic
+FAILED
+test_edit_functionality.py::test_participant_management [DEBUG UPSERT AFTER EXECUTE] item.id: 30655e2c-4ac1-4ea1-a1a8-2886f4b66548 metadata: {}
+[DEBUG] All users in DB: [('admin-001', 'admin', True)]
+[DEBUG UPSERT AFTER EXECUTE] item.id: 30655e2c-4ac1-4ea1-a1a8-2886f4b66548 metadata: {}
+[DEBUG] add_participant response: 200 <div class="current-participants">
+                        <span class="participant-badge">
+                            Administrator (admin)
+                            <button type="button" class="remove-participant" 
+                                    hx-post="/items/30655e2c-4ac1-4ea1-a1a8-2886f4b66548/participants/remove"
+                                    hx-vals='{"user_id": "admin-001"}'
+                                    hx-target=".participants-container"
+                                    hx-swap="innerHTML"
+                                    title="Teilnehmer entfernen">×</button>
+                        </span>
+                        </div><div class="add-participant"><select id="new-participant" name="new_participant"><option value="">Teilnehmer hinzufügen...</option></select>
+    <button type="button" class="btn btn-sm"
+            hx-post="/items/30655e2c-4ac1-4ea1-a1a8-2886f4b66548/participants/add"
+            hx-include="#new-participant"
+            hx-target=".participants-container"
+            hx-swap="innerHTML">Hinzufügen</button>
+    </div>
+PASSED
+
+================================== FAILURES ===================================
+_____________________ test_minimal_item_creation_undated ______________________
+test_edit_functionality.py:56: in test_minimal_item_creation_undated
+    assert "Aufgaben ohne Termin" in html
+E   assert 'Aufgaben ohne Termin' in '\\n<!doctype html>\\n<html lang="de">\\n<head>\\n  <meta charset="utf-8">\\n  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\\n  <title>Dashboard - Task Manager</title>\\n  <link rel="stylesheet" href="/static/style.css?v=20260109">\\n  <link rel="stylesheet" href="/static/css/dashboard.css?v=20260109">\\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">\\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">\\n</head>\\n\\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>\\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>\\n<script>\\n  function initDatePickers(root){\\n    try {\\n      // Schon initialisierte Inputs nicht doppelt initialisieren\\n      const scope = root || document;\\n      const nodes = scope.querySelectorAll(\\'.fp-datetime:not([data-fp])\\');\\n      nodes.forEach(el => {\\n        flatpickr(el, {\\n          enableTime: true,\\n          time_24hr: true,\\n          dateFormat: "d.m.Y H:i",\\n          locale: "de"\\n        });\\n        el.setAttribute(\\'data-fp\\', \\'1\\');\\n      });\\n...nt = dateStr;\\n    } else {\\n      console.error(\\'\u274c CRITICAL: Date element #current-date not found in DOM!\\');\\n    }\\n    \\n    if (timeElement) {\\n      timeElement.textContent = timeStr;\\n    } else {\\n      console.error(\\'\u274c CRITICAL: Time element #current-time not found in DOM!\\');\\n    }\\n  } catch (error) {\\n    console.error(\\'\u274c Error updating date/time:\\', error);\\n  }\\n}\\n\\n// ===== CRITICAL: Initialize dashboard when DOM is ready =====\\ndocument.addEventListener(\\'DOMContentLoaded\\', function() {\\n  console.log(\\'\U0001f680 Dashboard initializing...\\');\\n  \\n  // Update date and time immediately and then every second\\n  console.log(\\'\u23f0 Starting time updates...\\');\\n  updateDateTime();\\n  setInterval(updateDateTime, 1000);\\n  \\n  // Render calendar immediately (no delay needed)\\n  console.log(\\'\U0001f4c5 Rendering calendar...\\');\\n  try {\\n    renderCalendar();\\n    console.log(\\'\u2705 Dashboard initialization complete\\');\\n  } catch (error) {\\n    console.error(\\'\u274c CRITICAL: Calendar initialization failed:\\', error);\\n    console.error(\\'Stack trace:\\', error.stack);\\n  }\\n});\\n</script>\\n\\n  <!-- DEBUG: Injected dashboard debug info for test diagnosis -->\\n  \\n\\n</main>\\n</body>\\n</html>'
+__________________________ test_login_and_ice_update __________________________
+test_edit_functionality.py:248: in test_login_and_ice_update
+    assert resp3.status_code == 200, f"Cannot access item edit page: {resp3.status_code}"
+E   AssertionError: Cannot access item edit page: 403
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+============================== warnings summary ===============================
+test_edit_functionality.py::test_minimal_item_creation_undated
+test_edit_functionality.py::test_minimal_item_creation_with_due
+test_edit_functionality.py::test_minimal_item_creation_with_due
+test_edit_functionality.py::test_login_and_ice_update
+  C:\Users\andre\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\templating.py:162: DeprecationWarning: The `name` is not the first parameter anymore. The first parameter should be the `Request` instance.
+  Replace `TemplateResponse(name, {"request": request})` by `TemplateResponse(request, name)`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED test_edit_functionality.py::test_minimal_item_creation_undated - asser...
+FAILED test_edit_functionality.py::test_login_and_ice_update - AssertionError...
+=================== 2 failed, 2 passed, 4 warnings in 1.84s ===================

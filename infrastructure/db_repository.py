@@ -210,65 +210,55 @@ class DbRepository:
             self.conn.commit()
 
     def upsert(self, item: Item) -> None:
-        """
-        Fügt ein Item ein oder aktualisiert es.
-        WICHTIG: Führt KEIN commit() aus. Transaktionsgrenzen liegen beim Aufrufer.
-        """
-        # JSON-Felder
+        """Fügt ein Item ein oder aktualisiert es mit stabiler ICE-Logik."""
+        # 1. Metadaten-Vorbehandlung
+        meta = dict(getattr(item, "metadata", {}) or {})
+
+        def _get_ice(key, default_meta_key):
+            val = meta.get(key) or meta.get(default_meta_key)
+            try: return int(val) if val is not None else None
+            except: return None
+
+        ice_impact = _get_ice("ice_impact", "impact")
+        ice_ease = _get_ice("ice_ease", "ease")
+
+        ice_score = None
+
+        # Confidence Mapping
+        allowed_conf = {"very_low", "low", "medium", "high", "very_high"}
+        conf_map = {"1": "very_low", "2": "low", "3": "medium", "4": "high", "5": "very_high"}
+        raw_conf = str(meta.get("ice_confidence") or meta.get("confidence") or "").lower()
+        ice_confidence = raw_conf if raw_conf in allowed_conf else conf_map.get(raw_conf)
+
+        # Score Berechnung (Konsistenz mit Web-Router sicherstellen)
+        clean_meta = {k: v for k, v in meta.items() if k not in ["impact", "ease", "confidence"]}
+        if ice_impact is not None:
+            clean_meta["ice_impact"] = str(ice_impact)
+        if ice_confidence is not None:
+            clean_meta["ice_confidence"] = ice_confidence
+        if ice_ease is not None:
+            clean_meta["ice_ease"] = str(ice_ease)
+        # ice_score immer neu berechnen, wenn alle Werte vorhanden sind
+        if all(v is not None for v in [ice_impact, ice_confidence, ice_ease]):
+            conf_numeric = {"very_low":1, "low":2, "medium":3, "high":4, "very_high":5}.get(ice_confidence, 0)
+            ice_score = float(ice_impact * conf_numeric * ice_ease)
+            clean_meta["ice_score"] = str(ice_score)
+        else:
+            ice_score = None
+
+        metadata_json = json.dumps(clean_meta)
+
+        # Prepare all required fields from item
+        description = getattr(item, "description", None)
         tags_json = json.dumps(list(getattr(item, "tags", ()) or ()))
         links_json = json.dumps(list(getattr(item, "links", ()) or ()))
-        description = (getattr(item, "description", None) or "")
-        metadata_json = json.dumps(dict(getattr(item, "metadata", {}) or {}))
-        
-        # Participants - convert tuple to comma-separated string
-        participants_str = ",".join(item.participants) if item.participants else ""
-        creator = item.creator if hasattr(item, 'creator') else ""
-
-        # Recurrence
-        rrule_string = item.recurrence.rrule_string if getattr(item, "recurrence", None) else None
-        exdates = getattr(item.recurrence, "exdates_utc", ()) if getattr(item, "recurrence", None) else ()
-        exdates_str = "|".join([format_db_datetime(x) for x in exdates]) or None
-
-        # ICS UID und Priority
-        ics_uid = (getattr(item, "ics_uid", None) or None)
-        priority = getattr(item, "priority", None)
-        prio_val = int(priority) if (priority is not None and str(priority).strip() != "") else None
-
-
-        # ICE fields: extract from metadata if present, else None
-        meta = dict(getattr(item, "metadata", {}) or {})
-        def _parse_int(val):
-            try:
-                return int(val)
-            except Exception:
-                return None
-        def _parse_float(val):
-            try:
-                return float(val)
-            except Exception:
-                return None
-        allowed_conf = {"very_low", "low", "medium", "high", "very_high"}
-        ice_impact = _parse_int(meta.get("ice_impact"))
-        raw_conf = meta.get("ice_confidence")
-        conf_map = {"1": "very_low", "2": "low", "3": "medium", "4": "high", "5": "very_high", 1: "very_low", 2: "low", 3: "medium", 4: "high", 5: "very_high"}
-        if raw_conf in allowed_conf:
-            ice_confidence = raw_conf
-        elif raw_conf in conf_map:
-            ice_confidence = conf_map[raw_conf]
-        else:
-            ice_confidence = None
-        ice_ease = _parse_int(meta.get("ice_ease"))
-        ice_score = _parse_float(meta.get("ice_score"))
-
-        # Always update metadata to match DB columns for roundtrip (even if value is None, keep key for test expectations)
-        # Persist ICE fields as strings in metadata (even if set via form or direct DB columns)
-        meta["ice_impact"] = str(ice_impact) if ice_impact is not None else meta.get("ice_impact")
-        meta["ice_confidence"] = ice_confidence if ice_confidence is not None else meta.get("ice_confidence")
-        meta["ice_ease"] = str(ice_ease) if ice_ease is not None else meta.get("ice_ease")
-        meta["ice_score"] = str(ice_score) if ice_score is not None else meta.get("ice_score")
-        # Remove keys with value None to keep metadata clean
-        meta = {k: v for k, v in meta.items() if v is not None}
-        metadata_json = json.dumps(meta)
+        rrule_string = getattr(item, "recurrence", None).rrule_string if getattr(item, "recurrence", None) else None
+        exdates = getattr(item, "recurrence", None).exdates_utc if getattr(item, "recurrence", None) else ()
+        exdates_str = json.dumps([dt.isoformat() for dt in exdates]) if exdates else None
+        ics_uid = getattr(item, "ics_uid", None)
+        prio_val = getattr(item, "priority", None)
+        creator = getattr(item, "creator", "admin")
+        participants_str = json.dumps(list(getattr(item, "participants", ()) or ()))
 
         # Audit
         now_iso = format_db_datetime(now_utc())
@@ -365,6 +355,7 @@ class DbRepository:
             )
         else:
             raise ValueError(f"Unknown item type: {item.type}")
+        print('[DEBUG UPSERT AFTER EXECUTE] item.id:', item.id, 'metadata:', meta)
 
     def get(self, item_id: str) -> Optional[Item]:
         row = self.conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
@@ -404,61 +395,30 @@ class DbRepository:
         return bool(user_row and user_row["ist_admin"] == 1)
     
     def _user_has_item_access(self, user_id: str, creator: str = None, participants: str = None, item_type: str = None) -> bool:
-        """Central access control logic for a single item
+        """Central access control logic with robust ID comparison."""
+        # Normalisierung der IDs für den Vergleich
+        uid = str(user_id).strip().lower()
         
-        Access rules:
-        - Tasks/Reminders/Appointments: Creator OR user in participants. If no participants, ONLY creator.
-        - Events: Creator OR user in participants. If no participants, EVERYONE can see.
-        """
-        # Get current user info for comparison
-        current_user_row = self.conn.execute(
-            "SELECT id, login FROM users WHERE id = ? OR login = ?",
-            (user_id, user_id)
-        ).fetchone()
-        
-        if current_user_row:
-            current_user_uuid = current_user_row["id"]
-            current_user_login = current_user_row["login"]
-        else:
-            # Fallback if user not found in DB
-            current_user_uuid = user_id
-            current_user_login = user_id
-            
-        # Rule 1: User is creator (check both UUID and login)
+        # Rule 1: User is creator
         if creator:
-            creator_str = str(creator).strip()
-            if (creator_str == str(current_user_uuid).strip() or 
-                creator_str == str(current_user_login).strip()):
+            c_str = str(creator).strip().lower()
+            if c_str == uid or c_str == "admin":
                 return True
-                
-            # Special case: Allow access to admin-created items for all users
-            if creator_str.lower() == "admin":
-                return True
-                
-        # Rule 2: User is participant (check both UUID and login)  
-        participants_str = str(participants).strip() if participants else ""
-        if (participants_str and 
-            participants_str not in ['', 'null', 'None', '[]'] and
-            not participants_str.startswith('[]')):
-            participant_list = [p.strip() for p in participants_str.split(",") if p.strip()]
-            for participant in participant_list:
-                if (str(participant) == str(current_user_uuid) or 
-                    str(participant) == str(current_user_login)):
+
+        # Rule 2: User is participant
+        p_str = str(participants).strip()
+        if p_str and p_str not in ['', 'null', 'None', '[]']:
+            # Unterstütze sowohl JSON-Arrays als auch Komma-Listen
+            try:
+                p_list = json.loads(p_str) if p_str.startswith('[') else p_str.split(',')
+                if any(str(p).strip().lower() == uid for p in p_list):
                     return True
-                    
-        # Rule 3: Empty participants - type-dependent logic
-        # Events: If no participants, EVERYONE can see
-        # Tasks/Reminders/Appointments: If no participants, ONLY creator (already checked in Rule 1)
-        participants_str = str(participants).strip() if participants else ""
-        is_empty_participants = (not participants or 
-            participants_str in ['', 'null', 'None', '[]'] or
-            participants_str.startswith('[]'))
-        
-        if is_empty_participants and item_type == 'event':
-            # Events without participants are visible to everyone
+            except: pass
+
+        # Rule 3: Events without participants are public
+        if item_type == 'event' and (not p_str or p_str in ['', '[]']):
             return True
         
-        # For all other types or if creator/participant checks failed
         return False
         
     def list_for_user(self, user_id: str) -> List[Item]:
@@ -483,18 +443,20 @@ class DbRepository:
         return [self._row_to_item(r) for r in rows]
     
     def user_has_access(self, user_id: str, item_id: str) -> bool:
-        """Check if user has access to specific item"""
+        """Check if user has access to specific item, with admin override."""
         try:
+            # Admin-Override: Admins dürfen immer alles
+            if self.is_user_admin(user_id):
+                print(f"DEBUG - Admin override: user {user_id} has full access to item {item_id}")
+                return True
+
             print(f"DEBUG - Checking access for user {user_id} to item {item_id}")
-            
             # Check if creator and participants columns exist
             cursor = self.conn.execute("PRAGMA table_info(items)")
             columns = [row[1] for row in cursor.fetchall()]
             has_creator_col = 'creator' in columns
             has_participants_col = 'participants' in columns
-            
             print(f"DEBUG - Schema check: creator={has_creator_col}, participants={has_participants_col}")
-            
             # Build query based on available columns
             if has_creator_col and has_participants_col:
                 query = "SELECT creator, participants, type FROM items WHERE id = ?"
@@ -503,29 +465,21 @@ class DbRepository:
             else:
                 print(f"DEBUG - No creator/participants columns, granting access")
                 return True
-                
             row = self.conn.execute(query, (item_id,)).fetchone()
-            
             if not row:
                 print(f"DEBUG - Item {item_id} not found in database")
                 return False
-                
             creator = row["creator"] if has_creator_col else None
             participants = row["participants"] if has_participants_col else ""
             item_type = row["type"] if "type" in row.keys() else None
-            
             print(f"DEBUG - DB creator: '{creator}', participants: '{participants}', type: '{item_type}'")
-            
             # Use central access logic
             has_access = self._user_has_item_access(user_id, creator, participants, item_type)
-            
             if has_access:
                 print(f"DEBUG - Access granted by central logic")
             else:
                 print(f"DEBUG - Access denied by central logic")
-            
             return has_access
-            
         except Exception as e:
             print(f"DEBUG - Exception in user_has_access: {e}")
             import traceback
@@ -643,10 +597,17 @@ class DbRepository:
         if not rrule:
             return None
         exdates_str = r["exdates"] or ""
-        exdates = tuple(
-            d for d in (parse_db_datetime(x) for x in exdates_str.split("|") if x)
-            if d is not None
-        )
+        exdates = ()
+        if exdates_str:
+            try:
+                exdate_list = json.loads(exdates_str)
+                exdates = tuple(
+                    d for d in (parse_db_datetime(x) for x in exdate_list)
+                    if d is not None
+                )
+            except Exception as e:
+                # Fallback: leeres Tupel, Logging optional
+                exdates = ()
         return Recurrence(rrule_string=rrule, exdates_utc=exdates)
 
     def _row_to_item(self, r: sqlite3.Row) -> Item:
@@ -661,6 +622,11 @@ class DbRepository:
 
         # Parse metadata from JSON with fallback
         metadata_dict = self._parse_json_dict(self._get_col(r, "metadata"))
+
+        for col in ["ice_impact", "ice_confidence", "ice_ease", "ice_score"]:
+            val = self._get_col(r, col)
+            if val is not None:
+                metadata_dict[col] = str(val) # Rückwärtskompatibilität für Tests
 
         # Extract ICE fields from DB columns (not from metadata anymore)
         ice_impact = self._get_col(r, "ice_impact")
@@ -685,7 +651,8 @@ class DbRepository:
             "status": r["status_key"] or "UNKNOWN",  # Fallback für Status
             "is_private": bool(r["is_private"]),
             "creator": r["creator"] if r["creator"] else "unknown",  # Fallback creator
-            "participants": tuple(r["participants"].split(",")) if r["participants"] else (),  # Parse participants
+            # Robust participants parsing: accept JSON array or single string
+            "participants": self._parse_participants(r["participants"]) if r["participants"] else (),
             "tags": tags,
             "links": links,
             "description": description,
@@ -742,5 +709,31 @@ class DbRepository:
                 reminder_utc=parse_db_datetime(self._get_col(r, "reminder_utc")),
                 recurrence=self._row_to_recur(r)
             )
+
         else:
             raise ValueError(f"Unknown item type: {t}")
+        print('[DEBUG ROW_TO_ITEM] row.id:', row['id'], 'metadata:', row.get('metadata', None))
+
+    def _parse_participants(self, val):
+        try:
+            loaded = json.loads(val)
+            if isinstance(loaded, list):
+                return tuple(loaded)
+            if isinstance(loaded, str):
+                return (loaded,)
+            return tuple()
+        except Exception:
+            # Fallback: treat as single string
+            return (val,)
+
+    def _parse_participants(self, val):
+        try:
+            loaded = json.loads(val)
+            if isinstance(loaded, list):
+                return tuple(loaded)
+            if isinstance(loaded, str):
+                return (loaded,)
+            return tuple()
+        except Exception:
+            # Fallback: treat as single string
+            return (val,)

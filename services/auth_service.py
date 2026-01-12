@@ -72,18 +72,29 @@ class AuthService:
         try:
             session = self.user_repo.get_session_by_token(token)
             if not session or not session.is_active or session.is_expired():
-                return None
-            
+                if not token:
+                    print(f"[DEBUG Auth] get_user_from_session_token called with empty token", flush=True)
+                    return None
+                # Print all sessions in DB for debug
+                try:
+                    all_sessions = list(self.user_repo.conn.execute("SELECT id, user_id, token, is_active, expires_utc FROM sessions").fetchall())
+                    print(f"[DEBUG Auth] All sessions in DB: {[dict(row) for row in all_sessions]}", flush=True)
+                except Exception as e:
+                    print(f"[DEBUG Auth] Could not fetch sessions: {e}", flush=True)
+
             user = self.user_repo.get_user_by_id(session.user_id)
             if not user or not user.is_active:
+                print(f"[DEBUG Auth] Token {token[:8]}...: User not found or inactive (user_id={getattr(session, 'user_id', None)})")
                 return None
-            
+
             # Update session activity
             updated_session = session.with_activity_update()
             self.user_repo.update_session_activity(updated_session)
-            
+
+            print(f"[DEBUG Auth] Token {token[:8]}...: user_id={user.id}, login={getattr(user, 'login', None)}")
             return user
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG Auth] Exception in get_user_from_session_token: {e}")
             return None
     
     def create_session(self, user: User, expires_hours: int = 24) -> Session:

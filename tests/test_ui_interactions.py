@@ -4,7 +4,6 @@ Unit tests for UI interaction features like loading states, toast notifications,
 
 import pytest
 from unittest.mock import Mock, patch
-from web.server import app
 from fastapi.testclient import TestClient
 
 class TestUIFeatures:

@@ -18,6 +18,15 @@ def make_repo():
         repo.conn.close()
         os.unlink(path)
 
+# Test: Beschreibung wird wie gespeichert geladen
+def test_db_repository_description_persistence():
+    desc = "Zeile1\\nZeile2\\,Komma"
+    for repo in make_repo():
+        t = Task(id="desc1", type="task", name="T", status="TASK_OPEN", is_private=False, creator="u", description=desc)
+        repo.upsert(t)
+        loaded = repo.get("desc1")
+        assert loaded.description == desc
+
 def test_db_repository_delete_and_get():
     for repo in make_repo():
         t = Task(id="1", type="task", name="T", status="TASK_OPEN", is_private=False, creator="u")

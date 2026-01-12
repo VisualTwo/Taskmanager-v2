@@ -50,11 +50,11 @@ class User:
             raise ValueError("Password hash cannot be empty")
     
     @classmethod
-    def create_admin_user(cls, login: str, email: str, full_name: str, password_hash: str) -> "User":
+    def create_admin_user(cls, login: str, email: str, full_name: str, password_hash: str, id: str = None) -> "User":
         """Create an admin user that is automatically active"""
         import uuid
         return cls(
-            id=str(uuid.uuid4()),
+            id=str(id) if id is not None else str(uuid.uuid4()),
             login=login,
             email=email,
             full_name=full_name,

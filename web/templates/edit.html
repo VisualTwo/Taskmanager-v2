@@ -45,9 +45,9 @@
       <div class="full">
         <label for="description">Beschreibung</label>
         <textarea id="description" name="description" placeholder="Ausführliche Beschreibung, Hinweise, Checkliste… (Markdown unterstützt)"
-                  hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:400ms"
-                  hx-include="#description"
-                  hx-swap="none" rows="8">{{ it.description | default('') }}</textarea>
+            hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:400ms"
+            hx-include="#description"
+            hx-swap="none" rows="8">{{ it.description | default('') | unescape_description }}</textarea>
         <div class="muted">Markdown möglich: Überschriften, Listen, Links.</div>
       </div>
 

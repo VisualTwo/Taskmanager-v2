@@ -15,11 +15,11 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 # Import components
-from infrastructure.user_repository import UserRepository
 from infrastructure.db_repository import DbRepository
+from web.dependencies import get_user_repository, get_auth_service, get_email_service, get_error_handler
 from services.auth_service import AuthService
-from services.email_service import EmailService
 from domain.user_models import User
+from utils.datetime_helpers import now_utc
 from web.handlers.config import config
 from web.routers import auth
 from web.routers import main
@@ -77,20 +77,10 @@ app = FastAPI(
 # Templates
 templates = Jinja2Templates(directory=config.get_templates_path())
 
-# Dependencies
-def get_user_repository():
-    """Get user repository instance"""
-    db_path = config.get_database_url().replace('sqlite:///', '')
-    return UserRepository(db_path)
 
 def get_item_repository():
-    """Get multitenant item repository instance"""
     db_path = config.get_database_url().replace('sqlite:///', '')
     return DbRepository(db_path)
-
-def get_auth_service():
-    """Get authentication service"""
-    return AuthService(get_user_repository())
 
 def get_current_user(
     auth_token: Optional[str] = Cookie(None),
@@ -135,7 +125,9 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle HTTP exceptions, especially 401 authentication errors"""
     if exc.status_code == 401:
         return RedirectResponse(url="/login", status_code=302)
-    raise exc
+    # Return JSON response for other HTTP exceptions
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 # Health check
 @app.get("/health")

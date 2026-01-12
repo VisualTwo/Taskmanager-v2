@@ -20,6 +20,7 @@ class FilterParams:
     range: Optional[str] = None
     prio: Optional[str] = None
     sort_by: Optional[str] = None
+    date: Optional[str] = None
 
 
 @dataclass
@@ -91,7 +92,8 @@ class CommonService:
             tags=params.get("tags"),
             range=params.get("range"),
             prio=params.get("prio"),
-            sort_by=params.get("sort_by")
+            sort_by=params.get("sort_by"),
+            date=params.get("date")
         )
     
     def get_user_info(self, user_id: str) -> UserInfo:
@@ -129,7 +131,7 @@ class CommonService:
 
         def is_past(item: Item) -> bool:
             """Return True if item's relevant date is before today (Berlin)."""
-            def to_local_date(dt: Optional[datetime]) -> Optional[date]:
+            def to_local_date(dt):  # type: ignore
                 if not dt:
                     return None
                 try:
@@ -193,6 +195,34 @@ class CommonService:
         # Past items filter
         if not filters.include_past:
             filtered_items = [item for item in filtered_items if not is_past(item)]
+        
+        # Date filter
+        if filters.date:
+            print(f"[DEBUG] Applying date filter: {filters.date}")
+            try:
+                from datetime import datetime
+                filter_date = datetime.strptime(filters.date, "%d.%m.%Y").date()
+                print(f"[DEBUG] Parsed filter_date: {filter_date}")
+                def item_matches_date(item: Item) -> bool:
+                    print(f"[DEBUG] Checking item: {item.name}")
+                    candidates = [
+                        getattr(item, 'due_utc', None),
+                        getattr(item, 'reminder_utc', None),
+                        getattr(item, 'end_utc', None),
+                        getattr(item, 'start_utc', None),
+                    ]
+                    for dt in candidates:
+                        if dt:
+                            local_date = dt.astimezone(self.berlin_tz).date() if dt.tzinfo else dt.date()
+                            print(f"[DEBUG] Item {item.name}: dt={dt}, local_date={local_date}")
+                            if local_date == filter_date:
+                                return True
+                    return False
+                filtered_items = [item for item in filtered_items if item_matches_date(item)]
+                print(f"[DEBUG] After date filter: {len(filtered_items)} items")
+            except (ValueError, AttributeError) as e:
+                print(f"[DEBUG] Date filter error: {e}")
+                pass  # Invalid date format, skip filter
         
         # TODO: Add more filters like include_past, range, etc. as needed
         

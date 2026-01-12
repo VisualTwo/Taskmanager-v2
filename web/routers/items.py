@@ -1,56 +1,82 @@
-
-# --- Standard Library Imports ---
 import os
-import logging
+from web.handlers.error_handler import ErrorHandler
 import re
-from dataclasses import replace
+import logging
 from datetime import datetime, timedelta
+from dataclasses import replace
 from typing import List, Optional, Annotated
 from urllib.parse import urlencode
 
-# --- Third-Party Imports ---
-from fastapi import APIRouter, Request, Form, HTTPException, Depends, Query, Cookie
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi import APIRouter, Request, Depends, HTTPException, Cookie, Query, Form
+from fastapi.responses import HTMLResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-
-# --- Project Imports ---
+from web.handlers.config import config
+from web.dependencies import get_user_repository, get_error_handler
+from web.routers.auth import get_current_user
+from utils.datetime_helpers import now_utc
+from utils.text_helpers import unescape_description
+from services.auth_service import AuthService
+from infrastructure.user_repository import UserRepository
+from infrastructure.db_repository import DbRepository
 from domain.models import Task, Reminder, Appointment, Event
 from domain.user_models import User
-from infrastructure.db_repository import DbRepository
-from infrastructure.user_repository import UserRepository
-from services.auth_service import AuthService
 from services.recurrence_service import expand_item
-from web.handlers.error_handler import ErrorHandler
-from web.handlers.config import config
-from utils.datetime_helpers import now_utc
-from web.server import get_current_user
-
-# --- Logger ---
-logger = logging.getLogger(__name__)
 
 # --- Router and Templates ---
 router = APIRouter()
+logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory=config.get_templates_path())
 
-# --- Dependency Providers ---
-def get_user_repository():
-    db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
-    return UserRepository(db_path)
 
-def get_error_handler():
-    return ErrorHandler(templates)
 
-def get_repository():
-    db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
-    repo = DbRepository(db_path)
+# --- EDIT FORM ROUTE ---
+from web.dependencies import get_repository
+from web.routers.auth import get_current_user
+
+@router.get("/{item_id}/edit", response_class=HTMLResponse)
+async def edit_item_form(
+    request: Request,
+    item_id: str,
+    repo: DbRepository = Depends(get_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    error_handler: ErrorHandler = Depends(get_error_handler),
+    current_user: Optional[User] = Depends(get_current_user),
+    q: Optional[str] = None,  # Akzeptiere beliebige Query-Parameter
+):
+    """Render edit form for an item."""
     try:
-        yield repo
-    finally:
-        try:
-            repo.conn.close()
-        except Exception:
-            pass
+        logger.info(f"[DEBUG] Route GET /items/{{item_id}}/edit wurde genutzt für item_id={item_id}")
+        if current_user:
+            logger.info(f"[DEBUG] current_user.id: {getattr(current_user, 'id', None)} | login: {getattr(current_user, 'login', None)}")
+        else:
+            logger.info("[DEBUG] current_user is None")
+            raise HTTPException(status_code=403, detail="Not authenticated")
+        item = repo.get(item_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        # Use the correct user_has_access logic from the item repo
+        if not repo.user_has_access(current_user.id, item_id):
+            raise HTTPException(status_code=403, detail="Access denied")
+        # Zusätzliche Kontextdaten können hier ergänzt werden
+        context = {
+            "request": request,
+            "item": item,
+            "it": item,
+            "current_user": current_user,
+            # "q": q,  # Query-Parameter falls benötigt
+        }
+        return templates.TemplateResponse(request, "edit.html", context)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rendering edit form for item {item_id}: {e}")
+        error_response = error_handler.handle_database_error("edit_item_form", e)
+        raise HTTPException(status_code=500, detail=error_response["message"])
+
+
 
 # --- Utility Functions ---
 def urlencode_qs(params):
@@ -116,17 +142,15 @@ async def create_item(
     priority: Optional[int] = Form(None),
     repo: DbRepository = Depends(get_repository),
     status=Depends(lambda: None),  # Placeholder, replace with actual status service if needed
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Create a new item (Task, Reminder, Appointment, Event) with ICE metadata and status validation."""
     import uuid
     from domain.ice_definitions import compute_ice_score
-    # User handling: try header, fallback to current_user if available
-    creator_id = request.headers.get("X-User-Id")
-    if not creator_id:
-        user = getattr(request, 'user', None)
-        creator_id = getattr(user, 'id', None) if user else None
-    if not creator_id:
+    # User handling: use only current_user
+    if not current_user:
         return HTMLResponse('<div class="alert alert-error">Kein Benutzer angegeben.</div>', status_code=401)
+    creator_id = current_user.id
     nid = str(uuid.uuid4())
     item_type = (item_type or "").strip().lower()
     name = (name or "").strip()
@@ -229,6 +253,7 @@ async def edit_item_name(
     repository: DbRepository = Depends(get_repository),
     error_handler: ErrorHandler = Depends(get_error_handler)
 ):
+    tag_mode: Optional[str] = None,  # Akzeptiere beliebige Query-Parameter
     """Update item name via inline edit."""
     try:
         error_handler.log_operation("edit_item_name", item_id, f"new_name='{name}'")
@@ -359,7 +384,7 @@ async def edit_item_type(
             )
         repository.upsert(new_item)
         # Return updated table row
-        return templates.TemplateResponse("_items_table.html", {
+        return templates.TemplateResponse(request, "_items_table.html", {
             "request": request,
             "rows": [(new_item, [], None, None)]
         })
@@ -405,11 +430,13 @@ async def get_items_table(
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
         items = repository.get_all_items()
+        # Filter items by user access
+        accessible_items = [item for item in items if repository.user_has_access(current_user.id, item.id)]
         rows = []
-        for item in items:
+        for item in accessible_items:
             occurrences = expand_item(item, now_utc(), now_utc() + timedelta(days=365))
             rows.append((item, occurrences, None, None))
-        return templates.TemplateResponse("_items_table.html", {
+        return templates.TemplateResponse(request, "_items_table.html", {
             "request": request,
             "current_user": current_user,
             "rows": rows,
@@ -570,12 +597,12 @@ async def get_item_occurrences(
             "item": item,
             "it": item
         }
-        return templates.TemplateResponse("_occurrences.html", context)
+        return templates.TemplateResponse(request, "_occurrences.html", context)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error loading occurrences for item {item_id}: {e}")
-        return templates.TemplateResponse("_occurrences.html", {
+        return templates.TemplateResponse(request, "_occurrences.html", {
             "request": request,
             "occs": [],
             "item": None,
@@ -593,56 +620,105 @@ async def update_item(
     error_handler: ErrorHandler = Depends(get_error_handler),
     current_user: Optional[User] = Depends(get_current_user),
 ):
-    """Update an item (proxy for /items/{item_id}/edit POST)."""
     form = await request.form()
     try:
         item = repo.get(item_id)
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
+        # Access Check: only current_user
+        if not current_user or not repo.user_has_access(current_user.id, item_id):
+            raise HTTPException(status_code=403, detail="Access denied")
+
         new_values = {}
-        name = form.get("name")
-        if name is not None:
-            new_values["name"] = name.strip()
-        status_key = form.get("status_key")
-        if status_key is not None:
-            from web.server import status_svc
-            valid_statuses = [s.key if hasattr(s, 'key') else s[0] for s in status_svc.get_options_for(item.type)]
+        
+        # 1. Basis-Felder
+        if form.get("name"):
+            new_values["name"] = form.get("name").strip()
+            
+        if form.get("status_key"):
+            # Statusvalidierung: Erlaubte Status für den Typ bestimmen
+            status_key = form.get("status_key")
+            item_type = getattr(item, "type", None)
+            # Default-Statusmapping analog zu create_item
+            valid_statuses = {
+                "task": ["TASK_OPEN", "TASK_IN_PROGRESS", "TASK_WAITING", "TASK_DONE", "TASK_POSTPONED", "TASK_CANCELED"],
+                "reminder": ["REMINDER_ACTIVE", "REMINDER_DONE", "REMINDER_CANCELED"],
+                "appointment": ["APPOINTMENT_PLANNED", "APPOINTMENT_CONFIRMED", "APPOINTMENT_DONE", "APPOINTMENT_CANCELED"],
+                "event": ["EVENT_SCHEDULED", "EVENT_DONE", "EVENT_CANCELED"]
+            }.get(item_type, [])
             if status_key not in valid_statuses:
-                raise HTTPException(status_code=422, detail=f"Ungültiger Status für diesen Typ: '{status_key}' für '{item.type}'")
+                raise HTTPException(status_code=422, detail=f"Ungültiger Status '{status_key}' für Typ '{item_type}'")
             new_values["status"] = status_key
-        priority = form.get("priority")
-        if priority is not None:
+
+        # 2. ICE-Metadaten (Zusammenführung statt Überschreiben)
+        meta = dict(getattr(item, "metadata", {}) or {})
+        ice_mapping = {
+            "impact": "ice_impact",
+            "confidence": "ice_confidence",
+            "ease": "ice_ease"
+        }
+        
+        updated_ice = False
+        for form_key, meta_key in ice_mapping.items():
+            val = form.get(form_key)
+            if val is not None:
+                meta[meta_key] = val
+                updated_ice = True
+
+        # ICE Score calculation if all present
+        if all(meta.get(k) is not None for k in ("ice_impact", "ice_confidence", "ice_ease")):
             try:
-                new_values["priority"] = int(priority)
+                # Map confidence to numeric if needed
+                conf_map = {"very_low": 1, "low": 2, "medium": 3, "high": 4, "very_high": 5}
+                impact = float(meta["ice_impact"])
+                confidence = meta["ice_confidence"]
+                if confidence.isdigit():
+                    confidence_val = float(confidence)
+                else:
+                    confidence_val = float(conf_map.get(confidence, 0))
+                ease = float(meta["ice_ease"])
+                ice_score = impact * confidence_val * ease * 4
+                meta["ice_score"] = str(ice_score)
             except Exception:
                 pass
-        meta_updates = {}
-        impact = form.get("impact")
-        confidence = form.get("confidence")
-        ease = form.get("ease")
-        if impact is not None:
-            meta_updates["impact"] = impact
-        if confidence is not None:
-            meta_updates["confidence"] = confidence
-        if ease is not None:
-            meta_updates["ease"] = ease
-        if impact is not None and confidence is not None and ease is not None:
-            try:
-                ice_score = float(impact) * float(confidence) * float(ease) * 4
-                meta_updates["ice_score"] = str(ice_score)
-            except Exception:
-                pass
-        if meta_updates:
-            meta = dict(getattr(item, "metadata", {}) or {})
-            meta.update(meta_updates)
+
+        if updated_ice:
             new_values["metadata"] = meta
+
+        # 3. Due Date Handling (Fix für das Dashboard-Filter-Problem)
+        due_utc_raw = form.get("due_utc")
+        if due_utc_raw is not None:
+            if due_utc_raw.strip() == "":
+                new_values["due_utc"] = None
+            else:
+                try:
+                    # ISO Format Konvertierung
+                    parsed_due = datetime.fromisoformat(due_utc_raw.replace('Z', '+00:00'))
+                    new_values["due_utc"] = parsed_due
+                except ValueError:
+                    logger.warning(f"Invalid date format: {due_utc_raw}")
+
         if new_values:
             item = replace(item, **new_values)
-        repo.upsert(item)
+            repo.upsert(item)
+            repo.conn.commit()
+
+        # HTMX Unterstützung
+        if request.headers.get("HX-Request"):
+            return Response(status_code=204, headers={"HX-Refresh": "true"})
+            
         return RedirectResponse(f"/items/{item_id}/edit", status_code=303)
-    except HTTPException:
-        raise
+
     except Exception as e:
-        logger.error(f"Error updating item {item_id}: {e}")
-        error_response = error_handler.handle_database_error("update_item", e)
-        raise HTTPException(status_code=500, detail=error_response["message"])
+        from fastapi import HTTPException as FastAPIHTTPException
+        if isinstance(e, FastAPIHTTPException):
+            raise e
+        logger.error(f"Update failed for {item_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Jinja-Filter registrieren (ganz am Dateiende, nach allen Funktionsdefinitionen) ---
+templates.env.filters["unescape_description"] = unescape_description
+templates.env.filters["urlencode_qs"] = urlencode_qs
+templates.env.filters["format_local"] = format_local
+from web.routers.main import format_local_short_weekday_de
+templates.env.filters["format_local_short_weekday_de"] = format_local_short_weekday_de

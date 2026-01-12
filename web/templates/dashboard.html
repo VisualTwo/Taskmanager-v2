@@ -309,16 +309,16 @@
     <div class="card-header">
       <span>⏳</span>
       <h2 class="card-title">
-        {% if without_date|length == 1 %}
+        {% if undated|length == 1 %}
           1 Aufgabe ohne Termin
         {% else %}
-          {{ without_date|length }} Aufgaben ohne Termin
+          {{ undated|length }} Aufgaben ohne Termin
         {% endif %}
       </h2>
     </div>
-    {% if without_date %}
+    {% if undated %}
       <ul class="priority-list">
-        {% for item in without_date %}
+        {% for item in undated %}
           <li class="priority-item priority-{{ item.priority or 'medium' }}">
             <div class="item-info">
               <div class="item-name">
@@ -765,4 +765,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+  <!-- DEBUG: Injected dashboard debug info for test diagnosis -->
+  {% if dashboard_debug_info %}
+    <div id="dashboard-debug-info" style="display:none;">{{ dashboard_debug_info }}</div>
+  {% endif %}
 {% endblock %}

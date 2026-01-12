@@ -1,0 +1,589 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.11, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\andre\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Skripts\taskmanagerv2
+plugins: anyio-4.12.1
+collecting ... collected 129 items
+
+test_edit_functionality.py::test_minimal_item_creation_undated FAILED    [  0%]
+test_edit_functionality.py::test_minimal_item_creation_with_due FAILED   [  1%]
+test_edit_functionality.py::test_login_and_ice_update FAILED             [  2%]
+test_edit_functionality.py::test_participant_management PASSED           [  3%]
+test_password.py::test_password PASSED                                   [  3%]
+test_sorting.py::test_sorting PASSED                                     [  4%]
+tests/test_compute_ice_integration.py::test_compute_ice_runs PASSED      [  5%]
+tests/test_date_filter.py::test_date_filter_functionality PASSED         [  6%]
+tests/test_date_filter.py::test_date_filter_invalid_format PASSED        [  6%]
+tests/test_date_filter.py::test_date_filter_empty_date PASSED            [  7%]
+tests/test_date_filter.py::test_date_filter_with_timezone_handling PASSED [  8%]
+tests/test_date_filter.py::test_date_filter_past_dates PASSED            [  9%]
+tests/test_db_persistence.py::test_upsert_and_row_to_item_roundtrip PASSED [ 10%]
+tests/test_db_persistence.py::test_ice_columns_check_constraints PASSED  [ 10%]
+tests/test_db_persistence.py::test_persisting_ice_from_metadata_to_columns PASSED [ 11%]
+tests/test_db_persistence.py::test_query_sort_by_ice_score PASSED        [ 12%]
+tests/test_db_persistence.py::test_backward_compatibility_metadata_only_items PASSED [ 13%]
+tests/test_db_repository.py::test_upsert_and_get_task_complete_roundtrip PASSED [ 13%]
+tests/test_db_repository.py::test_upsert_and_get_appointment_with_recurrence PASSED [ 14%]
+tests/test_db_repository.py::test_upsert_with_malformed_json_in_metadata_falls_back_gracefully PASSED [ 15%]
+tests/test_db_repository.py::test_priority_validation_constraints PASSED [ 16%]
+tests/test_db_repository.py::test_ics_uid_uniqueness_constraint PASSED   [ 17%]
+tests/test_db_repository.py::test_reminder_roundtrip_with_null_recurrence PASSED [ 17%]
+tests/test_db_repository.py::test_event_all_day_flag PASSED              [ 18%]
+tests/test_db_repository.py::test_list_by_type_filters_correctly PASSED  [ 19%]
+tests/test_db_repository.py::test_metadata_preserves_unicode_and_special_chars PASSED [ 20%]
+tests/test_db_repository.py::test_copy_item_resets_audit_and_ids PASSED  [ 20%]
+tests/test_db_repository.py::test_null_fields_do_not_break_loading PASSED [ 21%]
+tests/test_db_repository_extra.py::test_db_repository_description_persistence PASSED [ 22%]
+tests/test_db_repository_extra.py::test_db_repository_delete_and_get PASSED [ 23%]
+tests/test_db_repository_extra.py::test_db_repository_list_by_type PASSED [ 24%]
+tests/test_db_repository_extra.py::test_db_repository_filter PASSED      [ 24%]
+tests/test_db_repository_extra.py::test_db_repository_is_user_admin PASSED [ 25%]
+tests/test_db_repository_extra.py::test_db_repository_user_has_access PASSED [ 26%]
+tests/test_db_repository_extra.py::test_db_repository_get_invalid PASSED [ 27%]
+tests/test_db_repository_extra.py::test_db_repository_delete_invalid PASSED [ 27%]
+tests/test_filter.py::test_filter_text_and_type PASSED                   [ 28%]
+tests/test_filter_service.py::test_norm_s PASSED                         [ 29%]
+tests/test_filter_service.py::test_norm_lower PASSED                     [ 30%]
+tests/test_filter_service.py::test_iter_lower PASSED                     [ 31%]
+tests/test_filter_service.py::test_iter_lower_invalid PASSED             [ 31%]
+tests/test_holidays.py::test_german_holidays_integration PASSED          [ 32%]
+tests/test_holidays.py::test_get_holidays_for_period PASSED              [ 33%]
+tests/test_holidays.py::test_holidays_module_version_compatibility PASSED [ 34%]
+tests/test_holidays.py::test_holiday_translation_coverage PASSED         [ 34%]
+tests/test_holidays.py::test_holiday_period_boundary_conditions PASSED   [ 35%]
+tests/test_holidays.py::test_dynamic_holiday_loading PASSED              [ 36%]
+tests/test_ics_import.py::test_ics_status_to_app PASSED                  [ 37%]
+tests/test_ics_import.py::test_compose_description PASSED                [ 37%]
+tests/test_ics_import.py::test_clamp_priority_0_5 PASSED                 [ 38%]
+tests/test_ics_import.py::test_import_ics_minimal PASSED                 [ 39%]
+tests/test_ics_import.py::test_ics_status_to_app_invalid PASSED          [ 40%]
+tests/test_ics_import.py::test_clamp_priority_0_5_invalid PASSED         [ 41%]
+tests/test_ics_roundtrip.py::test_uid_roundtrip_task PASSED              [ 41%]
+tests/test_ics_roundtrip.py::test_uid_roundtrip_reminder PASSED          [ 42%]
+tests/test_integration_edit_route.py::test_edit_route_get_returns_200_and_renders_form PASSED [ 43%]
+tests/test_integration_edit_route.py::test_edit_route_rejects_invalid_status_and_returns_422 PASSED [ 44%]
+tests/test_integration_edit_route.py::test_edit_route_accepts_and_persists_ice_metadata FAILED [ 44%]
+tests/test_models.py::test_baseitem_defaults PASSED                      [ 45%]
+tests/test_models.py::test_task_optional_fields PASSED                   [ 46%]
+tests/test_models.py::test_recurrence_exdates_are_tuple_and_immutable PASSED [ 47%]
+tests/test_models.py::test_metadata_mutation_but_no_reassignment_allowed PASSED [ 48%]
+tests/test_models.py::test_occurrence_structure PASSED                   [ 48%]
+tests/test_models.py::test_reminder_and_appointment_defaults PASSED      [ 49%]
+tests/test_multitenant.py::TestUserModel::test_create_admin_user PASSED  [ 50%]
+tests/test_multitenant.py::TestUserModel::test_create_regular_user PASSED [ 51%]
+tests/test_multitenant.py::TestUserRepository::test_create_and_get_user PASSED [ 51%]
+tests/test_multitenant.py::TestUserRepository::test_list_users PASSED    [ 52%]
+tests/test_multitenant.py::TestMultiTenantRepository::test_create_item_with_creator PASSED [ 53%]
+tests/test_multitenant.py::TestMultiTenantRepository::test_user_access_control PASSED [ 54%]
+tests/test_multitenant.py::TestMultiTenantRepository::test_list_for_user PASSED [ 55%]
+tests/test_multitenant.py::TestAuthenticationFlow::test_session_creation PASSED [ 55%]
+tests/test_multitenant.py::TestAuthenticationFlow::test_session_deactivation PASSED [ 56%]
+tests/test_occurrence.py::test_yearly_from_start_without_rrule PASSED    [ 57%]
+tests/test_occurrence.py::test_yearly_from_rrule_dtstart PASSED          [ 58%]
+tests/test_occurrence.py::test_yearly_2902_clamped_non_leap PASSED       [ 58%]
+tests/test_occurrence.py::test_event_display_prefers_rrule_next_if_available PASSED [ 59%]
+tests/test_occurrence.py::test_non_event_tasks_do_not_roll PASSED        [ 60%]
+tests/test_scheduler_service.py::test_scheduler_expand_window PASSED     [ 61%]
+tests/test_scheduler_service.py::test_scheduler_due_within PASSED        [ 62%]
+tests/test_scheduler_service.py::test_scheduler_should_notify PASSED     [ 62%]
+tests/test_scheduler_service.py::test_scheduler_expand_window_invalid PASSED [ 63%]
+tests/test_sort_and_create.py::test_overdue_sorted_by_ice_then_priority FAILED [ 64%]
+tests/test_sort_and_create.py::test_upcoming_sort_by_date_and_score FAILED [ 65%]
+tests/test_sort_and_create.py::test_create_item_with_ice_and_due PASSED  [ 65%]
+tests/test_sort_and_create.py::test_chronological_sorting_functionality PASSED [ 66%]
+tests/test_status_manager.py::test_normalize_input_type_mismatch_returns_original PASSED [ 67%]
+tests/test_status_manager.py::test_map_csv_status_backlog_and_open PASSED [ 68%]
+tests/test_status_manager.py::test_map_ical_status_basic PASSED          [ 68%]
+tests/test_status_manager.py::test_auto_adjust_appointment_status_past_end_returns_done_like PASSED [ 69%]
+tests/test_status_manager.py::test_get_options_for_filters_by_type PASSED [ 70%]
+tests/test_status_manager.py::test_status_manager_get_display_name_invalid PASSED [ 71%]
+tests/test_status_manager.py::test_status_manager_auto_adjust_appointment_status_invalid PASSED [ 72%]
+tests/test_status_mapping.py::test_map_csv_status_task PASSED            [ 72%]
+tests/test_status_mapping.py::test_map_csv_status_reminder PASSED        [ 73%]
+tests/test_status_mapping.py::test_map_csv_status_fallback PASSED        [ 74%]
+tests/test_status_service.py::test_status_service_normalize PASSED       [ 75%]
+tests/test_status_service.py::test_status_service_display_name PASSED    [ 75%]
+tests/test_status_service.py::test_status_service_is_terminal PASSED     [ 76%]
+tests/test_status_service.py::test_status_service_options_for PASSED     [ 77%]
+tests/test_status_service.py::test_status_service_normalize_invalid PASSED [ 78%]
+tests/test_status_service.py::test_status_service_display_name_invalid PASSED [ 79%]
+tests/test_text_helpers.py::test_unescape_description_positive PASSED    [ 79%]
+tests/test_text_helpers.py::test_unescape_description_negative PASSED    [ 80%]
+tests/test_ui_interactions.py::TestUIFeatures::test_loading_states_present_in_template PASSED [ 81%]
+tests/test_ui_interactions.py::TestUIFeatures::test_toast_notification_system_present PASSED [ 82%]
+tests/test_ui_interactions.py::TestUIFeatures::test_keyboard_shortcuts_help_system PASSED [ 82%]
+tests/test_ui_interactions.py::TestUIFeatures::test_modern_confirmation_dialogs PASSED [ 83%]
+tests/test_ui_interactions.py::TestUIFeatures::test_smooth_animations_css PASSED [ 84%]
+tests/test_ui_interactions.py::TestUIFeatures::test_auto_save_indicators PASSED [ 85%]
+tests/test_ui_interactions.py::TestUIFeatures::test_improved_mobile_responsiveness PASSED [ 86%]
+tests/test_ui_interactions.py::TestUIFeatures::test_button_protection_consistency PASSED [ 86%]
+tests/test_ui_interactions.py::TestUIAccessibility::test_aria_labels_present PASSED [ 87%]
+tests/test_ui_interactions.py::TestUIAccessibility::test_keyboard_navigation_support PASSED [ 88%]
+tests/test_ui_interactions.py::TestUIAccessibility::test_focus_management PASSED [ 89%]
+tests/test_ui_interactions.py::TestPerformanceFeatures::test_lazy_loading_favicons PASSED [ 89%]
+tests/test_ui_interactions.py::TestPerformanceFeatures::test_efficient_event_handling PASSED [ 90%]
+tests/test_user_models.py::test_user_with_login_update PASSED            [ 91%]
+tests/test_user_models.py::test_user_with_activation_status PASSED       [ 92%]
+tests/test_user_models.py::test_session_is_expired PASSED                [ 93%]
+tests/test_user_models.py::test_session_with_activity_update PASSED      [ 93%]
+tests/test_user_models.py::test_user_with_login_update_invalid PASSED    [ 94%]
+tests/test_user_models.py::test_user_with_activation_status_invalid PASSED [ 95%]
+tests/test_user_models.py::test_session_is_expired_invalid PASSED        [ 96%]
+tests/test_user_repository_extra.py::test_user_repository_create_and_get PASSED [ 96%]
+tests/test_user_repository_extra.py::test_user_repository_update_and_delete PASSED [ 97%]
+tests/test_user_repository_extra.py::test_user_repository_get_by_email PASSED [ 98%]
+tests/test_user_repository_extra.py::test_user_repository_get_invalid PASSED [ 99%]
+tests/test_verify_uids.py::test_ics_contains_uid PASSED                  [100%]
+
+================================== FAILURES ===================================
+_____________________ test_minimal_item_creation_undated ______________________
+
+test_client_and_repo = (<starlette.testclient.TestClient object at 0x000001B84FB830E0>, 'C:\\Users\\andre\\AppData\\Local\\Temp\\tmpqev2int5....tc=datetime.datetime(2026, 1, 11, 21, 30, 52, 763858, tzinfo=datetime.timezone.utc), last_login_utc=None, metadata={}))
+
+    def test_minimal_item_creation_undated(test_client_and_repo):
+        """
+        Test: Nach dem Anlegen ohne due_utc erscheint das Item im Bereich 'ohne Termin'.
+        """
+        client, db_path, admin_user = test_client_and_repo
+        # Login als admin
+        login_data = {"login": "admin", "password": "admin"}
+        resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+        assert resp.status_code == 302, f"Login failed: {resp.text}"
+        for k, v in resp.cookies.items():
+            client.cookies.set(k, v)
+        # Minimal Item anlegen
+        create_data = {
+            "name": "Minimal-Test",
+            "item_type": "task"
+        }
+        headers = {"X-User-Id": admin_user.id, "HX-Request": "true"}
+        resp_create = client.post("/items/new", data=create_data, headers=headers)
+        assert resp_create.status_code in (204, 303), f"Item creation failed: {resp_create.text}"
+        # Extract item_id from redirect header
+        item_id = None
+        if resp_create.status_code == 204:
+            location = resp_create.headers.get("HX-Redirect")
+        else:
+            location = resp_create.headers.get("location")
+        if location:
+            import re
+            m = re.search(r"/items/([\w-]+)/edit", location)
+            if m:
+                item_id = m.group(1)
+        assert item_id, "Item ID could not be extracted from redirect"
+        # Status in DB pr³fen
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cur = conn.cursor()
+>       cur.execute("SELECT status FROM items WHERE name = ?", ("Minimal-Test",))
+E       sqlite3.OperationalError: no such column: status
+
+test_edit_functionality.py:47: OperationalError
+---------------------------- Captured stdout setup ----------------------------
+[DEBUG] Admin user after insert: User(id='admin-001', login='admin', email='admin@test.com', full_name='Administrator', password_hash='$2b$12$TdjZwLSTxxjrEGXOqeEou.i1kZVDP4Rp5QfvE9noWhaPXczyKoncK', role='user', is_admin=True, is_active=True, is_email_confirmed=True, email_confirmation_token=None, password_reset_token=None, password_reset_expires=None, created_utc=datetime.datetime(2026, 1, 11, 21, 30, 52, 763850, tzinfo=datetime.timezone.utc), last_modified_utc=datetime.datetime(2026, 1, 11, 21, 30, 52, 763858, tzinfo=datetime.timezone.utc), last_login_utc=None, metadata={})
+---------------------------- Captured stderr setup ----------------------------
+2026-01-11 22:30:52,959 - httpx - INFO - HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+----------------------------- Captured log setup ------------------------------
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+---------------------------- Captured stdout call -----------------------------
+[DEBUG UPSERT AFTER EXECUTE] item.id: d1ea613e-e8b4-4b6c-a37d-cf8f0a027101 metadata: {}
+---------------------------- Captured stderr call -----------------------------
+2026-01-11 22:30:53,141 - httpx - INFO - HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+2026-01-11 22:30:53,152 - httpx - INFO - HTTP Request: POST http://testserver/items/new "HTTP/1.1 204 No Content"
+------------------------------ Captured log call ------------------------------
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/items/new "HTTP/1.1 204 No Content"
+_____________________ test_minimal_item_creation_with_due _____________________
+
+test_client_and_repo = (<starlette.testclient.TestClient object at 0x000001B84FB830E0>, 'C:\\Users\\andre\\AppData\\Local\\Temp\\tmpqev2int5....tc=datetime.datetime(2026, 1, 11, 21, 30, 52, 763858, tzinfo=datetime.timezone.utc), last_login_utc=None, metadata={}))
+
+    def test_minimal_item_creation_with_due(test_client_and_repo):
+        """
+        Test: Nach Setzen von due_utc erscheint das Item im Dashboard, aber nicht mehr unter 'ohne Termin'.
+        """
+        client, db_path, admin_user = test_client_and_repo
+        # Login als admin
+        login_data = {"login": "admin", "password": "admin"}
+        resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+        assert resp.status_code == 302, f"Login failed: {resp.text}"
+        for k, v in resp.cookies.items():
+            client.cookies.set(k, v)
+        # Minimal Item anlegen
+        create_data = {
+            "name": "Minimal-Test",
+            "item_type": "task"
+        }
+        headers = {"X-User-Id": admin_user.id, "HX-Request": "true"}
+        resp_create = client.post("/items/new", data=create_data, headers=headers)
+        assert resp_create.status_code in (204, 303), f"Item creation failed: {resp_create.text}"
+        # Extract item_id from redirect header
+        item_id = None
+        if resp_create.status_code == 204:
+            location = resp_create.headers.get("HX-Redirect")
+        else:
+            location = resp_create.headers.get("location")
+        if location:
+            import re
+            m = re.search(r"/items/([\w-]+)/edit", location)
+            if m:
+                item_id = m.group(1)
+        assert item_id, "Item ID could not be extracted from redirect"
+        # due_utc setzen
+        from datetime import datetime
+        due_today = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        edit_data = {"due_utc": due_today}
+        edit_url = f"/items/{item_id}/edit"
+        resp_edit = client.post(edit_url, data=edit_data, headers={"X-User-Id": admin_user.id})
+        assert resp_edit.status_code in (200, 204, 303), f"Edit failed: {resp_edit.text}"
+        # Dashboard abfragen und pr³fen, ob das Item nicht mehr unter 'ohne Termin' erscheint
+        resp_dashboard = client.get("/dashboard")
+        assert resp_dashboard.status_code == 200
+        html = resp_dashboard.text
+        # Es kann jetzt in anderen Bereichen erscheinen, aber nicht mehr unter 'ohne Termin'
+        # (Wir pr³fen nur, dass es nicht mehr im Bereich 'ohne Termin' gelistet ist)
+        # Optional: Bereich extrahieren und gezielt pr³fen
+        if "Aufgaben ohne Termin" in html:
+            # Bereich extrahieren
+            start = html.find("Aufgaben ohne Termin")
+            end = html.find("<!-- Next 3 Months Events -->", start)
+            undated_section = html[start:end] if end > start else html[start:]
+>           assert "Minimal-Test" not in undated_section, "Item sollte nach Setzen von due_utc nicht mehr unter 'ohne Termin' erscheinen!"
+E           AssertionError: Item sollte nach Setzen von due_utc nicht mehr unter 'ohne Termin' erscheinen!
+E           assert 'Minimal-Test' not in 'Aufgaben oh...</div>\n\n  '
+E             
+E             'Minimal-Test' is contained here:
+E               Aufgaben ohne Termin
+E                       
+E                     </h2>
+E                   </div>
+E                   ...
+E             
+E             ...Full output truncated (44 lines hidden), use '-vv' to show
+
+test_edit_functionality.py:133: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[DEBUG UPSERT AFTER EXECUTE] item.id: be32d769-a641-45df-9ea4-1d7327b99188 metadata: {}
+[DEBUG UPSERT AFTER EXECUTE] item.id: be32d769-a641-45df-9ea4-1d7327b99188 metadata: {}
+---------------------------- Captured stderr call -----------------------------
+2026-01-11 22:30:53,425 - httpx - INFO - HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+2026-01-11 22:30:53,432 - httpx - INFO - HTTP Request: POST http://testserver/items/new "HTTP/1.1 204 No Content"
+2026-01-11 22:30:53,448 - web.routers.items - INFO - [DEBUG] Route POST /items/{item_id}/edit wurde genutzt f³r item_id=be32d769-a641-45df-9ea4-1d7327b99188
+2026-01-11 22:30:53,450 - httpx - INFO - HTTP Request: POST http://testserver/items/be32d769-a641-45df-9ea4-1d7327b99188/edit "HTTP/1.1 303 See Other"
+2026-01-11 22:30:53,452 - web.routers.items - INFO - [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=be32d769-a641-45df-9ea4-1d7327b99188
+2026-01-11 22:30:53,461 - httpx - INFO - HTTP Request: GET http://testserver/items/be32d769-a641-45df-9ea4-1d7327b99188/edit "HTTP/1.1 200 OK"
+2026-01-11 22:30:53,469 - web.handlers.error_handler - INFO - Operation: dashboard_access
+2026-01-11 22:30:53,500 - httpx - INFO - HTTP Request: GET http://testserver/dashboard "HTTP/1.1 200 OK"
+------------------------------ Captured log call ------------------------------
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/items/new "HTTP/1.1 204 No Content"
+INFO     web.routers.items:items.py:672 [DEBUG] Route POST /items/{item_id}/edit wurde genutzt f³r item_id=be32d769-a641-45df-9ea4-1d7327b99188
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/items/be32d769-a641-45df-9ea4-1d7327b99188/edit "HTTP/1.1 303 See Other"
+INFO     web.routers.items:items.py:80 [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=be32d769-a641-45df-9ea4-1d7327b99188
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/items/be32d769-a641-45df-9ea4-1d7327b99188/edit "HTTP/1.1 200 OK"
+INFO     web.handlers.error_handler:error_handler.py:101 Operation: dashboard_access
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/dashboard "HTTP/1.1 200 OK"
+__________________________ test_login_and_ice_update __________________________
+
+test_client_and_repo = (<starlette.testclient.TestClient object at 0x000001B84FB830E0>, 'C:\\Users\\andre\\AppData\\Local\\Temp\\tmpqev2int5....tc=datetime.datetime(2026, 1, 11, 21, 30, 52, 763858, tzinfo=datetime.timezone.utc), last_login_utc=None, metadata={}))
+
+    def test_login_and_ice_update(test_client_and_repo):
+        client, db_path, admin_user = test_client_and_repo
+        # Login als admin
+        login_data = {"login": "admin", "password": "admin"}
+        resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+        assert resp.status_code == 302, f"Login failed: {resp.text}"
+        # Set session cookie on client for subsequent requests
+        for k, v in resp.cookies.items():
+            client.cookies.set(k, v)
+        # Test-Item anlegen via App-Endpoint
+        create_data = {
+            "name": "ICE-Test",
+            "item_type": "task"
+        }
+        # Use the /items/new endpoint to create the item, with HX-Request for redirect
+        headers = {"X-User-Id": admin_user.id, "HX-Request": "true"}
+        resp_create = client.post("/items/new", data=create_data, headers=headers)
+        assert resp_create.status_code in (303, 204, 200), f"Item creation failed: {resp_create.text}"
+        # Extract item_id from redirect URL
+        if resp_create.status_code == 303:
+            location = resp_create.headers.get("location")
+        elif resp_create.status_code == 204:
+            location = resp_create.headers.get("HX-Redirect")
+        else:
+            location = None
+        assert location, "No redirect location found after item creation"
+        m = re.search(r"/items/([\w-]+)/edit", location)
+        assert m, f"Could not extract item_id from redirect location: {location}"
+        item_id = m.group(1)
+        # ICE-Felder updaten
+        ice_data = {"ice_impact": "4", "ice_confidence": "3", "ice_ease": "2"}
+        edit_url = f"/items/{item_id}/edit"
+        resp2 = client.post(edit_url, data=ice_data, headers={"X-User-Id": admin_user.id})
+        assert resp2.status_code == 200, f"ICE update failed: {resp2.text}"
+        # Check if item was updated by getting it
+        resp3 = client.get(edit_url)
+>       assert resp3.status_code == 200, f"Cannot access item edit page: {resp3.status_code}"
+E       AssertionError: Cannot access item edit page: 403
+E       assert 403 == 200
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+test_edit_functionality.py:248: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[DEBUG UPSERT AFTER EXECUTE] item.id: faf21834-8053-40ca-aff6-d5af15a3becb metadata: {}
+[DEBUG UPSERT AFTER EXECUTE] item.id: faf21834-8053-40ca-aff6-d5af15a3becb metadata: {}
+DEBUG - Checking access for user user-1 to item faf21834-8053-40ca-aff6-d5af15a3becb
+DEBUG - Schema check: creator=True, participants=True
+DEBUG - DB creator: 'admin-001', participants: 'admin-001', type: 'task'
+DEBUG - Access denied by central logic
+---------------------------- Captured stderr call -----------------------------
+2026-01-11 22:30:53,690 - httpx - INFO - HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+2026-01-11 22:30:53,697 - httpx - INFO - HTTP Request: POST http://testserver/items/new "HTTP/1.1 204 No Content"
+2026-01-11 22:30:53,713 - web.routers.items - INFO - [DEBUG] Route POST /items/{item_id}/edit wurde genutzt f³r item_id=faf21834-8053-40ca-aff6-d5af15a3becb
+2026-01-11 22:30:53,714 - httpx - INFO - HTTP Request: POST http://testserver/items/faf21834-8053-40ca-aff6-d5af15a3becb/edit "HTTP/1.1 303 See Other"
+2026-01-11 22:30:53,717 - web.routers.items - INFO - [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=faf21834-8053-40ca-aff6-d5af15a3becb
+2026-01-11 22:30:53,718 - httpx - INFO - HTTP Request: GET http://testserver/items/faf21834-8053-40ca-aff6-d5af15a3becb/edit "HTTP/1.1 200 OK"
+2026-01-11 22:30:53,720 - web.routers.items - INFO - [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=faf21834-8053-40ca-aff6-d5af15a3becb
+2026-01-11 22:30:53,721 - httpx - INFO - HTTP Request: GET http://testserver/items/faf21834-8053-40ca-aff6-d5af15a3becb/edit "HTTP/1.1 403 Forbidden"
+------------------------------ Captured log call ------------------------------
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/items/new "HTTP/1.1 204 No Content"
+INFO     web.routers.items:items.py:672 [DEBUG] Route POST /items/{item_id}/edit wurde genutzt f³r item_id=faf21834-8053-40ca-aff6-d5af15a3becb
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/items/faf21834-8053-40ca-aff6-d5af15a3becb/edit "HTTP/1.1 303 See Other"
+INFO     web.routers.items:items.py:80 [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=faf21834-8053-40ca-aff6-d5af15a3becb
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/items/faf21834-8053-40ca-aff6-d5af15a3becb/edit "HTTP/1.1 200 OK"
+INFO     web.routers.items:items.py:80 [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=faf21834-8053-40ca-aff6-d5af15a3becb
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/items/faf21834-8053-40ca-aff6-d5af15a3becb/edit "HTTP/1.1 403 Forbidden"
+______________ test_edit_route_accepts_and_persists_ice_metadata ______________
+
+    def test_edit_route_accepts_and_persists_ice_metadata():
+        repo = make_repo()
+        item = Task(id=str(uuid.uuid4()), type='task', name='Y', status='TASK_OPEN', is_private=False, creator="user-1")
+        repo.upsert(item)
+        repo.conn.commit()
+    
+        import web.server
+        from domain.status_service import StatusService
+        from domain.status_catalog import STATUS_DEFINITIONS
+        try:
+            os.environ["TEST_DB_PATH"] = repo._tmpfile
+            web.server.status_svc = StatusService(STATUS_DEFINITIONS)
+            def repo_override():
+                yield repo
+            appmod.app.dependency_overrides[appmod.get_item_repository] = repo_override
+            appmod.app.dependency_overrides[appmod.get_current_user] = lambda: fake_current_user()
+            client = TestClient(appmod.app)
+            resp = client.post(f"/items/{item.id}/edit", data={
+                'name': 'Y',
+                'status_key': 'TASK_OPEN',
+                'impact': '4',   # int-String
+                'confidence': '4',  # int-String statt 'high'
+                'ease': '5',     # int-String
+            }, headers={"X-User-Id": "user-1"})
+            # HTMX responses may return 200/204; we expect success
+            assert resp.status_code in (200, 204)
+            # Fetch from repo and verify metadata stored
+            stored = repo.get(item.id)
+            print('DEBUG STORED:', stored, getattr(stored, 'metadata', None))
+            assert stored is not None
+            meta = getattr(stored, 'metadata', {}) or {}
+>           assert meta.get('impact') == '4'
+E           AssertionError: assert None == '4'
+E            +  where None = <built-in method get of dict object at 0x000001B8504D3300>('impact')
+E            +    where <built-in method get of dict object at 0x000001B8504D3300> = {}.get
+
+tests\test_integration_edit_route.py:141: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[DEBUG UPSERT AFTER EXECUTE] item.id: e8007d3c-6713-4e01-8019-0e2e5127a873 metadata: {}
+[DEBUG UPSERT AFTER EXECUTE] item.id: e8007d3c-6713-4e01-8019-0e2e5127a873 metadata: {'ice_impact': '4', 'ice_confidence': 'high', 'ice_ease': '5', 'ice_score': '320.0'}
+DEBUG - Checking access for user user-1 to item e8007d3c-6713-4e01-8019-0e2e5127a873
+DEBUG - Schema check: creator=True, participants=True
+DEBUG - DB creator: 'user-1', participants: '', type: 'task'
+DEBUG - Access granted by central logic
+DEBUG STORED: Task(id='e8007d3c-6713-4e01-8019-0e2e5127a873', type='task', name='Y', status='TASK_OPEN', is_private=False, creator='user-1', ics_uid=None, priority=0, participants=(), description='', tags=(), links=(), metadata={}, created_utc=datetime.datetime(2026, 1, 11, 21, 30, 56, 204513, tzinfo=datetime.timezone.utc), last_modified_utc=datetime.datetime(2026, 1, 11, 21, 30, 56, 204513, tzinfo=datetime.timezone.utc), due_utc=None, recurrence=None, planned_start_utc=None, planned_end_utc=None) {}
+---------------------------- Captured stderr call -----------------------------
+2026-01-11 22:30:56,216 - web.routers.items - INFO - [DEBUG] Route POST /items/{item_id}/edit wurde genutzt f³r item_id=e8007d3c-6713-4e01-8019-0e2e5127a873
+2026-01-11 22:30:56,219 - httpx - INFO - HTTP Request: POST http://testserver/items/e8007d3c-6713-4e01-8019-0e2e5127a873/edit "HTTP/1.1 303 See Other"
+2026-01-11 22:30:56,222 - web.routers.items - INFO - [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=e8007d3c-6713-4e01-8019-0e2e5127a873
+2026-01-11 22:30:56,223 - httpx - INFO - HTTP Request: GET http://testserver/items/e8007d3c-6713-4e01-8019-0e2e5127a873/edit "HTTP/1.1 200 OK"
+------------------------------ Captured log call ------------------------------
+INFO     web.routers.items:items.py:672 [DEBUG] Route POST /items/{item_id}/edit wurde genutzt f³r item_id=e8007d3c-6713-4e01-8019-0e2e5127a873
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/items/e8007d3c-6713-4e01-8019-0e2e5127a873/edit "HTTP/1.1 303 See Other"
+INFO     web.routers.items:items.py:80 [DEBUG] Route GET /items/{item_id}/edit wurde genutzt f³r item_id=e8007d3c-6713-4e01-8019-0e2e5127a873
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/items/e8007d3c-6713-4e01-8019-0e2e5127a873/edit "HTTP/1.1 200 OK"
+__________________ test_overdue_sorted_by_ice_then_priority ___________________
+
+client = <starlette.testclient.TestClient object at 0x000001B8504EC050>
+repo_tmp = <infrastructure.db_repository.DbRepository object at 0x000001B8504F6E90>
+
+    def test_overdue_sorted_by_ice_then_priority(client, repo_tmp):
+        # Create three overdue tasks: A(high score, low prio), B(low score, high prio), C(no score, medium prio)
+        now = datetime.now(timezone.utc)
+        a = Task(id="a", type="task", name="A-highscore", status="open", is_private=False, creator="admin",
+                 due_utc=now - timedelta(days=2), priority=1,
+                 metadata={"ice_score": "20", "ice_impact": "5", "ice_confidence": "very_high", "ice_ease": "4"})
+        b = Task(id="b", type="task", name="B-highprio", status="open", is_private=False, creator="admin",
+                 due_utc=now - timedelta(days=1), priority=5,
+                 metadata={"ice_score": "2", "ice_impact": "1", "ice_confidence": "low", "ice_ease": "2"})
+        c = Task(id="c", type="task", name="C-noice", status="open", is_private=False, creator="admin",
+                 due_utc=now - timedelta(days=3), priority=3, metadata={})
+    
+        repo_tmp.upsert(a)
+        repo_tmp.upsert(b)
+        repo_tmp.upsert(c)
+        repo_tmp.conn.commit()
+    
+        # Login als admin, um Zugriff auf das Dashboard zu bekommen
+        login_data = {"login": "admin", "password": "admin"}
+        resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+        assert resp.status_code == 302, f"Login failed: {resp.text}"
+        for k, v in resp.cookies.items():
+            client.cookies.set(k, v)
+    
+        r = client.get('/dashboard')
+        assert r.status_code == 200
+        html = r.text
+        # Ensure overdue section lists items in order: A, B, C (A highest ICE, then B by ICE, then C)
+        idx_a = html.find('A-highscore')
+        idx_b = html.find('B-highprio')
+        idx_c = html.find('C-noice')
+>       assert idx_a != -1 and idx_b != -1 and idx_c != -1
+E       assert (-1 != -1)
+
+tests\test_sort_and_create.py:94: AssertionError
+---------------------------- Captured stderr setup ----------------------------
+2026-01-11 22:31:00,326 - run_multitenant_simple - INFO - Starting TaskManager Multitenant...
+2026-01-11 22:31:00,326 - run_multitenant_simple - INFO - Skipping admin user creation due to database lock - will create manually later
+2026-01-11 22:31:00,327 - run_multitenant_simple - INFO - Multitenant database schema initialized
+2026-01-11 22:31:00,328 - run_multitenant_simple - INFO - TaskManager Multitenant started successfully
+----------------------------- Captured log setup ------------------------------
+INFO     run_multitenant_simple:run_multitenant_simple.py:41 Starting TaskManager Multitenant...
+INFO     run_multitenant_simple:run_multitenant_simple.py:46 Skipping admin user creation due to database lock - will create manually later
+INFO     run_multitenant_simple:run_multitenant_simple.py:53 Multitenant database schema initialized
+INFO     run_multitenant_simple:run_multitenant_simple.py:62 TaskManager Multitenant started successfully
+---------------------------- Captured stdout call -----------------------------
+[DEBUG UPSERT AFTER EXECUTE] item.id: a metadata: {'ice_score': '20.0', 'ice_impact': '5', 'ice_confidence': 'very_high', 'ice_ease': '4'}
+[DEBUG UPSERT AFTER EXECUTE] item.id: b metadata: {'ice_score': '2.0', 'ice_impact': '1', 'ice_confidence': 'low', 'ice_ease': '2'}
+[DEBUG UPSERT AFTER EXECUTE] item.id: c metadata: {}
+---------------------------- Captured stderr call -----------------------------
+2026-01-11 22:31:00,516 - httpx - INFO - HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+2026-01-11 22:31:00,524 - web.handlers.error_handler - INFO - Operation: dashboard_access
+2026-01-11 22:31:00,551 - httpx - INFO - HTTP Request: GET http://testserver/dashboard "HTTP/1.1 200 OK"
+------------------------------ Captured log call ------------------------------
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+INFO     web.handlers.error_handler:error_handler.py:101 Operation: dashboard_access
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/dashboard "HTTP/1.1 200 OK"
+-------------------------- Captured stderr teardown ---------------------------
+2026-01-11 22:31:00,556 - run_multitenant_simple - INFO - Shutting down TaskManager Multitenant...
+---------------------------- Captured log teardown ----------------------------
+INFO     run_multitenant_simple:run_multitenant_simple.py:67 Shutting down TaskManager Multitenant...
+____________________ test_upcoming_sort_by_date_and_score _____________________
+
+client = <starlette.testclient.TestClient object at 0x000001B8505227B0>
+repo_tmp = <infrastructure.db_repository.DbRepository object at 0x000001B850518640>
+
+    def test_upcoming_sort_by_date_and_score(client, repo_tmp):
+        now = datetime.now(timezone.utc)
+        # item1: present/future
+        item1 = Task(id="i1", type="task", name="Item-early-lowscore", status="open", is_private=False, creator="admin",
+                     due_utc=now + timedelta(days=1), priority=2,
+                     metadata={"ice_score": "1"})
+        # item2: future
+        item2 = Task(id="i2", type="task", name="Item-late-highscore", status="open", is_private=False, creator="admin",
+                     due_utc=now + timedelta(days=3), priority=2,
+                     metadata={"ice_score": "10"})
+    
+    
+        repo_tmp.upsert(item1)
+        repo_tmp.upsert(item2)
+        repo_tmp.conn.commit()
+    
+        # Debug: Alle Items nach Upsert auflisten
+        all_items = repo_tmp.list_all()
+        print("[DEBUG TEST] Items nach Upsert:", [(it.id, it.name, it.creator, it.participants, it.metadata) for it in all_items])
+    
+        # Login als admin, um Zugriff auf das Dashboard zu bekommen
+        login_data = {"login": "admin", "password": "admin"}
+        resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+        assert resp.status_code == 302, f"Login failed: {resp.text}"
+        for k, v in resp.cookies.items():
+            client.cookies.set(k, v)
+    
+        # Default (date): early should come before late (only present/future)
+        r = client.get('/dashboard')
+        assert r.status_code == 200
+        html = r.text
+        print("[DASHBOARD HTML]", html)
+        # Check both upcoming_today and upcoming_next7 panels
+>       assert ('Item-early-lowscore' in html) or ('Item-early-lowscore' in html)
+E       assert ('Item-early-lowscore' in '\\n<!doctype html>\\n<html lang="de">\\n<head>\\n  <meta charset="utf-8">\\n  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\\n  <title>Dashboard - Task Manager</title>\\n  <link rel="stylesheet" href="/static/style.css?v=20260109">\\n  <link rel="stylesheet" href="/static/css/dashboard.css?v=20260109">\\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">\\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">\\n</head>\\n\\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>\\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>\\n<script>\\n  function initDatePickers(root){\\n    try {\\n      // Schon initialisierte Inputs nicht doppelt initialisieren\\n      const scope = root || document;\\n      const nodes = scope.querySelectorAll(\\'.fp-datetime:not([data-fp])\\');\\n      nodes.forEach(el => {\\n        flatpickr(el, {\\n          enableTime: true,\\n          time_24hr: true,\\n          dateFormat: "d.m.Y H:i",\\n          locale: "de"\\n        });\\n        el.setAttribute(\\'data-fp\\', \\'1\\');\\n      });\\n...rent-time\\');\\n    \\n    if (dateElement) {\\n      dateElement.textContent = dateStr;\\n    } else {\\n      console.error(\\'\u274c CRITICAL: Date element #current-date not found in DOM!\\');\\n    }\\n    \\n    if (timeElement) {\\n      timeElement.textContent = timeStr;\\n    } else {\\n      console.error(\\'\u274c CRITICAL: Time element #current-time not found in DOM!\\');\\n    }\\n  } catch (error) {\\n    console.error(\\'\u274c Error updating date/time:\\', error);\\n  }\\n}\\n\\n// ===== CRITICAL: Initialize dashboard when DOM is ready =====\\ndocument.addEventListener(\\'DOMContentLoaded\\', function() {\\n  console.log(\\'\U0001f680 Dashboard initializing...\\');\\n  \\n  // Update date and time immediately and then every second\\n  console.log(\\'\u23f0 Starting time updates...\\');\\n  updateDateTime();\\n  setInterval(updateDateTime, 1000);\\n  \\n  // Render calendar immediately (no delay needed)\\n  console.log(\\'\U0001f4c5 Rendering calendar...\\');\\n  try {\\n    renderCalendar();\\n    console.log(\\'\u2705 Dashboard initialization complete\\');\\n  } catch (error) {\\n    console.error(\\'\u274c CRITICAL: Calendar initialization failed:\\', error);\\n    console.error(\\'Stack trace:\\', error.stack);\\n  }\\n});\\n</script>\\n\\n\\n</main>\\n</body>\\n</html>' or 'Item-early-lowscore' in '\\n<!doctype html>\\n<html lang="de">\\n<head>\\n  <meta charset="utf-8">\\n  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\\n  <title>Dashboard - Task Manager</title>\\n  <link rel="stylesheet" href="/static/style.css?v=20260109">\\n  <link rel="stylesheet" href="/static/css/dashboard.css?v=20260109">\\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">\\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">\\n</head>\\n\\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>\\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>\\n<script>\\n  function initDatePickers(root){\\n    try {\\n      // Schon initialisierte Inputs nicht doppelt initialisieren\\n      const scope = root || document;\\n      const nodes = scope.querySelectorAll(\\'.fp-datetime:not([data-fp])\\');\\n      nodes.forEach(el => {\\n        flatpickr(el, {\\n          enableTime: true,\\n          time_24hr: true,\\n          dateFormat: "d.m.Y H:i",\\n          locale: "de"\\n        });\\n        el.setAttribute(\\'data-fp\\', \\'1\\');\\n      });\\n...rent-time\\');\\n    \\n    if (dateElement) {\\n      dateElement.textContent = dateStr;\\n    } else {\\n      console.error(\\'\u274c CRITICAL: Date element #current-date not found in DOM!\\');\\n    }\\n    \\n    if (timeElement) {\\n      timeElement.textContent = timeStr;\\n    } else {\\n      console.error(\\'\u274c CRITICAL: Time element #current-time not found in DOM!\\');\\n    }\\n  } catch (error) {\\n    console.error(\\'\u274c Error updating date/time:\\', error);\\n  }\\n}\\n\\n// ===== CRITICAL: Initialize dashboard when DOM is ready =====\\ndocument.addEventListener(\\'DOMContentLoaded\\', function() {\\n  console.log(\\'\U0001f680 Dashboard initializing...\\');\\n  \\n  // Update date and time immediately and then every second\\n  console.log(\\'\u23f0 Starting time updates...\\');\\n  updateDateTime();\\n  setInterval(updateDateTime, 1000);\\n  \\n  // Render calendar immediately (no delay needed)\\n  console.log(\\'\U0001f4c5 Rendering calendar...\\');\\n  try {\\n    renderCalendar();\\n    console.log(\\'\u2705 Dashboard initialization complete\\');\\n  } catch (error) {\\n    console.error(\\'\u274c CRITICAL: Calendar initialization failed:\\', error);\\n    console.error(\\'Stack trace:\\', error.stack);\\n  }\\n});\\n</script>\\n\\n\\n</main>\\n</body>\\n</html>')
+
+tests\test_sort_and_create.py:131: AssertionError
+---------------------------- Captured stderr setup ----------------------------
+2026-01-11 22:31:00,633 - run_multitenant_simple - INFO - Starting TaskManager Multitenant...
+2026-01-11 22:31:00,633 - run_multitenant_simple - INFO - Skipping admin user creation due to database lock - will create manually later
+2026-01-11 22:31:00,634 - run_multitenant_simple - INFO - Multitenant database schema initialized
+2026-01-11 22:31:00,634 - run_multitenant_simple - INFO - TaskManager Multitenant started successfully
+----------------------------- Captured log setup ------------------------------
+INFO     run_multitenant_simple:run_multitenant_simple.py:41 Starting TaskManager Multitenant...
+INFO     run_multitenant_simple:run_multitenant_simple.py:46 Skipping admin user creation due to database lock - will create manually later
+INFO     run_multitenant_simple:run_multitenant_simple.py:53 Multitenant database schema initialized
+INFO     run_multitenant_simple:run_multitenant_simple.py:62 TaskManager Multitenant started successfully
+---------------------------- Captured stdout call -----------------------------
+[DEBUG UPSERT AFTER EXECUTE] item.id: i1 metadata: {'ice_score': '1.0'}\n[DEBUG UPSERT AFTER EXECUTE] item.id: i2 metadata: {'ice_score': '10.0'}\n[DEBUG TEST] Items nach Upsert: [('i1', 'Item-early-lowscore', 'admin', (), {'ice_score': '1.0'}), ('i2', 'Item-late-highscore', 'admin', (), {'ice_score': '10.0'})]\n[DASHBOARD HTML] \n<!doctype html>\n<html lang="de">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n  <title>Dashboard - Task Manager</title>\n  <link rel="stylesheet" href="/static/style.css?v=20260109">\n  <link rel="stylesheet" href="/static/css/dashboard.css?v=20260109">\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">\n</head>\n\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>\n<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>\n<script>\n  function initDatePickers(root){\n    try {\n      // Schon initialisierte Inputs nicht doppelt initialisieren\n      const scope = root || document;\n      const nodes = scope.querySelectorAll('.fp-datetime:not([data-fp])');\n      nodes.forEach(el => {\n        flatpickr(el, {\n          enableTime: true,\n          time_24hr: true,\n          dateFormat: "d.m.Y H:i",\n          locale: "de"\n        });\n        el.setAttribute('data-fp', '1');\n      });\n    } catch(e) { /* noop */ }\n  }\n  document.addEventListener('DOMContentLoaded', () => {\n    initDatePickers(document);\n  });\n</script>\n<script src="https://unpkg.com/htmx.org@1.9.12"></script>\n\n<script>\n  // Globale htmx Hooks: Datepicker-Reinit und Alerts\n  document.addEventListener('htmx:afterSwap', (e) => {\n    // Falls ein Teilbereich neu gerendert wurde, Datepicker initialisieren\n    initDatePickers(e.target);\n  });\n\n  document.addEventListener('htmx:responseError', (e) => {\n    // 4xx/5xx: Fehlerinhalt (z. B. _alerts.html) anzeigen\n    try {\n      const alerts = document.getElementById('alerts') || document.body;\n      const wrap = document.createElement('div');\n      wrap.innerHTML = e.detail.xhr.responseText || '<div class="alert alert-error">Fehler</div>';\n      alerts.prepend(wrap);\n    } catch(_) {}\n  });\n\n  // Custom Erfolgsmeldungen via HX-Trigger (z. B. links-updated)\n  document.body.addEventListener('links-updated', () => {\n    const alerts = document.getElementById('alerts');\n    if (!alerts) return;\n    alerts.innerHTML = '<div class="alert alert-success">Links aktualisiert.</div>';\n    setTimeout(()=>{ if (alerts.firstChild) alerts.innerHTML=''; }, 3000);\n  });\n</script>\n\n<body>\n<header class="header-row" style="display:flex; justify-content:space-between; align-items:center; gap:.75rem; margin:.25rem 0 .25rem;">\n  <h1 style="margin:0;">TaskManager</h1>\n  <nav class="header-group" style="display:flex; gap:.4rem; align-items:center;">\n    <a href="/dashboard" class="header-btn">Dashboard</a>\n    <a href="/list" class="header-btn">Liste</a>\n    <a href="/import" class="header-btn">Import</a>\n    <form id="export-form-head" method="post" action="/export_selected" class="inline" style="gap:.4rem; margin:0;">\n      <input type="hidden" name="q" value="">\n      <input type="hidden" name="types" value="">\n      <input type="hidden" name="status_keys" value="">\n      <input type="hidden" name="show_private" value="0">\n      <input type="hidden" name="tags" value="">\n      <input type="hidden" name="include_past" value="0">\n      <!-- optional konsistent halten -->\n      <input type="hidden" name="range" value="">\n      <input type="hidden" name="sort" value="">\n      <input type="hidden" name="dir" value="asc">\n    </form>\n    \n    <!-- Login/Logout Bereich -->\n    \n      \n        <a href="/auth/admin/users" class="header-btn">\U0001f465 Benutzer</a>\n      \n      <span class="header-btn" style="color: #666;">Administrator</span>\n      <a href="/auth/logout" class="header-btn">Logout</a>\n    \n    \n    <button type="button" id="themeBtn" class="header-btn" aria-label="Theme umschalten">Light</button>\n  </nav>\n</header>\n\n<script>\n  // Zentrale Theme-Initialisierung inkl. Button\n  (function(){\n    const THEME_KEY = 'ui.theme';\n    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;\n    const savedTheme = localStorage.getItem(THEME_KEY);\n    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');\n    document.documentElement.setAttribute('data-theme', initialTheme);\n    const btn = document.getElementById('themeBtn');\n    function label(){\n      const cur = document.documentElement.getAttribute('data-theme') || 'light';\n      btn.textContent = (cur === 'dark') ? 'Light' : 'Dark';\n    }\n    if (btn){\n      label();\n      btn.addEventListener('click', ()=>{\n        const cur = document.documentElement.getAttribute('data-theme') || 'light';\n        const next = (cur === 'light') ? 'dark' : 'light';\n        document.documentElement.setAttribute('data-theme', next);\n        localStorage.setItem(THEME_KEY, next);\n        label();\n      });\n    }\n  })();\n</script>\n\n<main>\n  \n<!-- Kalenderdaten f\xfcr JS: tasks werden im Hauptscript gesetzt -->\n<!-- Dashboard Content -->\n\n<!-- Date and Time Header -->\n<div class="dashboard-header">\n  <div class="current-datetime">\n    <div class="current-date" id="current-date">Heute</div>\n    <div class="current-time" id="current-time">00:00</div>\n  </div>\n</div>\n\n<!-- Filter-Toolbar f\xfcr Dashboard -->\n<section class="filterbar">\n  <form method="get" action="/dashboard" class="filters" role="search" aria-label="Suche und Filter" id="dashboard-filters">\n    <div class="filter-toolbar">\n\n      <!-- Zeile 1: Hauptsuche und Grundfilter -->\n      <div class="filter-row row-main">\n        <div class="field field-search">\n          <label for="q">Suche</label>\n          <div class="input">\n            <input id="q" type="text" name="q" placeholder="Name oder Beschreibung suchen\u2026" value="" maxlength="120"\n                  data-initial-q=""\n                  data-confirmed-q=""\n                  hx-get="/dashboard"\n                  hx-trigger="keyup changed delay:300ms, search"\n                  hx-include="#dashboard-filters"\n                  hx-target=".dashboard-grid"\n                  hx-swap="outerHTML"\n                  hx-push-url="true"\n                  autocomplete="off">\n            <button type="submit" class="btn btn-xs preview-btn" id="btn-search" aria-label="Suchen" title="Suchen">\n              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\n                <circle cx="11" cy="11" r="8"></circle>\n                <path d="21 21l-4.35-4.35"></path>\n              <!-- ...existing button markup... -->\n          <label for="status_key">Status</label>\n          \n          <select id="status_key" name="status" title="Status filtern" onchange="this.form.requestSubmit()">\n            <option value="">Alle Status</option>\n            \n          </select>\n        </div>\n\n        <div class="field">\n          <label for="prio">Priorit\xe4t</label>\n          \n          <select id="prio" name="prio" title="Nach Priorit\xe4t filtern" onchange="this.form.requestSubmit()">\n            <option value="">Alle</option>\n            <option value="5" >\U0001f6a8 Blockierend</option>\n            <option value="4" >\U0001f525 Kritisch</option>\n            <option value="3" >\u26a1 Hoch</option>\n            <option value="2" >\U0001f4cb Normal</option>\n            <option value="1" >\U0001f4a4 Niedrig</option>\n            <option value="0" >\u26aa Keine</option>\n          </select>\n        </div>\n      </div>\n\n      <!-- Zeile 2: Erweiterte Filter und Optionen -->\n      <div class="filter-row row-advanced">\n        <div class="field field-tags">\n          <label for="filter-tags">Tags</label>\n          <div class="input">\n            <input id="filter-tags" type="text" name="tags" placeholder="#tag1, #tag2\u2026" autocomplete="off" value="" \n                   hx-get="/tags/suggest"\n                   hx-trigger="keyup changed delay:200ms"\n                   hx-params="*"\n                   hx-include="#filter-tags"\n                   hx-target="next .tags-filter-suggest"\n                   hx-swap="innerHTML">\n            <div class="tags-filter-suggest"></div>\n          </div>\n        </div>\n\n        <div class="field field-toggles">\n          <label>Optionen</label>\n          <div class="toggle-group">\n            <label class="toggle-item" title="Private Items anzeigen/ausblenden">\n              <input id="show_private" type="checkbox" name="show_private" value="1"  onchange="this.form.requestSubmit()">\n              <span>\U0001f512 Private</span>\n            </label>\n            <label class="toggle-item" title="Vergangene und erledigte Items anzeigen">\n              <input id="include_past" type="checkbox" name="include_past" value="1"  onchange="this.form.requestSubmit()">\n              <span>\U0001f4dc Vergangene</span>\n            </label>\n          </div>\n        </div>\n\n        <!-- Verbesserte Vorkommen-Vorschau -->\n        <div class="field field-occurrence">\n          <label>Zeitraum</label>\n          <div class="occurrence-controls">\n            \n            <a class="range-btn" \n               href="http://testserver/dashboard?range=heute" \n               title="Nur heutige Vorkommen anzeigen">\n              \U0001f4c5 Heute\n            </a>\n            <a class="range-btn" \n               href="http://testserver/dashboard?range=woche"\n               title="Vorkommen dieser Woche">\n               \U0001f4c6 Diese Woche\n            </a>\n            <a class="range-btn" \n               href="http://testserver/dashboard?range=naechstewoche"\n               title="Vorkommen der n\xe4chsten Woche">\n               \u23ed\ufe0f N\xe4chste Woche\n            </a>\n            <a class="range-btn active" \n               \n               title="N\xe4chste 3 Vorkommen pro Item (Standard)">\n               \U0001f504 Standard\n            </a>\n          </div>\n        </div>\n      </div>\n    </div>\n  </form>\n</section>\n\n<div class="dashboard-grid">\n\n  <!-- Priority Tasks -->\n  <div class="dashboard-card">\n    <div class="card-header">\n      <span>\u26a0\ufe0f</span>\n      <h2 class="card-title">\n        \n          8 \xfcberf\xe4llige Aufgaben\n        \n      </h2>\n    </div>\n    \n      <ul class="priority-list">\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/ff1eaf64-5d8d-4db9-a2ee-c8f4bcb73cb3/edit" target="_blank" title="Task: Zahnarzttermin | F\xe4llig: 22.11.2025 08:00">\n                  Zahnarzttermin\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  22.11.2025 08:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_OPEN">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/f65fd50a-ee3c-4d98-95dc-6d3c6761f562/edit" target="_blank" title="Task: Taskmanager | Priorit\xe4t: 3 | F\xe4llig: 03.11.2025 15:00">\n                  Taskmanager\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  03.11.2025 15:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_IN_PROGRESS">\n              In Bearbeitung\n            </span>\n          </li>\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/dd3dd61f-5cd3-4dfd-b810-1c965d5ce069/edit" target="_blank" title="Task: Untersuchung der Speiser\xf6hre | Priorit\xe4t: 3 | F\xe4llig: 03.11.2025 08:00">\n                  Untersuchung der Speiser\xf6hre\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  03.11.2025 08:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_OPEN">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/2efccd2b-f6af-4a55-a1d8-ebdd9aacd684/edit" target="_blank" title="Task: Dokumente f\xfcr Schlichtungsstelle raussuchen | Priorit\xe4t: 5 | F\xe4llig: 04.11.2025 16:00">\n                  Dokumente f\xfcr Schlichtungsstelle raussuchen\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  04.11.2025 16:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_BLOCKED">\n              Blockiert\n            </span>\n          </li>\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/678325ee-a48b-4fa4-925e-110061b13782/edit" target="_blank" title="Task: MSCI hebeln? | F\xe4llig: 01.12.2025 12:00">\n                  MSCI hebeln?\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  01.12.2025 12:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_OPEN">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/512a0e89-3cab-4aad-9f05-bfa75a480ad7/edit" target="_blank" title="Task: Gehaltsabrechnung herunterladen | Priorit\xe4t: 2 | F\xe4llig: 26.12.2025 12:00">\n                  Gehaltsabrechnung herunterladen\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  26.12.2025 12:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_OPEN">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/f2cc621d-fc11-4121-b1f7-cc8da24d5ab5/edit" target="_blank" title="Task: 2 Task offen | F\xe4llig: 22.11.2025 12:00">\n                  2 Task offen\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  22.11.2025 12:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_IN_PROGRESS">\n              In Bearbeitung\n            </span>\n          </li>\n        \n          <li class="priority-item overdue">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/c2768606-ade2-4211-b7a4-9ee9f8c74cc8/edit" target="_blank" title="Task: 3 Task offen bis morgen | F\xe4llig: 25.11.2025 12:00">\n                  3 Task offen bis morgen\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  25.11.2025 12:00\n                \n              </div>\n            </div>\n            <span class="status-chip status-task-TASK_IN_PROGRESS">\n              In Bearbeitung\n            </span>\n          </li>\n        \n      </ul>\n    \n  </div>\n\n  <!-- Today's Schedule -->\n  <div class="dashboard-card">\n    <div class="card-header">\n      <span>\U0001f4c5</span>\n      <div class="day-nav-container">\n        <button class="day-nav day-nav-left" onclick="changeDay(-1)">\u2039</button>\n        <h2 class="card-title" id="today-title">\n          \n            Heute (1 Element)\n          \n        </h2>\n        <button class="day-nav day-nav-right" onclick="changeDay(1)">\u203a</button>\n      </div>\n    </div>\n    <div id="today-content">\n    \n      <ul class="priority-list">\n        \n          <li class="priority-item">\n            <div class="item-info">\n              <div class="item-name">\n                \n                  <a href="/items/9274a3dd-20fc-4a4a-9708-a2e546ae6d5e/edit" target="_blank">Petra Stephan</a>\n                \n              </div>\n              <div class="item-time">\n                00:00\n              </div>\n            </div>\n            <span class="btn-simple status-event-EVENT_SCHEDULED" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Geplant\n            </span>\n          </li>\n        \n      </ul>\n    \n    </div>\n  </div>\n\n\n  <!-- Next 7 Days Panel -->\n  <div class="dashboard-card">\n    <div class="card-header">\n      <span>\u23f3</span>\n      <h2 class="card-title">\n        \n          0 Termine in den n\xe4chsten 7 Tagen\n        \n      </h2>\n    </div>\n    \n      <p class="empty-state">\U0001f4ed Keine Termine in den n\xe4chsten 7 Tagen</p>\n    \n  </div>\n\n  <!-- Upcoming Events -->\n  <div class="dashboard-card">\n    <div class="card-header">\n      <span>\U0001f4c5</span>\n      <h2 class="card-title">\n        \n          0 kommende Termine\n        \n      </h2>\n    </div>\n    \n      <p class="empty-state">\U0001f4ed Keine Termine</p>\n    \n  </div>\n\n  <!-- Tasks without Date -->\n  <div class="dashboard-card">\n    <div class="card-header">\n      <span>\u23f3</span>\n      <h2 class="card-title">\n        \n          13 Aufgaben ohne Termin\n        \n      </h2>\n    </div>\n    \n      <ul class="priority-list">\n        \n          <li class="priority-item priority-3">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/cbcdd43e-622b-4e48-900e-e0e5eb2c7d48/edit" target="_blank" title="Task: Ausgaben_NEU Anpassungen | Priorit\xe4t: 3">\n                  Ausgaben_NEU Anpassungen\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  Prio: 3\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item priority-3">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/198fafed-1249-4bf4-bf63-59fe8e2e4bf6/edit" target="_blank" title="Task: Bonus Ausgaben | Priorit\xe4t: 3">\n                  Bonus Ausgaben\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  Prio: 3\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_IN_PROGRESS" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              In Bearbeitung\n            </span>\n          </li>\n        \n          <li class="priority-item priority-3">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/526544b8-bd82-4a67-aa40-a90ffac69361/edit" target="_blank" title="Task: Veranstaltungen sammeln | Priorit\xe4t: 3">\n                  Veranstaltungen sammeln\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  Prio: 3\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_IN_PROGRESS" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              In Bearbeitung\n            </span>\n          </li>\n        \n          <li class="priority-item priority-5">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/6b7680a9-612f-414a-a3da-c6ccc759eaef/edit" target="_blank" title="Task: Eisdisco in der EisArena | Priorit\xe4t: 5">\n                  Eisdisco in der EisArena\n                </a>\n              </div>\n              <div class="item-time">\n                \n                  Prio: 5\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/d7ed37de-b4e8-4aa9-b4d3-6c3dd46dfa6b/edit" target="_blank" title="Task: Rezepte">\n                  Rezepte\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/d388d0a5-badc-4739-8f21-e6c739d3fe69/edit" target="_blank" title="Reminder: Prompt &#34;Pr\xfcfungs- und Lernsystem">\n                  Prompt &#34;Pr\xfcfungs- und Lernsystem\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-reminder-REMINDER_ACTIVE" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Aktiv\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/b41e79a3-c070-4674-abd4-41ed699b24d2/edit" target="_blank" title="Reminder: Prompt &#34;Lyra&#34;">\n                  Prompt &#34;Lyra&#34;\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-reminder-REMINDER_ACTIVE" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Aktiv\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/55a36a46-07b6-4b19-b481-f46ea327c576/edit" target="_blank" title="Task: Kirsch Spekulatius Torte zu Weihnachten">\n                  Kirsch Spekulatius Torte zu Weihnachten\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/6c7a6bf6-fb04-4aea-93ab-76df6e97a9a3/edit" target="_blank" title="Reminder: J\xfcrgen, Hub">\n                  J\xfcrgen, Hub\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-reminder-REMINDER_ACTIVE" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Aktiv\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/5aa0d57e-fc7e-4da5-b451-edb535dc54fe/edit" target="_blank" title="Task: Vorsorge f\xfcr Krisen und Katastrophen">\n                  Vorsorge f\xfcr Krisen und Katastrophen\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/ad66608d-dacb-4c07-bc41-7d0c544f69ca/edit" target="_blank" title="Task: Affinity installieren">\n                  Affinity installieren\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/a35bceb1-b1e0-4d2d-a34a-75feb6289f49/edit" target="_blank" title="Task: Microsoft KI Kurse">\n                  Microsoft KI Kurse\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n          <li class="priority-item priority-medium">\n            <div class="item-info">\n              <div class="item-name">\n                <a href="/items/dc797af4-aa73-4fda-a680-b0b585b0aedc/edit" target="_blank" title="Task: Test">\n                  Test\n                </a>\n              </div>\n              <div class="item-time">\n                \n                \n                \n              </div>\n            </div>\n            <span class="btn-simple status-task-TASK_OPEN" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">\n              Offen\n            </span>\n          </li>\n        \n      </ul>\n    \n  </div>\n\n  <!-- Next 3 Months Events -->\n  <div class="dashboard-card">\n    <div class="card-header">\n      <span>\U0001f389</span>\n      <h2 class="card-title">\n        \n          3 Ereignisse in den n\xe4chsten 3 Monaten\n        \n      </h2>\n    </div>\n    \n      <ul class="priority-list">\n        \n          <li class="priority-item ">\n            <div class="item-info">\n              <div class="item-name">\n                \n                <a href="/items/9274a3dd-20fc-4a4a-9708-a2e546ae6d5e/edit" target="_blank" title="Event: Petra Stephan | 11.01.2026">\n                  \n                  Petra Stephan\n                </a>\n                \n              </div>\n              <div class="item-time">\n                \n                  11.01.2026\n                  \n                  \n                \n              </div>\n            </div>\n\n          </li>\n        \n          <li class="priority-item ">\n            <div class="item-info">\n              <div class="item-name">\n                \n                <a href="/items/a49763d2-3940-4d28-83d6-f47111302bb4/edit" target="_blank" title="Event: Karnevalsumzug Nordhorn-Blanke | 15.02.2026 12:00-16:00">\n                  \n                  Karnevalsumzug Nordhorn-Blanke\n                </a>\n                \n              </div>\n              <div class="item-time">\n                \n                  15.02.2026\n                  \n                  \n                    \n                      12:00 - 16:00\n                    \n                  \n                \n              </div>\n            </div>\n\n          </li>\n        \n          <li class="priority-item ">\n            <div class="item-info">\n              <div class="item-name">\n                \n                <a href="/items/50f5f74b-80e2-4a50-8715-a2a9746add62/edit" target="_blank" title="Event: 4 Geburtstag | Geburtstag | 15.03.2026">\n                  \U0001f382\n                  4 Geburtstag\n                </a>\n                \n              </div>\n              <div class="item-time">\n                \n                  15.03.2026\n                  \n                  \n                \n              </div>\n            </div>\n\n          </li>\n        \n      </ul>\n    \n  </div>\n\n  <!-- Mini Calendar -->\n  <div class="dashboard-card calendar-widget">\n    <div class="card-header">\n      <span>\U0001f4c5</span>\n      <h2 class="card-title">Kalender</h2>\n    </div>\n    <div class="mini-calendar">\n      <div class="calendar-header">\n        <button class="calendar-nav" onclick="changeMonth(-1)">\u2039</button>\n        <div class="calendar-month" id="calendar-month">Januar 2026</div>\n        <button class="calendar-nav" onclick="changeMonth(1)">\u203a</button>\n      </div>\n      <div class="calendar-weekdays">\n        <div>Mo</div><div>Di</div><div>Mi</div><div>Do</div><div>Fr</div><div>Sa</div><div>So</div>\n      </div>\n      <div class="calendar-days" id="calendar-days">\n        <!-- Days will be generated by JavaScript -->\n      </div>\n    </div>\n  </div>\n\n</div>\n\n<script>\n// ===== CRITICAL: Global variables for calendar =====\nlet currentDate = new Date();  // For calendar month navigation\nlet currentViewDate = new Date();  // For today view navigation\n\nfunction changeDay(delta) {\n  currentViewDate.setDate(currentViewDate.getDate() + delta);\n  updateTodayView();\n\nfunction updateTodayView() {\n  const today = new Date();\n  const isToday = currentViewDate.toDateString() === today.toDateString();\n  const isYesterday = currentViewDate.toDateString() === new Date(today.getTime() - 86400000).toDateString();\n  const isTomorrow = currentViewDate.toDateString() === new Date(today.getTime() + 86400000).toDateString();\n  \n  let titleText;\n  if (isToday) {\n    titleText = 'Heute';\n  } else if (isYesterday) {\n    titleText = 'Gestern';\n  } else if (isTomorrow) {\n    titleText = 'Morgen';\n  } else {\n    const options = { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' };\n    titleText = currentViewDate.toLocaleDateString('de-DE', options);\n  }\n  \n  document.getElementById('today-title').textContent = titleText;\n  \n  // Load content for the selected date\n  const dateStr = currentViewDate.toISOString().split('T')[0];\n  \n  // Combine all calendar data (tasks and events) for date filtering\n  const allItems = [\n    ...calendarEvents.tasks.map(task => ({\n      id: task.id,\n      name: task.title,\n      date: task.date,\n      time: task.time,\n      status: task.overdue ? '\xdcberf\xe4llig' : 'Offen',\n      statusColor: task.overdue ? '#dc2626' : '#059669',\n      type: 'task',\n      priority: task.priority\n    })),\n    ...calendarEvents.events.map(event => ({\n      id: event.id, \n      name: event.title,\n      date: event.date,\n      time: event.is_birthday ? '' : (event.time || ''),\n      endTime: event.is_birthday ? '' : (event.endTime || ''),\n      status: event.is_birthday ? 'Geburtstag' : 'Ereignis',\n      statusColor: event.is_birthday ? '#f59e0b' : '#2563eb',\n      type: 'event',\n      is_birthday: event.is_birthday,\n      is_holiday: event.is_holiday\n    }))\n  ];\n  \n  const dayItems = allItems.filter(item => item.date === dateStr);\n  let html;\n  if (dayItems.length > 0) {\n    html = '<ul class="priority-list">';\n    dayItems.forEach(item => {\n      const timeDisplay = item.endTime ? `${item.time}-${item.endTime}` : item.time;\n      const displayTime = timeDisplay ? timeDisplay : '';\n      \n      // Create tooltip with metadata\n      let tooltip = `${item.type === 'task' ? 'Aufgabe' : item.type === 'event' ? 'Ereignis' : 'Termin'}: ${item.name}`;\n      if (item.priority) tooltip += ` | Priorit\xe4t: ${item.priority}`;\n      if (displayTime) tooltip += ` | Zeit: ${displayTime}`;\n      if (item.is_birthday) tooltip += ` | Geburtstag`;\n      if (item.is_holiday) tooltip += ` | Feiertag`;\n      \n      const priorityClass = item.priority ? `priority-${item.priority}` : 'priority-medium';\n      const prefix = item.is_birthday ? '\U0001f382 ' : (item.is_holiday ? '\U0001f38c ' : '');\n      const itemLink = item.is_holiday \n        ? `${prefix}${item.name}` \n        : `<a href="/items/${item.id}/edit" target="_blank" title="${tooltip}">${prefix}${item.name}</a>`;\n      \n      html += `<li class="priority-item ${priorityClass}">\n        <div class="item-info">\n          <div class="item-name">${itemLink}</div>\n          <div class="item-time">${displayTime}</div>\n        </div>\n        <span class="status-chip" style="border-color: ${item.statusColor}; color: ${item.statusColor};">\n          ${item.status}\n        </span>\n      </li>`;\n    });\n    html += '</ul>';\n  } else {\n    html = '<p class="empty-state">\U0001f3d6\ufe0f Keine Termine</p>';\n  }\n  \n  document.getElementById('today-content').innerHTML = html;\n}\n\n// ===== CRITICAL: Doppelte Deklaration entfernt! =====\n// currentDate ist bereits oben (Zeile 395) deklariert: let currentDate = new Date();\n\n// Calendar data from backend - include ALL items for calendar display\nlet calendarEvents = {\n  tasks: calendarTasks,\n  appointments: [], // TODO: Provide appointments as needed\n  events: [] // TODO: Provide events as needed\n};\n\nfunction changeMonth(delta) {\n  console.log('Changing month by:', delta);\n  currentDate.setMonth(currentDate.getMonth() + delta);\n    console.error('\u274c Calendar days container not found (#calendar-days)');\n    return;\n  }\n  \n  console.log('\u2713 Calendar DOM elements found');\n  \n  // Set header\n  monthHeader.textContent = `${months[currentDate.getMonth()]} ${currentDate.getFullYear()}`;\n  \n  // Clear container\n  daysContainer.innerHTML = '';\n  \n  // Calculate calendar layout\n  const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);\n  const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);\n  const startingDayOfWeek = (firstDay.getDay() + 6) % 7; // Monday = 0\n  const today = new Date();\n  \n  // Add empty cells for previous month\n  for (let i = 0; i < startingDayOfWeek; i++) {\n    const emptyDay = document.createElement('div');\n    emptyDay.className = 'calendar-day empty';\n    daysContainer.appendChild(emptyDay);\n  }\n  \n  // Add all days of current month\n  for (let day = 1; day <= lastDay.getDate(); day++) {\n    const dayElement = document.createElement('div');\n    dayElement.className = 'calendar-day';\n    \n    // Add day number\n    const dayNumber = document.createElement('div');\n    dayNumber.className = 'day-number';\n    dayNumber.textContent = day;\n    dayElement.appendChild(dayNumber);\n    \n    // Add events for this day\n    const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);\n    const dateKey = dayDate.getFullYear() + '-' + \n                    String(dayDate.getMonth() + 1).padStart(2, '0') + '-' + \n                    String(day).padStart(2, '0');\n    \n    const dayItems = getEventsForDate(dateKey);\n    \n    if (dayItems.length > 0) {\n      dayElement.classList.add('has-events');\n      \n      // Add class for many events to increase height\n      if (dayItems.length >= 4) {\n        dayElement.classList.add('has-many-events');\n      }\n      \n      const eventsContainer = document.createElement('div');\n      eventsContainer.className = 'day-events';\n      \n      // Show up to 3 events\n      dayItems.slice(0, 3).forEach(item => {\n        const eventEl = document.createElement('div');\n        let icon = '\U0001f4cb';\n        \n        if (item.itemType === 'task') {\n          icon = item.overdue ? '\u26a0\ufe0f' : (item.priority === 'high' ? '\U0001f525' : '\U0001f4cb');\n        } else if (item.itemType === 'appointment') {\n          icon = '\U0001f465';\n        } else if (item.itemType === 'event') {\n          icon = item.is_birthday ? '\U0001f382' : (item.is_holiday ? '\U0001f38c' : '\U0001f389');\n        }\n        \n        // Format time/date prefix\n        let timePrefix = '';\n        if (item.time && item.time.trim() && !item.allDay) {\n          timePrefix = `${item.time} `;\n          if (item.endTime) {\n            timePrefix = `${item.time}-${item.endTime} `;\n          }\n        }\n        \n        // Create title (limit length based on whether time is shown)\n        const titleMaxLength = timePrefix ? 8 : 15;\n        const title = (item.title || item.summary);\n        const truncatedTitle = title.length > titleMaxLength ? \n                               title.substring(0, titleMaxLength) + '...' : title;\n        \n        eventEl.className = `day-event ${item.itemType}-event`;\n        \n        // Make event clickable for editing (except holidays)\n        if (item.id && !item.is_holiday) {\n          eventEl.style.cursor = 'pointer';\n          eventEl.onclick = function(e) {\n            e.stopPropagation(); // Prevent day click\n            try {\n              window.open(`/items/${item.id}/edit`, '_blank');\n            } catch (error) {\n              alert('Fehler beim \xd6ffnen des Elements.');\n            }\n          };\n        }\n        \n        // Build display text: time + icon + title\n        let displayText;\n        if (timePrefix) {\n          eventEl.innerHTML = `<span class="event-time">${timePrefix}</span>${icon} ${truncatedTitle}`;\n        } else {\n          eventEl.textContent = `${icon} ${truncatedTitle}`;\n        }\n        \n        // Create comprehensive tooltip with all available information\n        let tooltip = `${item.itemType === 'task' ? 'Aufgabe' : \n                          item.itemType === 'appointment' ? 'Termin' : 'Ereignis'}: ${title}`;\n        \n        // Add time information\n        if (timePrefix.trim()) {\n          tooltip += ` | Zeit: ${timePrefix.trim()}`;\n        }\n        \n        // Add task-specific information\n        if (item.itemType === 'task') {\n          if (item.priority && item.priority !== '0') {\n            const prioNames = {'5': 'Blockierend', '4': 'Kritisch', '3': 'Hoch', '2': 'Normal', '1': 'Niedrig'};\n            tooltip += ` | Priorit\xe4t: ${prioNames[item.priority] || item.priority}`;\n          }\n          if (item.status && item.status !== 'offen') {\n            tooltip += ` | Status: ${item.status}`;\n          }\n          if (item.overdue) {\n            tooltip += ' | \xdcBERF\xc4LLIG!';\n          }\n        }\n        \n        // Add recurrence information\n        if (item.recurrence && item.recurrence.trim()) {\n          tooltip += ` | Wiederholung: ${item.recurrence}`;\n        }\n        \n        // Add description if available\n        if (item.description && item.description.trim()) {\n          const desc = item.description.length > 50 ? \n                       item.description.substring(0, 50) + '...' : item.description;\n          tooltip += ` | Beschreibung: ${desc}`;\n        }\n        \n        // Add tags if available\n        if (item.tags && item.tags.trim()) {\n          tooltip += ` | Tags: ${item.tags}`;\n        }\n        \n        // Add event-specific information\n        if (item.is_birthday) tooltip += ' | Geburtstag';\n        if (item.is_holiday) tooltip += ' | Feiertag';\n        if (item.allDay) tooltip += ' | Ganzt\xe4gig';\n        \n        eventEl.title = tooltip;\n        eventsContainer.appendChild(eventEl);\n      });\n      \n      dayElement.appendChild(eventsContainer);\n    }\n    \n    // Highlight today\n    if (dayDate.toDateString() === today.toDateString()) {\n      dayElement.classList.add('today');\n    }\n    \n    // Make clickable\n    dayElement.onclick = function() {\n      currentViewDate.setFullYear(dayDate.getFullYear());\n      currentViewDate.setMonth(dayDate.getMonth());\n      currentViewDate.setDate(dayDate.getDate());\n      updateTodayView();\n    };\n    \n    daysContainer.appendChild(dayElement);\n  }\n  \n  console.log('\u2705 Calendar rendered with', daysContainer.children.length, 'cells');\n}\n\n// ===== CRITICAL: Update current date and time =====\n// L\xe4uft jede Sekunde via setInterval in DOMContentLoaded\nfunction updateDateTime() {\n  try {\n    const now = new Date();\n    const options = { \n      weekday: 'long', \n      year: 'numeric', \n      month: 'long', \n      day: 'numeric' \n    };\n    const dateStr = now.toLocaleDateString('de-DE', options);\n    const timeStr = now.toLocaleTimeString('de-DE', { \n      hour: '2-digit', \n      minute: '2-digit',\n      second: '2-digit'\n    });\n    \n    const dateElement = document.getElementById('current-date');\n    const timeElement = document.getElementById('current-time');\n    \n    if (dateElement) {\n      dateElement.textContent = dateStr;\n    } else {\n      console.error('\u274c CRITICAL: Date element #current-date not found in DOM!');\n    }\n    \n    if (timeElement) {\n      timeElement.textContent = timeStr;\n    } else {\n      console.error('\u274c CRITICAL: Time element #current-time not found in DOM!');\n    }\n  } catch (error) {\n    console.error('\u274c Error updating date/time:', error);\n  }\n}\n\n// ===== CRITICAL: Initialize dashboard when DOM is ready =====\ndocument.addEventListener('DOMContentLoaded', function() {\n  console.log('\U0001f680 Dashboard initializing...');\n  \n  // Update date and time immediately and then every second\n  console.log('\u23f0 Starting time updates...');\n  updateDateTime();\n  setInterval(updateDateTime, 1000);\n  \n  // Render calendar immediately (no delay needed)\n  console.log('\U0001f4c5 Rendering calendar...');\n  try {\n    renderCalendar();\n    console.log('\u2705 Dashboard initialization complete');\n  } catch (error) {\n    console.error('\u274c CRITICAL: Calendar initialization failed:', error);\n    console.error('Stack trace:', error.stack);\n  }\n});\n</script>\n\n\n</main>\n</body>\n</html>
+---------------------------- Captured stderr call -----------------------------
+2026-01-11 22:31:00,827 - httpx - INFO - HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+2026-01-11 22:31:00,836 - web.handlers.error_handler - INFO - Operation: dashboard_access
+2026-01-11 22:31:00,840 - httpx - INFO - HTTP Request: GET http://testserver/dashboard "HTTP/1.1 200 OK"
+------------------------------ Captured log call ------------------------------
+INFO     httpx:_client.py:1025 HTTP Request: POST http://testserver/auth/login "HTTP/1.1 302 Found"
+INFO     web.handlers.error_handler:error_handler.py:101 Operation: dashboard_access
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/dashboard "HTTP/1.1 200 OK"
+-------------------------- Captured stderr teardown ---------------------------
+2026-01-11 22:31:00,845 - run_multitenant_simple - INFO - Shutting down TaskManager Multitenant...
+---------------------------- Captured log teardown ----------------------------
+INFO     run_multitenant_simple:run_multitenant_simple.py:67 Shutting down TaskManager Multitenant...
+============================== warnings summary ===============================
+web\server_modular.py:74
+  D:\Skripts\taskmanagerv2\web\server_modular.py:74: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+C:\Users\andre\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4576
+C:\Users\andre\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4576
+  C:\Users\andre\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4576: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+web\server_modular.py:92
+  D:\Skripts\taskmanagerv2\web\server_modular.py:92: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+test_edit_functionality.py: 3 warnings
+tests/test_date_filter.py: 5 warnings
+tests/test_integration_edit_route.py: 2 warnings
+tests/test_sort_and_create.py: 3 warnings
+  C:\Users\andre\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\templating.py:162: DeprecationWarning: The `name` is not the first parameter anymore. The first parameter should be the `Request` instance.
+  Replace `TemplateResponse(name, {"request": request})` by `TemplateResponse(request, name)`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED test_edit_functionality.py::test_minimal_item_creation_undated - sqlit...
+FAILED test_edit_functionality.py::test_minimal_item_creation_with_due - Asse...
+FAILED test_edit_functionality.py::test_login_and_ice_update - AssertionError...
+FAILED tests/test_integration_edit_route.py::test_edit_route_accepts_and_persists_ice_metadata
+FAILED tests/test_sort_and_create.py::test_overdue_sorted_by_ice_then_priority
+FAILED tests/test_sort_and_create.py::test_upcoming_sort_by_date_and_score - ...
+================= 6 failed, 123 passed, 17 warnings in 11.43s =================

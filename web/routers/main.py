@@ -14,8 +14,9 @@ import uuid
 from pathlib import Path
 
 from infrastructure.db_repository import DbRepository
-from infrastructure.user_repository import UserRepository
-from services.auth_service import AuthService
+from web.routers.auth import get_current_user
+from web.dependencies import get_user_repository, get_error_handler, get_auth_service, get_repository
+from web.dependencies import get_common_service_factory
 from services.common_service import CommonService
 from services.filter_service import filter_items
 from services.recurrence_service import expand_item
@@ -28,8 +29,9 @@ from domain.models import Task, Reminder
 from domain.status_catalog import STATUS_DEFINITIONS
 from domain.status_service import StatusService
 
-logger = logging.getLogger(__name__)
 
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 templates = Jinja2Templates(directory=config.get_templates_path())
 
@@ -44,6 +46,7 @@ TYPE_STATUS_OPTIONS = {
     'appointment': [(k, v['display_name']) for k, v in STATUS_DEFINITIONS.items() if 'appointment' in v.get('relevant_for_types', [])],
     'event': [(k, v['display_name']) for k, v in STATUS_DEFINITIONS.items() if 'event' in v.get('relevant_for_types', [])]
 }
+
 
 def is_holiday_item(item):
     """Check if an item is a holiday event"""
@@ -237,38 +240,8 @@ def generate_calendar_data(items, now_local, timezone, offset):
         'year': now_local.year
     }
 
-# Auth dependency functions (moved here to fix import order)
-async def get_auth_service() -> AuthService:
-    """Get auth service instance"""
-    db_path = config.get_database_url().replace('sqlite:///', '')
-    user_repo = UserRepository(db_path)
-    return AuthService(user_repo)
 
-async def get_current_user(request: Request, auth_service: AuthService = Depends(get_auth_service)) -> Optional[User]:
-    """Get current authenticated user from session"""
-    try:
-        session_token = request.cookies.get("session_token")
-        if not session_token:
-            return None
-            
-        user = auth_service.get_user_from_session_token(session_token)
-        return user
-    except Exception as e:
-        logger.error(f"Error getting current user: {e}")
-        return None
 
-def require_auth(current_user: Optional[User] = Depends(get_current_user)) -> User:
-    """Require authentication, redirect to login if not authenticated"""
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return current_user
-
-@router.get("/")
-async def root_redirect(current_user: Optional[User] = Depends(get_current_user)):
-    """Redirect root to dashboard or login"""
-    if not current_user:
-        return RedirectResponse("/auth/login", status_code=302)
-    return RedirectResponse("/dashboard", status_code=302)
 
 # Color mappings
 TYPE_STATUS_COLORS = {
@@ -288,47 +261,6 @@ TYPE_STATUS_COLORS = {
     }
 }
 
-def get_repository():
-    """Dependency to get database repository"""
-    db_path = config.get_database_url().replace('sqlite:///', '')
-    return DbRepository(db_path)
-
-def get_user_repository():
-    """Dependency to get user repository"""
-    db_path = config.get_database_url().replace('sqlite:///', '')
-    return UserRepository(db_path)
-
-def get_auth_service():
-    """Dependency to get auth service"""
-    user_repo = get_user_repository()
-    return AuthService(user_repo)
-
-async def get_current_user(request: Request, auth_service: AuthService = Depends(get_auth_service)) -> Optional[User]:
-    """Get current authenticated user from session"""
-    # Check both possible cookie names for compatibility
-    token = request.cookies.get("auth_token") or request.cookies.get("session_token")
-    if not token:
-        logger.debug("No session token found in cookies")
-        return None
-    
-    logger.debug(f"Found session token: {token[:20]}...")
-    # Use the async method for proper session validation
-    user = await auth_service.get_user_from_session(token)
-    
-    if user:
-        logger.debug(f"User authenticated: {user.login}")
-    else:
-        logger.debug("Session validation failed - no user found")
-    
-    return user
-
-def get_error_handler():
-    """Dependency to get error handler"""
-    return ErrorHandler(templates)
-
-def get_common_service(repository: DbRepository = Depends(get_repository)):
-    """Dependency to get common service"""
-    return CommonService(repository)
 
 @router.get("/", response_class=HTMLResponse, name="index")
 async def homepage(
@@ -353,7 +285,7 @@ async def list_view(
     current_user: Optional[User] = Depends(get_current_user),
     repository: DbRepository = Depends(get_repository),
     error_handler: ErrorHandler = Depends(get_error_handler),
-    common_service: CommonService = Depends(get_common_service),
+    common_service: CommonService = Depends(get_common_service_factory),
     # Legacy parameters for backwards compatibility - now just used for specialized logic
     min_prio: Optional[str] = Query(None),    # Mindestpriorität
     tag_mode: str = Query("all"),              # all (UND) oder any (ODER)
@@ -406,7 +338,7 @@ async def list_view(
             "status_choices": [(sd.key, sd.display_name) for sd in _status_service.sm.get_options_for(None)]
         }
         
-        return templates.TemplateResponse("index.html", context)
+        return templates.TemplateResponse(request, "index.html", context)
         
     except Exception as e:
         logger.error(f"List view error: {str(e)}")
@@ -418,7 +350,7 @@ async def dashboard(
     current_user: Optional[User] = Depends(get_current_user),
     repository: DbRepository = Depends(get_repository),
     error_handler: ErrorHandler = Depends(get_error_handler),
-    common_service: CommonService = Depends(get_common_service),
+    common_service: CommonService = Depends(get_common_service_factory),
     offset: int = Query(0, ge=0),
     debug: bool = Query(False),
     sort_by: Optional[str] = Query(None, description="Sortierung: 'date' oder 'score'")
@@ -438,6 +370,9 @@ async def dashboard(
         
         # Get filtered items using common service
         all_items = common_service.get_items_for_user_with_filters(current_user.id, filter_params)
+        print(f"[DASHBOARD DEBUG] current_user.id={getattr(current_user, 'id', None)}; all_items count={len(all_items)}")
+        for it in all_items:
+            print(f"  - {it.id}: {getattr(it, 'name', '')} (type={getattr(it, 'type', None)}, due={getattr(it, 'due_utc', None)}, prio={getattr(it, 'priority', None)}, meta={getattr(it, 'metadata', None)})")
         
         # Get common date ranges
         date_ranges = common_service.get_date_ranges_berlin()
@@ -468,7 +403,7 @@ async def dashboard(
         seen_today = set()
         seen_next7 = set()
         seen_3m = set()
-        
+
         for item in all_items:
             # Überfällige Tasks
             if item.type == 'task' and hasattr(item, 'due_utc') and item.due_utc:
@@ -480,7 +415,7 @@ async def dashboard(
                         upcoming_today.append(item)
                     elif due_date <= week_end and not is_terminal_status(item.status):
                         upcoming_next7.append(item)
-            
+
             # Events und Termine
             elif item.type in ['event', 'appointment']:
                 if hasattr(item, 'start_utc') and item.start_utc:
@@ -528,6 +463,53 @@ async def dashboard(
                 if not is_terminal_status(item.status):
                     undated.append(item)
         
+
+        # DEBUG: Print overdue task names and IDs for test diagnosis
+        print("[DASHBOARD DEBUG] Overdue tasks:")
+        for t in overdue:
+            print(f"  - {t.id}: {getattr(t, 'name', '')} (due={getattr(t, 'due_utc', None)}, prio={getattr(t, 'priority', None)}, ice={getattr(t, 'metadata', {}).get('ice_score', None)})")
+
+        def get_ice_score(item):
+            # Try both DB column and metadata
+            score = None
+            if hasattr(item, 'metadata') and item.metadata:
+                try:
+                    score = float(item.metadata.get('ice_score', 0))
+                except Exception:
+                    score = 0
+            # If DB attribute exists and is not None, prefer it
+            if hasattr(item, 'ice_score') and getattr(item, 'ice_score', None) is not None:
+                try:
+                    score = float(item.ice_score)
+                except Exception:
+                    pass
+            return score if score is not None else 0
+
+        overdue.sort(
+            key=lambda x: (
+                -get_ice_score(x),
+                -(x.priority or 0),
+                x.due_utc or datetime.min
+            )
+        )
+
+        # Sort upcoming_next7 and upcoming_today by ICE score if requested
+        if sort_by == "score":
+            upcoming_next7.sort(
+                key=lambda x: (
+                    -get_ice_score(x),
+                    -(x.priority or 0),
+                    x.due_utc or datetime.max
+                )
+            )
+            upcoming_today.sort(
+                key=lambda x: (
+                    -get_ice_score(x),
+                    -(x.priority or 0),
+                    x.due_utc or datetime.max
+                )
+            )
+
         # Limit events_next2m to avoid UI overload - maximal 30, aber Geburtstage immer behalten
         if len(events_next2m) > 30:
             birthdays = [e for e in events_next2m if is_birthday(e)]
@@ -542,7 +524,7 @@ async def dashboard(
 
             remaining_slots = max(0, 30 - len(birthdays))
             events_next2m = birthdays + others[:remaining_slots]
-        
+
         # Build calendarTasks for JS (all relevant items for the calendar)
         def serialize_task(task, overdue_flag=False):
             if task.type == 'task' and getattr(task, 'due_utc', None):
@@ -607,7 +589,7 @@ async def dashboard(
             "calendarTasks": calendarTasks
         }
         
-        return templates.TemplateResponse("dashboard.html", context)
+        return templates.TemplateResponse(request, "dashboard.html", context)
         
     except Exception as e:
         logger.error(f"Dashboard error: {str(e)}")
@@ -628,7 +610,7 @@ async def import_page(
         if not current_user:
             return RedirectResponse("/auth/login", status_code=302)
         
-        return templates.TemplateResponse("import.html", {"request": request, "current_user": current_user})
+        return templates.TemplateResponse(request, "import.html", {"request": request, "current_user": current_user})
         
     except Exception as e:
         logger.error(f"Import page error: {str(e)}")
@@ -950,7 +932,7 @@ async def import_upload(
         }
         
         # Create response and handle cookie (matching original)
-        response = templates.TemplateResponse("dashboard.html", context)
+        response = templates.TemplateResponse(request, "dashboard.html", context)
         
         # If the user explicitly supplied a sort_by in the query, persist it as a cookie
         if sort_by and sort_by.lower() in ("date", "score"):
@@ -970,4 +952,4 @@ async def health_check():
 @router.get("/about")  
 async def about(request: Request):
     """About page"""
-    return templates.TemplateResponse("about.html", {"request": request})
+    return templates.TemplateResponse(request, "about.html", {"request": request})

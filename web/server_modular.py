@@ -70,31 +70,30 @@ app.include_router(items_router)
 app.include_router(tags_router)
 app.include_router(links_router)
 
-# Application lifecycle events
-@app.on_event("startup")
-async def startup_event():
-    """Application startup tasks"""
+
+# Lifespan-Handler (empfohlen von FastAPI)
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    # Startup
     logger.info("Task Manager application starting up...")
     logger.info(f"Configuration: {config.get_config_dict()}")
-    
-    # Ensure database exists
     from infrastructure.db_repository import DbRepository
     repository = DbRepository(config.get_database_url())
     try:
-        # Test database connection
         items = repository.get_all_items()
         logger.info(f"Database connected successfully. Found {len(items)} items.")
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
-        
     logger.info("Application startup completed successfully")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown tasks"""
+    yield
+    # Shutdown
     logger.info("Task Manager application shutting down...")
     # Add cleanup tasks here if needed
     logger.info("Application shutdown completed")
+
+app.router.lifespan_context = lifespan
 
 # Development server entry point
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from services.recurrence_service import expand_item
 from infrastructure.ical_mapper import to_ics
 from infrastructure.ical_importer import import_ics
 from utils.datetime_helpers import now_utc
+from utils.text_helpers import unescape_description
 
 # --- App Initialization ---
 app = FastAPI()
@@ -52,10 +53,6 @@ def format_local(dt: Optional[datetime], fmt: str = "%d.%m.%Y %H:%M") -> str:
 templates.env.filters["format_local"] = format_local
 
 # Jinja-Filter für Beschreibung: '\n' → Zeilenumbruch, '\,' → Komma
-def unescape_description(value):
-    if not value:
-        return ""
-    return value.replace('\\n', '\n').replace('\\,', ',')
 templates.env.filters["unescape_description"] = unescape_description
 
 def get_repo():

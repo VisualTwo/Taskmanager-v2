@@ -5,9 +5,9 @@ from fastapi.testclient import TestClient
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
 
-from web.server import app
 from infrastructure.db_repository import DbRepository
 from domain.models import Task, Event, Appointment
+from web.server_modular import app
 
 
 def mock_repo_with_test_data():
@@ -65,8 +65,13 @@ def mock_repo_with_test_data():
         print("[DEBUG] mock_repo.list_all called", flush=True)
         return test_items
     repo.list_all.side_effect = list_all
+    def list_for_user(user_id):
+        print(f"[DEBUG] mock_repo.list_for_user called for user {user_id}", flush=True)
+        return test_items
+    repo.list_for_user.side_effect = list_for_user
     # Mock conn für DbRepository
     mock_conn = Mock()
+    mock_conn.execute.return_value.fetchone.return_value = {"id": "admin-001", "login": "admin", "ist_admin": 1}
     repo.conn = mock_conn
     return repo
 
@@ -75,44 +80,44 @@ def test_date_filter_functionality():
     """Test that the date filter correctly filters items by occurrence date."""
     # Mock the repository dependency
     app.dependency_overrides = {}
-    
-    # Create test client  
+    from web.routers.main import get_repository
+    app.dependency_overrides[get_repository] = mock_repo_with_test_data
     client = TestClient(app)
-    
-    # Override the repo dependency with our mock
-    from web.server import get_repo
-    app.dependency_overrides[get_repo] = mock_repo_with_test_data
-    
+    # Login as admin
+    login_data = {"login": "admin", "password": "admin"}
+    resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+    assert resp.status_code == 302, f"Login failed: {resp.text}"
+    for k, v in resp.cookies.items():
+        client.cookies.set(k, v)
     # Test filtering by date 07.01.2026
-    response = client.get("/?date=07.01.2026")
-    
+    response = client.get("/list?date=07.01.2026&include_past=1")
     # Should return 200 OK
     assert response.status_code == 200
-    
     # Check that the response contains items for that date
     content = response.text
     assert "Task for 07.01.2026" in content
     assert "Event for 07.01.2026" in content  
     assert "Appointment for 07.01.2026" in content
-    
     # Should NOT contain items from other dates
     assert "Task for different date" not in content
-    
     # Should NOT contain items without dates
     assert "Task without date" not in content
 
 
 def test_date_filter_invalid_format():
     """Test that invalid date formats are ignored gracefully."""
-    from web.server import get_repo
-    app.dependency_overrides[get_repo] = mock_repo_with_test_data
-    
+    from web.routers.main import get_repository
+    app.dependency_overrides[get_repository] = mock_repo_with_test_data
     client = TestClient(app)
-    
+    # Login as admin
+    login_data = {"login": "admin", "password": "admin"}
+    resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+    assert resp.status_code == 302, f"Login failed: {resp.text}"
+    for k, v in resp.cookies.items():
+        client.cookies.set(k, v)
     # Test with invalid date format - should not crash
-    response = client.get("/?date=invalid-date")
+    response = client.get("/list?date=invalid-date&include_past=1")
     assert response.status_code == 200
-    
     # Should return all items since filter is ignored
     content = response.text  
     assert "Task for 07.01.2026" in content
@@ -121,21 +126,19 @@ def test_date_filter_invalid_format():
 
 def test_date_filter_empty_date():
     """Test that empty date parameter is ignored."""
-    from web.server import get_repo
-    print('[DEBUG] test get_repo id:', id(get_repo), flush=True)
-    app.dependency_overrides[get_repo] = mock_repo_with_test_data
-    print('[DEBUG] dependency_overrides:', app.dependency_overrides, flush=True)
+    from web.routers.main import get_repository
+    app.dependency_overrides[get_repository] = mock_repo_with_test_data
     client = TestClient(app)
+    # Login as admin
+    login_data = {"login": "admin", "password": "admin"}
+    resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+    assert resp.status_code == 302, f"Login failed: {resp.text}"
+    for k, v in resp.cookies.items():
+        client.cookies.set(k, v)
     try:
-        response = client.get("/?date=")
+        response = client.get("/list?date=&include_past=1")
         assert response.status_code == 200
         content = response.text
-        print('RESPONSE TEXT:', content)
-        # Print debug: check if expected item is present
-        if "Task for 07.01.2026" not in content:
-            print("[TEST DEBUG] 'Task for 07.01.2026' NOT FOUND in response!")
-        else:
-            print("[TEST DEBUG] 'Task for 07.01.2026' FOUND in response!")
         assert "Task for 07.01.2026" in content
     finally:
         app.dependency_overrides = {}  # Clean up overrides
@@ -143,15 +146,18 @@ def test_date_filter_empty_date():
 
 def test_date_filter_with_timezone_handling():
     """Test that timezone conversion works correctly."""
-    from web.server import get_repo
-    app.dependency_overrides[get_repo] = mock_repo_with_test_data
-    
-    client = TestClient(app) 
-    
+    from web.routers.main import get_repository
+    app.dependency_overrides[get_repository] = mock_repo_with_test_data
+    client = TestClient(app)
+    # Login as admin
+    login_data = {"login": "admin", "password": "admin"}
+    resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+    assert resp.status_code == 302, f"Login failed: {resp.text}"
+    for k, v in resp.cookies.items():
+        client.cookies.set(k, v)
     # Test date that should match items when converted to Berlin timezone
-    response = client.get("/?date=07.01.2026")
+    response = client.get("/list?date=07.01.2026&include_past=1")
     assert response.status_code == 200
-    
     content = response.text
     # Items with UTC times on 07.01.2026 should be included 
     assert "Task for 07.01.2026" in content
@@ -184,20 +190,25 @@ def test_date_filter_past_dates():
         )
     ]
     repo.list_all.return_value = past_items
+    repo.list_for_user.return_value = past_items
     
     # Mock conn für DbRepository
     mock_conn = Mock()
+    mock_conn.execute.return_value.fetchone.return_value = {"id": "admin-001", "login": "admin", "ist_admin": 1}
     repo.conn = mock_conn
     
-    from web.server import get_repo
-    app.dependency_overrides[get_repo] = lambda: repo
-    
+    from web.routers.main import get_repository
+    app.dependency_overrides[get_repository] = lambda: repo
     client = TestClient(app)
-    
+    # Login as admin
+    login_data = {"login": "admin", "password": "admin"}
+    resp = client.post("/auth/login", data=login_data, follow_redirects=False)
+    assert resp.status_code == 302, f"Login failed: {resp.text}"
+    for k, v in resp.cookies.items():
+        client.cookies.set(k, v)
     # Filter by past date  
-    response = client.get("/?date=25.12.2025&include_past=1")  # Enable past items to see events
+    response = client.get("/list?date=25.12.2025&include_past=1")  # Enable past items to see events
     assert response.status_code == 200
-    
     content = response.text
     assert "Past task" in content
     assert "Past event" in content

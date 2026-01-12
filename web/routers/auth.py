@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import logging
 
 from domain.user_models import User
-from infrastructure.user_repository import UserRepository
+from web.dependencies import get_user_repository, get_auth_service, get_email_service, get_error_handler
 from services.auth_service import AuthService
 from services.email_service import EmailService
 from web.handlers.config import config
@@ -30,30 +30,11 @@ def urlencode_qs(params):
 templates.env.filters['urlencode_qs'] = urlencode_qs
 templates.env.filters['format_local'] = lambda dt, fmt='%d.%m.%Y %H:%M': dt.strftime(fmt) if dt else ""
 
-# Dependency injection
-def get_user_repository():
-    """Dependency to get user repository"""
-    return UserRepository(config.get_database_url().replace('sqlite:///', ''))
-
-def get_auth_service():
-    """Dependency to get auth service"""
-    return AuthService(get_user_repository())
-
-def get_email_service():
-    """Dependency to get email service"""
-    return EmailService(
-        enabled=config.features.email_enabled if hasattr(config.features, 'email_enabled') else False
-    )
-
-def get_error_handler():
-    """Dependency to get error handler"""
-    return ErrorHandler(templates)
-
 def get_current_user(
     auth_token: Optional[str] = Cookie(None),
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service = Depends(get_auth_service)
 ) -> Optional[User]:
-    """Get current user from session token"""
+    # Only use 'auth_token' for session cookie
     if not auth_token:
         return None
     return auth_service.get_user_from_session_token(auth_token)
@@ -96,16 +77,15 @@ async def login(
     request: Request,
     login: Annotated[str, Form()],
     password: Annotated[str, Form()],
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """Handle login form submission"""
+    user, error, success = None, None, None
     try:
-        user, error_message = auth_service.authenticate_user(login, password)
-        
+        user, error = auth_service.authenticate_user(login, password)
         if user:
             # Create session
             session = auth_service.create_session(user)
-            
             # Set cookie and redirect to dashboard
             response = RedirectResponse(url="/dashboard", status_code=302)
             response.set_cookie(
@@ -118,20 +98,20 @@ async def login(
             )
             return response
         else:
-            # Show login page with error
-            return templates.TemplateResponse("auth.html", {
+            return templates.TemplateResponse(request, "auth.html", {
                 "request": request,
                 "is_register": False,
-                "error": error_message,
+                "error": error or "Login fehlgeschlagen.",
+                "success": None,
                 "request_data": {"login": login}
             })
-    
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
-        return templates.TemplateResponse("auth.html", {
+        return templates.TemplateResponse(request, "auth.html", {
             "request": request,
             "is_register": False,
-            "error": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+            "error": str(e),
+            "success": None,
             "request_data": {"login": login}
         })
 
@@ -225,7 +205,7 @@ async def confirm_email(
     """Handle email confirmation"""
     success, message = auth_service.confirm_email(token)
     
-    return templates.TemplateResponse("confirm_email.html", {
+    return templates.TemplateResponse(request, "confirm_email.html", {
         "request": request,
         "success": success,
         "error": None if success else message
@@ -239,6 +219,11 @@ async def forgot_password_page(
 ):
     """Display forgot password page"""
     return templates.TemplateResponse("forgot_password.html", {
+        "request": request,
+        "error": error,
+        "success": success
+    })
+    return templates.TemplateResponse(request, "forgot_password.html", {
         "request": request,
         "error": error,
         "success": success
@@ -269,11 +254,11 @@ async def forgot_password(
     
     except Exception as e:
         logger.error(f"Forgot password error: {str(e)}")
-        return templates.TemplateResponse("forgot_password.html", {
+        return templates.TemplateResponse(request, "forgot_password.html", {
             "request": request,
-            "error": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut."
+            "error": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+            "success": None
         })
-
 @router.post("/logout")
 async def logout(
     auth_token: Optional[str] = Cookie(None),
@@ -338,7 +323,7 @@ async def user_management(
         "admin_users": admin_users
     }
     
-    return templates.TemplateResponse("user_management.html", {
+    return templates.TemplateResponse(request,"user_management.html", {
         "request": request,
         "current_user": current_user,
         "users": users,
@@ -403,6 +388,10 @@ async def new_user_page(
         "request": request,
         "current_user": current_user
     })
+    return templates.TemplateResponse(request, "user_new.html", {
+        "request": request,
+        "current_user": current_user
+    })
 
 @router.post("/admin/users/new")
 async def create_new_user(
@@ -422,7 +411,7 @@ async def create_new_user(
     try:
         # Validate passwords match
         if password != password_confirm:
-            return templates.TemplateResponse("user_new.html", {
+            return templates.TemplateResponse(request, "user_new.html", {
                 "request": request,
                 "current_user": current_user,
                 "error": "Die Passwörter stimmen nicht überein.",
@@ -437,7 +426,7 @@ async def create_new_user(
             return RedirectResponse(url="/auth/admin/users?success=Benutzer erfolgreich erstellt", status_code=302)
         else:
             # Show form with error
-            return templates.TemplateResponse("user_new.html", {
+            return templates.TemplateResponse(request, "user_new.html", {
                 "request": request,
                 "current_user": current_user,
                 "error": error_message,
@@ -446,7 +435,7 @@ async def create_new_user(
     
     except Exception as e:
         logger.error(f"Create user error: {str(e)}")
-        return templates.TemplateResponse("user_new.html", {
+        return templates.TemplateResponse(request, "user_new.html", {
             "request": request,
             "current_user": current_user,
             "error": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
@@ -509,11 +498,10 @@ async def update_user(
         if success:
             return RedirectResponse(url="/auth/admin/users?success=Benutzer erfolgreich aktualisiert", status_code=302)
         else:
-            return templates.TemplateResponse("user_edit.html", {
+            return templates.TemplateResponse(request, "user_edit.html", {
                 "request": request,
                 "current_user": current_user,
-                "user_to_edit": user_to_edit,
-                "error": "Fehler beim Speichern der Änderungen"
+                "user_to_edit": user_to_edit
             })
     
     except HTTPException:
