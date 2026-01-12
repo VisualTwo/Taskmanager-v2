@@ -1,16 +1,15 @@
-import os
-import tempfile
-import bcrypt
 import pytest
-from fastapi import FastAPI, Depends, Request, Response, status, Form, APIRouter
+from fastapi import FastAPI, Depends, Request, Response, status, Form
 from fastapi.testclient import TestClient
+from fastapi.responses import RedirectResponse
+import tempfile, os
+import bcrypt
 from infrastructure.session_repository import SessionRepository
 
 class DummyUser:
     def __init__(self, id, password_hash):
         self.id = id
         self.password_hash = password_hash
-
 class DummyUserRepository:
     def __init__(self, user_id, password):
         self.user_id = user_id
@@ -20,9 +19,7 @@ class DummyUserRepository:
             return DummyUser(uid, self.hash_)
         return None
 
-
-def test_login_success_and_fail(monkeypatch):
-    """Testet erfolgreichen und fehlschlagenden Login inkl. Session-Cookie."""
+def test_logout_removes_session_and_cookie(monkeypatch):
     user_id = "testuser"
     password = "geheim"
     dummy_repo = DummyUserRepository(user_id, password)
@@ -31,6 +28,9 @@ def test_login_success_and_fail(monkeypatch):
     session_repo = SessionRepository(db_path)
     def get_session_repo():
         return session_repo
+    def get_user_repo():
+        return dummy_repo
+    from fastapi import APIRouter
     router = APIRouter()
     @router.post("/login")
     async def login(request: Request, response: Response, user_id: str = Form(...), password: str = Form(...), session_repo: SessionRepository = Depends(get_session_repo)):
@@ -43,22 +43,34 @@ def test_login_success_and_fail(monkeypatch):
         response = Response(status_code=303)
         response.set_cookie(key="session_id", value=session_id)
         return response
+    @router.get("/logout")
+    async def logout(request: Request, response: Response, session_repo: SessionRepository = Depends(get_session_repo)):
+        session_id = request.cookies.get("session_id")
+        if session_id:
+            session_repo.delete_session(session_id)
+        response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+        response.delete_cookie("session_id")
+        return response
     app = FastAPI()
     app.include_router(router)
     client = TestClient(app)
     try:
-        # Erfolgreicher Login
+        # Login, um Session zu setzen
         resp = client.post("/login", data={"user_id": user_id, "password": password})
         assert resp.status_code == 303
-        # Session-Cookie gesetzt?
-        set_cookie = resp.headers.get("set-cookie", "")
-        assert "session_id=" in set_cookie
         # Setze Cookie direkt auf Client
         client.cookies.update(resp.cookies)
-        # Fehlgeschlagener Login
-        resp2 = client.post("/login", data={"user_id": user_id, "password": "falsch"})
-        assert resp2.status_code == 401
-        assert "Login fehlgeschlagen" in resp2.text
+        # Session existiert in DB
+        assert session_repo.get_user_id("dummy-session") == user_id
+        # Logout
+        resp2 = client.get("/logout", follow_redirects=False)
+        assert resp2.status_code == 303
+        assert resp2.headers["location"] == "/login"
+        # Session ist gelöscht
+        assert session_repo.get_user_id("dummy-session") is None
+        # Cookie ist gelöscht (Set-Cookie mit expires in Vergangenheit)
+        set_cookie = resp2.headers.get("set-cookie", "")
+        assert ("session_id=;" in set_cookie or 'session_id=""' in set_cookie) and "Max-Age=0" in set_cookie
     finally:
         session_repo.conn.close()
         os.remove(db_path)

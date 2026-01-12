@@ -50,13 +50,15 @@ def get_error_handler():
     return ErrorHandler(templates)
 
 def get_current_user(
-    auth_token: Optional[str] = Cookie(None),
+    request: Request,
+    session_id: Optional[str] = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ) -> Optional[User]:
-    """Get current user from session token"""
-    if not auth_token:
+    """Get current user from session_id using SessionRepository"""
+    if not session_id:
         return None
-    return auth_service.get_user_from_session_token(auth_token)
+    db_path = getattr(request.state, 'user_db_path', None)
+    return auth_service.get_user_from_session_token(session_id, db_path=db_path)
 
 def require_auth(current_user: Optional[User] = Depends(get_current_user)) -> User:
     """Require authenticated user"""
@@ -100,17 +102,16 @@ async def login(
 ):
     """Handle login form submission"""
     try:
-        user, error_message = auth_service.authenticate_user(login, password)
-        
+        db_path = getattr(request.state, 'user_db_path', None)
+        user, error_message = auth_service.authenticate_user(login, password, db_path=db_path)
         if user:
-            # Create session
-            session = auth_service.create_session(user)
-            
+            # Create session in SessionRepository
+            session_id = auth_service.create_session(user, db_path=db_path)
             # Set cookie and redirect to dashboard
             response = RedirectResponse(url="/dashboard", status_code=302)
             response.set_cookie(
-                key="auth_token",
-                value=session.token,
+                key="session_id",
+                value=session_id,
                 httponly=True,
                 secure=False,  # Set to True in production with HTTPS
                 samesite="lax",
@@ -125,7 +126,6 @@ async def login(
                 "error": error_message,
                 "request_data": {"login": login}
             })
-    
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
         return templates.TemplateResponse("auth.html", {
@@ -274,30 +274,34 @@ async def forgot_password(
             "error": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut."
         })
 
+
 @router.post("/logout")
 async def logout(
-    auth_token: Optional[str] = Cookie(None),
+    request: Request,
+    session_id: Optional[str] = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Handle logout"""
-    if auth_token:
-        auth_service.logout_user(auth_token)
-    
+    db_path = getattr(request.state, 'user_db_path', None)
+    if session_id:
+        auth_service.logout_user(session_id, db_path=db_path)
     response = RedirectResponse(url="/login", status_code=302)
-    response.delete_cookie("auth_token")
+    response.delete_cookie("session_id")
     return response
+
 
 @router.get("/logout")
 async def logout_get(
-    auth_token: Optional[str] = Cookie(None),
+    request: Request,
+    session_id: Optional[str] = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Handle logout via GET (for convenience)"""
-    if auth_token:
-        auth_service.logout_user(auth_token)
-    
+    db_path = getattr(request.state, 'user_db_path', None)
+    if session_id:
+        auth_service.logout_user(session_id, db_path=db_path)
     response = RedirectResponse(url="/login", status_code=302)
-    response.delete_cookie("auth_token")
+    response.delete_cookie("session_id")
     return response
 
 # User Management Routes (Admin only)
@@ -311,7 +315,7 @@ async def admin_debug(
         "user_found": current_user is not None,
         "is_admin": current_user.is_admin if current_user else False,
         "login": current_user.login if current_user else None,
-        "auth_token": request.cookies.get("auth_token", "Not found")[:20] + "..." if request.cookies.get("auth_token") else "No cookie"
+        "session_id": request.cookies.get("session_id", "Not found")[:20] + "..." if request.cookies.get("session_id") else "No cookie"
     }
     
     return f"<html><body><h1>Debug Info</h1><pre>{debug_info}</pre></body></html>"

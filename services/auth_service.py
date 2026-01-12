@@ -6,6 +6,7 @@ from typing import Optional, Tuple, List
 from datetime import datetime, timedelta
 from domain.user_models import User, Session
 from infrastructure.user_repository import UserRepository
+from infrastructure.session_repository import SessionRepository
 
 # Robuster now_utc import
 def now_utc():
@@ -42,7 +43,7 @@ class AuthService:
         except (ValueError, TypeError):
             return False
     
-    def authenticate_user(self, login: str, password: str) -> Tuple[Optional[User], Optional[str]]:
+    def authenticate_user(self, login: str, password: str, db_path: str = None) -> Tuple[Optional[User], Optional[str]]:
         """
         Authenticate user with login and password
         Returns (User, error_message) - User is None if authentication failed
@@ -63,39 +64,39 @@ class AuthService:
         
         return updated_user, None
     
-    async def get_user_from_session(self, token: str) -> Optional[User]:
-        """Get user from session token (async version)"""
-        return self.get_user_from_session_token(token)
-    
-    def get_user_from_session_token(self, token: str) -> Optional[User]:
-        """Get user from session token"""
-        try:
-            session = self.user_repo.get_session_by_token(token)
-            if not session or not session.is_active or session.is_expired():
-                return None
-            
-            user = self.user_repo.get_user_by_id(session.user_id)
-            if not user or not user.is_active:
-                return None
-            
-            # Update session activity
-            updated_session = session.with_activity_update()
-            self.user_repo.update_session_activity(updated_session)
-            
-            return user
-        except Exception:
+    def get_user_from_session_token(self, session_id: str, db_path: str = None) -> Optional[User]:
+        """Get user from session_id using SessionRepository"""
+        if db_path is None:
+            import os
+            db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
+        session_repo = SessionRepository(db_path)
+        user_id = session_repo.get_user_id(session_id)
+        if not user_id:
             return None
+        user = self.user_repo.get_user_by_id(user_id)
+        if not user or not user.is_active:
+            return None
+        return user
     
-    def create_session(self, user: User, expires_hours: int = 24) -> Session:
-        """Create a new session for user"""
-        return self.user_repo.create_session(user.id, expires_hours)
+    def create_session(self, user: User, expires_hours: int = 24, db_path: str = None) -> str:
+        """Create a new session for user using SessionRepository"""
+        import secrets, time, os
+        if db_path is None:
+            db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
+        session_repo = SessionRepository(db_path)
+        session_id = secrets.token_urlsafe(32)
+        expires_at = time.time() + expires_hours * 3600
+        session_repo.create_session(session_id, user.id, expires_at)
+        return session_id
     
-    def logout_user(self, token: str) -> bool:
-        """Logout user by invalidating session"""
+    def logout_user(self, session_id: str, db_path: str = None) -> bool:
+        """Logout user by deleting session from SessionRepository"""
+        import os
+        if db_path is None:
+            db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
+        session_repo = SessionRepository(db_path)
         try:
-            session = self.user_repo.get_session_by_token(token)
-            if session:
-                self.user_repo.deactivate_session(token)
+            session_repo.delete_session(session_id)
             return True
         except Exception:
             return False

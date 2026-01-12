@@ -1,12 +1,54 @@
+# Imports
 import pytest
+import sys
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta, timezone
-
+from starlette.middleware.base import BaseHTTPMiddleware
 from web.server import app, get_repo
 from infrastructure.db_repository import DbRepository
 from domain.models import Task, Reminder
+from web.server import app
+from starlette.middleware.base import BaseHTTPMiddleware
+
+# --- Test-Middleware: Setzt user_db_path in request.state für alle Requests ---
+class SetTestDbPathMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, db_path):
+        super().__init__(app)
+        self.db_path = db_path
+    async def dispatch(self, request, call_next):
+        request.state.user_db_path = self.db_path
+        response = await call_next(request)
+        return response
 
 
+# --- Test-Middleware: Setzt user_db_path in request.state für alle Requests ---
+class SetTestDbPathMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, db_path):
+        super().__init__(app)
+        self.db_path = db_path
+    async def dispatch(self, request, call_next):
+        request.state.user_db_path = self.db_path
+        response = await call_next(request)
+        return response
+
+
+
+
+# =======================
+# Test Middleware
+# =======================
+class SetTestDbPathMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, db_path):
+        super().__init__(app)
+        self.db_path = db_path
+    async def dispatch(self, request, call_next):
+        request.state.user_db_path = self.db_path
+        response = await call_next(request)
+        return response
+
+# =======================
+# Helper Functions
+# =======================
 def make_dt(delta_days=0):
     return datetime.now(timezone.utc) + timedelta(days=delta_days)
 
@@ -39,6 +81,14 @@ def client(repo_tmp, monkeypatch):
     import web.routers.items
     app.dependency_overrides[get_repo] = _get_repo_override
     app.dependency_overrides[web.routers.items.get_repository] = lambda: repo_tmp
+
+
+    # Patch the middleware's db_path for this test run
+    for m in getattr(app, 'user_middleware', []):
+        if isinstance(m.cls, type) and m.cls.__name__ == 'SetTestDbPathMiddleware':
+            # Set directly on the middleware instance
+            setattr(m, 'db_path', db_path)
+
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -126,6 +176,13 @@ def test_create_item_with_ice_and_due(client, repo_tmp):
     except Exception as e:
         print(f"[DEBUG] test: direct SQL insert failed: {e}")
 
+    # Login als admin
+    login_data = {'login': 'admin', 'password': 'admin'}
+    resp = client.post('/auth/login', data=login_data, follow_redirects=False)
+    assert resp.status_code == 302, f"Login failed: {resp.text}"
+    for k, v in resp.cookies.items():
+        client.cookies.set(k, v)
+
     # Create via POST form (simulate quick-create)
     form = {
         'name': 'POSTed Item',
@@ -137,7 +194,7 @@ def test_create_item_with_ice_and_due(client, repo_tmp):
         'ice_ease': '4'
     }
 
-    r = client.post('/items/new', data=form, headers={"X-User-Id": "user-1"})
+    r = client.post('/items/new', data=form)
     # Should redirect to edit (303 or HX 204+HX-Redirect); accept both
     assert r.status_code in (200, 303, 204)
 

@@ -288,34 +288,33 @@ class TestMultiTenantRepository:
 class TestAuthenticationFlow:
     """Test authentication and session management"""
     
-    def test_session_creation(self, user_repo, sample_users):
-        """Test session creation and retrieval"""
+    def test_session_creation(self, user_repo, sample_users, temp_db):
+        """Test session creation and retrieval using SessionRepository"""
+        from infrastructure.session_repository import SessionRepository
+        import time, secrets
         user1 = sample_users['user1']
-        
-        # Create session
-        session = user_repo.create_session(user1.id, expires_hours=24)
-        
-        assert session.user_id == user1.id
-        assert session.token is not None
-        assert session.is_active is True
-        assert not session.is_expired()
-        
-        # Retrieve session
-        retrieved_session = user_repo.get_session_by_token(session.token)
-        assert retrieved_session is not None
-        assert retrieved_session.user_id == user1.id
+        session_repo = SessionRepository(temp_db)
+        session_id = secrets.token_urlsafe(16)
+        expires_at = time.time() + 3600
+        session_repo.create_session(session_id, user1.id, expires_at)
+        user_id = session_repo.get_user_id(session_id)
+        assert user_id == user1.id
+        # Expired session should return None
+        session_repo.create_session("expired", user1.id, time.time() - 10)
+        assert session_repo.get_user_id("expired") is None
     
-    def test_session_deactivation(self, user_repo, sample_users):
-        """Test session deactivation (logout)"""
+    def test_session_deactivation(self, user_repo, sample_users, temp_db):
+        """Test session deactivation (logout) using SessionRepository"""
+        from infrastructure.session_repository import SessionRepository
+        import time, secrets
         user1 = sample_users['user1']
-        
-        # Create and deactivate session
-        session = user_repo.create_session(user1.id)
-        user_repo.deactivate_session(session.token)
-        
-        # Should not be retrievable after deactivation
-        retrieved_session = user_repo.get_session_by_token(session.token)
-        assert retrieved_session is None
+        session_repo = SessionRepository(temp_db)
+        session_id = secrets.token_urlsafe(16)
+        expires_at = time.time() + 3600
+        session_repo.create_session(session_id, user1.id, expires_at)
+        # Delete session
+        session_repo.delete_session(session_id)
+        assert session_repo.get_user_id(session_id) is None
 
 if __name__ == "__main__":
     pytest.main([__file__])

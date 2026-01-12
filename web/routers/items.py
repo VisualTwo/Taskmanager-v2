@@ -28,6 +28,7 @@ from web.handlers.error_handler import ErrorHandler
 from web.handlers.config import config
 from utils.datetime_helpers import now_utc
 from web.dependencies import get_current_user, get_user_repository
+from fastapi import Request
 
 # --- Logger ---
 logger = logging.getLogger(__name__)
@@ -37,15 +38,16 @@ router = APIRouter()
 templates = Jinja2Templates(directory=config.get_templates_path())
 
 # --- Dependency Providers ---
-def get_user_repository():
-    db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
+
+def get_user_repository(request: Request):
+    db_path = getattr(request.state, 'user_db_path', os.environ.get("TEST_DB_PATH", "taskman.db"))
     return UserRepository(db_path)
 
 def get_error_handler():
     return ErrorHandler(templates)
 
-def get_repository():
-    db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
+def get_repository(request: Request):
+    db_path = getattr(request.state, 'user_db_path', os.environ.get("TEST_DB_PATH", "taskman.db"))
     repo = DbRepository(db_path)
     try:
         yield repo
@@ -153,15 +155,12 @@ async def create_item(
     priority: Optional[int] = Form(None),
     repo: DbRepository = Depends(get_repository),
     status=Depends(lambda: None),  # Placeholder, replace with actual status service if needed
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new item (Task, Reminder, Appointment, Event) with ICE metadata and status validation."""
     import uuid
     from domain.ice_definitions import compute_ice_score
-    # User handling: try header, fallback to current_user if available
-    creator_id = request.headers.get("X-User-Id")
-    if not creator_id:
-        user = getattr(request, 'user', None)
-        creator_id = getattr(user, 'id', None) if user else None
+    creator_id = current_user.id if current_user else None
     if not creator_id:
         return HTMLResponse('<div class="alert alert-error">Kein Benutzer angegeben.</div>', status_code=401)
     nid = str(uuid.uuid4())
@@ -396,7 +395,7 @@ async def edit_item_type(
             )
         repository.upsert(new_item)
         # Return updated table row
-        return templates.TemplateResponse("_items_table.html", {
+        return templates.TemplateResponse(request, "_items_table.html", {
             "request": request,
             "rows": [(new_item, [], None, None)]
         })
@@ -446,7 +445,7 @@ async def get_items_table(
         for item in items:
             occurrences = expand_item(item, now_utc(), now_utc() + timedelta(days=365))
             rows.append((item, occurrences, None, None))
-        return templates.TemplateResponse("_items_table.html", {
+        return templates.TemplateResponse(request, "_items_table.html", {
             "request": request,
             "current_user": current_user,
             "rows": rows,
@@ -616,12 +615,12 @@ async def get_item_occurrences(
             "item": item,
             "it": item
         }
-        return templates.TemplateResponse("_occurrences.html", context)
+        return templates.TemplateResponse(request, "_occurrences.html", context)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error loading occurrences for item {item_id}: {e}")
-        return templates.TemplateResponse("_occurrences.html", {
+        return templates.TemplateResponse(request, "_occurrences.html", {
             "request": request,
             "occs": [],
             "item": None,
@@ -732,7 +731,7 @@ async def edit_item_page(
     status_color = None
     back_qs = urlencode(list(request.query_params.multi_items()))
 
-    return templates.TemplateResponse("edit.html", {
+    return templates.TemplateResponse(request, "edit.html", {
         "request": request,
         "it": it,
         "status_options": status_options,

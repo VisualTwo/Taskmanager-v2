@@ -10,16 +10,21 @@ import os
 from fastapi import HTTPException, status
 
 def get_current_user(request: Request) -> User:
-    user_id = request.headers.get("X-User-Id")
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht eingeloggt")
+    from infrastructure.session_repository import SessionRepository
+    db_path = getattr(request.state, 'user_db_path', os.environ.get("TEST_DB_PATH", "taskman.db"))
+    session_repo = SessionRepository(db_path)
+    user_id = session_repo.get_user_id(session_id)
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    # Hier ggf. echten User aus DB laden, z.B.:
-    # user = UserRepository().get(user_id)
-    # if not user:
-    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    # return user
-    # Für jetzt: Fehler, wenn kein Header vorhanden
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User lookup not implemented")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session ungültig oder abgelaufen")
+    db_path = getattr(request.state, 'user_db_path', os.environ.get("TEST_DB_PATH", "taskman.db"))
+    repo = UserRepository(db_path)
+    user = repo.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User nicht gefunden")
+    return user
 
 def get_user_repository() -> UserRepository:
     db_path = os.environ.get("TEST_DB_PATH", "taskman.db")
