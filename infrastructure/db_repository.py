@@ -86,8 +86,6 @@ class DbRepository:
             to_add.append("ALTER TABLE items ADD COLUMN task_planned_start_utc TEXT;")
         if "task_planned_end_utc" not in cols:
             to_add.append("ALTER TABLE items ADD COLUMN task_planned_end_utc TEXT;")
-        if "reminder_utc" not in cols:
-            to_add.append("ALTER TABLE items ADD COLUMN reminder_utc TEXT;")
         if "links" not in cols:
             to_add.append("ALTER TABLE items ADD COLUMN links TEXT;")
         if "tags" not in cols:
