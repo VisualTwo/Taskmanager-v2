@@ -8,7 +8,8 @@
         hx-swap="outerHTML"
         class="inline"
         style="display:flex; gap:.5rem; align-items:center; margin-bottom:.35rem;">
-    <input id="new_link" type="url" name="url" placeholder="https://example.com" style="flex:1; min-width: 260px;" required>
+    <input id="new_link" type="url" name="url" placeholder="https://example.com" 
+           style="flex:1; min-width: 260px;" required>
     <button type="submit" class="btn btn-xs">Hinzufügen</button>
   </form>
 
@@ -17,8 +18,17 @@
     <ul class="list-plain" style="margin:.25rem 0 0 0;">
       {% for u in LINKS %}
         <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;">
-          <a class="link" href="{{ u }}" target="_blank" rel="noopener noreferrer" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            {{ u }}
+          {% set domain_name = u %}
+          <a class="link" href="{{ u }}" target="_blank" rel="noopener noreferrer" 
+             style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:.35rem;"
+             title="{{ u }}">
+            <img src="https://www.google.com/s2/favicons?domain={{ domain_name }}" 
+                 alt="" 
+                 class="link-favicon" 
+                 loading="lazy" 
+                 onerror="this.src='/static/icons/link.svg'"
+                 style="width:16px; height:16px; flex-shrink:0;">
+            <span>{{ u }}</span>
           </a>
           <form hx-post="/items/{{ it.id }}/links/remove"
                 hx-target="#links_block"
@@ -35,3 +45,81 @@
   {% endif %}
   <div class="muted" style="margin-top:.25rem;">Tipp: Vollständige URLs mit https:// eintragen.</div>
 </div>
+
+<script>
+(function() {
+  // Guard: Nur einmal binden
+  if (window.__linksBlockBound) return;
+  window.__linksBlockBound = true;
+
+  // ✅ Speichere URL VOR dem HTMX-Request
+  let pendingUrl = null;
+  
+  document.body.addEventListener('htmx:configRequest', function(e) {
+    const elt = e.detail.elt;
+    if (elt.matches && elt.matches('form[hx-post*="/links/add"]')) {
+      const input = elt.querySelector('input[name="url"]');
+      if (input) {
+        pendingUrl = input.value.trim();
+      }
+    }
+  });
+
+  // HTMX After-Request Handler für Links-Block
+  document.body.addEventListener('htmx:afterRequest', function(e) {
+    const form = e.target;
+    
+    // Prüfe ob es ein Links-Form ist
+    if (!form.matches || !(
+      form.matches('form[hx-post*="/links/add"]') || 
+      form.matches('form[hx-post*="/links/remove"]')
+    )) return;
+
+    const xhr = e.detail.xhr;
+    const alerts = document.getElementById('alerts');
+
+    if (xhr.status === 200) {
+      let url = null;
+      let action = null;
+
+      // Erfolg: Input leeren (nur bei Add-Form)
+      if (form.matches('form[hx-post*="/links/add"]')) {
+        url = pendingUrl || 'Link';
+        action = 'hinzugefügt';
+        const input = form.querySelector('input[name="url"]');
+        if (input) input.value = '';
+        pendingUrl = null;
+      } else if (form.matches('form[hx-post*="/links/remove"]')) {
+        const input = form.querySelector('input[name="url"]');
+        url = input ? input.value : 'Link';
+        action = 'entfernt';
+      }
+
+      // Success-Alert (optional)
+      if (alerts) {
+        alerts.innerHTML = `<div class="alert alert-success">Link ${action}.</div>`;
+        setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 2000);
+      }
+
+      // ✅ Dispatch Custom Event mit URL und Action
+      document.dispatchEvent(new CustomEvent('links-updated', {
+        detail: { url, action }
+      }));
+
+    } else if (xhr.status === 422) {
+      // Validierungsfehler
+      if (alerts) {
+        alerts.innerHTML = xhr.responseText || '<div class="alert alert-error">Ungültige URL.</div>';
+        setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
+      }
+
+    } else if (xhr.status >= 400) {
+      // Allgemeiner Fehler
+      if (alerts) {
+        alerts.innerHTML = '<div class="alert alert-error">Fehler beim Speichern des Links.</div>';
+        setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
+      }
+    }
+  });
+})();
+</script>

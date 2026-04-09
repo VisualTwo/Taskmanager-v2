@@ -1,0 +1,15 @@
+id,type,status,title,description,impact,confidence,ease,ice_score,notes
+1,task,active,Example task,Short description of the task,4,0.7,3,8.4,ICE = 4 * 0.7 * 3 = 8.4
+
+# Notes
+# - `type`: task, reminder, event, appointment (only `task` and `reminder` are prioritized)
+# - `status`: active, waiting, backlog (or someday) — rows with `status`==waiting should be hidden or listed separately
+# - `impact`: integer 1-5 (1=negligible, 5=transformational)
+# - `confidence`: decimal 0.1,0.3,0.5,0.7,0.9 (use decimals, higher = more certain)
+#   refined guidance:
+#     0.9 — "Ich weiß genau, was zu tun ist / Termin steht fest."
+#     0.5 — "Ich muss erst recherchieren / Entscheidung noch offen."
+#     0.1 — "Idee, vielleicht später."
+# - `ease`: integer 1-5 (1=very hard, 5=very easy)
+# - `ice_score`: compute as Impact * Confidence * Ease
+# Spreadsheet formula example (Google Sheets / Excel): =F2 * G2 * H2

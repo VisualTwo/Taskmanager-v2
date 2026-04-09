@@ -146,10 +146,6 @@ class StatusManager:
             return True, None
         old_def = self._defs.get(old_status)
         new_def = self._defs.get(new_status)
-        if old_def and old_def.is_terminal and not is_recurring:
-            if item_type in ("task", "reminder", "appointment", "event"):
-                return True, None
-            return False, f"Old status '{old_status}' is terminal; transition to '{new_status}' disallowed by default."
         return True, None
 
     # --- UI helpers -----------------------------------
@@ -196,6 +192,42 @@ class StatusManager:
                             return k
                     return None
         return None
+
+    def map_csv_status(self, simple_status: str, item_type: Optional[str] = None) -> Optional[str]:
+        """
+        Map simple CSV-style status values (e.g. 'active', 'waiting', 'someday'/'backlog')
+        to the internal status key used in STATUS_DEFINITIONS.
+
+        This provides a small, stable mapping layer so user-friendly CSV values
+        can be imported without breaking the application's internal status keys.
+
+        Returns the internal status key (e.g. 'TASK_OPEN') when a mapping is found,
+        otherwise returns None.
+        """
+        if not simple_status:
+            return None
+        s = simple_status.strip().lower()
+        # default mappings per type
+        if item_type == "task":
+            if s in ("someday", "backlog", "irgendwann"):
+                return "TASK_BACKLOG"
+            # Some users call backlog/open items "Offen" or "open" — treat these as backlog
+            if s in ("open", "offen"):
+                return "TASK_BACKLOG"
+            if s == "active":
+                return "TASK_OPEN"
+            if s == "waiting":
+                return "TASK_BLOCKED"
+        if item_type == "reminder":
+            if s in ("someday", "backlog", "irgendwann"):
+                return "REMINDER_BACKLOG"
+            if s == "active":
+                return "REMINDER_ACTIVE"
+            if s == "waiting":
+                return "REMINDER_SNOOZED"
+
+        # Fallback: try to normalize against known keys/display names
+        return self.normalize_input(simple_status, item_type=item_type)
 
 # Convenience factory: nutzt zentrale Definitionsquelle
 def make_status_service() -> StatusManager:

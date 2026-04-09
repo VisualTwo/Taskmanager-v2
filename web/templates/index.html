@@ -2,171 +2,274 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- Kopfzeile: Titel links, prominentes Anlegen rechts -->
+<!-- Kopfzeile: Datum/Zeit links, Neues Item rechts -->
 <div class="header-row">
-  <h2 style="margin:0;">{{ header_today }}</h2>
+  <!-- Datum und Uhrzeit -->
+  <div class="list-datetime">
+    <div class="list-date" id="list-current-date">Heute</div>
+    <div class="list-time" id="list-current-time">00:00</div>
+  </div>
+
+  <div style="flex: 1;"></div>
 
   <!-- Neues Item: prominenter Platz im Kopf -->
   <form method="post" action="/items/new" class="new-item"
-        hx-post="/items/new" hx-swap="none"
+        target="_blank"
         aria-label="Neues Item anlegen">
     <label for="new-name" class="sr-only">Name</label>
-    <input id="new-name" type="text" name="name" placeholder="Neues Item"
-          required maxlength="140">
+    <div style="display:flex; gap:.5rem; align-items:center;">
+      <input id="new-name" type="text" name="name" placeholder="Neues Item" required maxlength="140">
+      <select id="new-type" name="item_type" title="Typ" required>
+        <option value="" selected disabled hidden>Typ…</option>
+        <option value="task">Aufgabe</option>
+        <option value="reminder">Erinnerung</option>
+        <option value="appointment">Termin</option>
+        <option value="event">Ereignis</option>
+      </select>
+      <button type="submit" class="header-btn header-btn-primary">Anlegen</button>
+      <button type="button" class="header-btn header-btn-secondary" id="new-advanced-toggle-list">Erweitert</button>
+    </div>
 
-    <label for="new-type" class="sr-only">Typ</label>
-    <select id="new-type" name="item_type" title="Typ" required>
-      <option value="" selected disabled hidden>Bitte Typ wählen…</option>
-      <option value="task">Aufgabe</option>
-      <option value="reminder">Erinnerung</option>
-      <option value="appointment">Termin</option>
-      <option value="event">Ereignis</option>
-    </select>
+    <div class="new-item-advanced hidden" style="margin-top:.5rem; display:flex; gap:.5rem; align-items:center;">
+      <select name="priority" title="Priorität">
+        <option value="">Priorität</option>
+        <option value="0">Keine</option>
+        <option value="1">Niedrig</option>
+        <option value="2">Normal</option>
+        <option value="3">Hoch</option>
+        <option value="4">Kritisch</option>
+        <option value="5">Blockierend</option>
+      </select>
+      <input type="text" name="due_local" placeholder="dd.mm.yyyy hh:mm" class="small-input">
+      <select name="ice_impact" title="Impact">
+        <option value="">Impact</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+      <select name="ice_confidence" title="Confidence">
+        <option value="">Confidence</option>
+        <option value="very_low">Sehr gering</option>
+        <option value="low">Gering</option>
+        <option value="medium">Mittel</option>
+        <option value="high">Hoch</option>
+        <option value="very_high">Sehr hoch</option>
+      </select>
+      <select name="ice_ease" title="Ease">
+        <option value="">Ease</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+    </div>
 
-    <button type="submit" class="preview-btn">Anlegen</button>
+    <script>
+      (function(){
+        const btn = document.getElementById('new-advanced-toggle-list');
+        const adv = btn && btn.closest('form') && btn.closest('form').querySelector('.new-item-advanced');
+        if(!btn || !adv) return;
+        btn.addEventListener('click', ()=>{ adv.classList.toggle('hidden'); });
+      })();
+    </script>
   </form>
 </div>
 
 <div class="table-toolbar" style="display:flex; justify-content:flex-end; gap:.5rem; margin:.5rem 0;">
-  <button type="submit" id="export-selected" class="preview-btn">Auswahl exportieren (ICS)</button>
+  <button type="submit" id="export-selected" class="header-btn header-btn-accent">Auswahl exportieren (ICS)</button>
 </div>
 
-<!-- Filter-Toolbar: Links Suche/Filter, Rechts Sortierung -->
+<!-- Filter-Toolbar: Moderne, intuitive Anordnung -->
 <section class="filterbar">
-  <form method="get" action="/" class="filters" role="search" aria-label="Suche und Filter" id="filters">
+  <form method="get" action="/list" class="filters" role="search" aria-label="Suche und Filter" id="filters">
     <div class="filter-toolbar">
 
-      <!-- Linke Gruppe: Suche + Filter -->
-      <div class="filter-group-left">
+      <!-- Zeile 1: Hauptsuche und Grundfilter -->
+      <div class="filter-row row-main">
+        <div class="field field-search">
+          <label for="q">Suche</label>
+          <div class="input">
+            <input id="q" type="text" name="q" placeholder="Name oder Beschreibung suchen…" value="{{ request.query_params.get('q','') }}" maxlength="120"
+                  data-initial-q="{{ request.query_params.get('q','') }}"
+                  data-confirmed-q="{{ request.query_params.get('q','') }}"
+                  hx-get="/list"
+                  hx-trigger="keyup changed delay:300ms, search"
+                  hx-include="#filters"
+                  hx-target="#items-table"
+                  hx-swap="innerHTML"
+                  hx-push-url="true"
+                  autocomplete="off">
+            <button type="submit" class="btn btn-xs preview-btn" id="btn-search" aria-label="Suchen" title="Suchen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="21 21l-4.35-4.35"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {% set current_types = (request.query_params.get('types','') or '').split(',') if request.query_params.get('types') else [] %}
+        {% set current_type = current_types[0] if current_types else '' %}
+        <div class="field">
+          <label for="types-select">Typ</label>
+          <select id="types-select" title="Item-Typ auswählen"
+                  onchange="this.form.querySelector('input[name=types]').value = this.value; this.form.requestSubmit();">
+            <option value="">Alle Typen</option>
+            <option value="task" {% if current_type=='task' %}selected{% endif %}>📋 Aufgaben</option>
+            <option value="reminder" {% if current_type=='reminder' %}selected{% endif %}>⏰ Erinnerungen</option>
+            <option value="appointment" {% if current_type=='appointment' %}selected{% endif %}>📅 Termine</option>
+            <option value="event" {% if current_type=='event' %}selected{% endif %}>🎉 Ereignisse</option>
+          </select>
+          <input type="hidden" name="types" value="{{ current_type }}">
+        </div>
+
+        <div class="field">
+          <label for="status_key">Status</label>
+          {% set cur_status = request.query_params.get('status','') %}
+          <select id="status_key" name="status" title="Status filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Status</option>
+            {% for key, label, type in status_choices %}
+              <option value="{{ key }}" {% if cur_status==key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="prio">Priorität</label>
+          {% set cur_prio = request.query_params.get('prio','') %}
+          <select id="prio" name="prio" title="Nach Priorität filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle</option>
+            <option value="5" {% if cur_prio=='5' %}selected{% endif %}>🚨 Blockierend</option>
+            <option value="4" {% if cur_prio=='4' %}selected{% endif %}>🔥 Kritisch</option>
+            <option value="3" {% if cur_prio=='3' %}selected{% endif %}>⚡ Hoch</option>
+            <option value="2" {% if cur_prio=='2' %}selected{% endif %}>📋 Normal</option>
+            <option value="1" {% if cur_prio=='1' %}selected{% endif %}>💤 Niedrig</option>
+            <option value="0" {% if cur_prio=='0' %}selected{% endif %}>⚪ Keine</option>
+          </select>
+        </div>
         
-        <!-- Zeile 1: WAS (Suchkriterien) -->
-        <div class="filter-row row-search">
-          <div class="field">
-            <label for="q">Suche</label>
-            <div class="input">
-              <input id="q" type="text" name="q" placeholder="Suchen…" value="{{ request.query_params.get('q','') }}" maxlength="120"
-                    data-initial-q="{{ request.query_params.get('q','') }}"
-                    data-confirmed-q="{{ request.query_params.get('q','') }}"
-                    hx-get="/"
-                    hx-trigger="keyup changed delay:250ms, search"
-                    hx-include="#filters"
-                    hx-target="#items-table"
-                    hx-swap="innerHTML"
-                    hx-push-url="true"
-                    autocomplete="off">
-              <button type="submit" class="btn btn-xs preview-btn" id="btn-search" aria-label="Suchen" title="Suchen">Suchen</button>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="filter-tags">Tags</label>
-            <input id="filter-tags" type="text" name="tags" placeholder="Tags filtern…" autocomplete="off" value="{{ tags }}" 
-                   hx-get="/tags/suggest"
-                   hx-trigger="keyup changed delay:200ms"
-                   hx-params="*"
-                   hx-include="#filter-tags"
-                   hx-target="next .tags-filter-suggest"
-                   hx-swap="innerHTML">
-            <div class="tags-filter-suggest"></div>
-          </div>
-        </div>
-
-        <!-- Zeile 2: WIE (Filterkriterien) -->
-        <div class="filter-row row-filters">
-          {% set current_types = (request.query_params.get('types','') or '').split(',') if request.query_params.get('types') else [] %}
-          {% set current_type = current_types[0] if current_types else '' %}
-          <div class="field">
-            <label for="types-select">Typ</label>
-            <select id="types-select" title="Typ"
-                    onchange="this.form.querySelector('input[name=types]').value = this.value; this.form.requestSubmit();">
-              <option value="">Alle</option>
-              <option value="task" {% if current_type=='task' %}selected{% endif %}>Aufgaben</option>
-              <option value="reminder" {% if current_type=='reminder' %}selected{% endif %}>Erinnerungen</option>
-              <option value="appointment" {% if current_type=='appointment' %}selected{% endif %}>Termine</option>
-              <option value="event" {% if current_type=='event' %}selected{% endif %}>Ereignisse</option>
-            </select>
-            <input type="hidden" name="types" value="{{ current_type }}">
-          </div>
-
-          <div class="field">
-            <label for="status_key">Status</label>
-            {% set cur_status = request.query_params.get('status','') %}
-            <select id="status_key" name="status" onchange="this.form.requestSubmit()">
-              <option value="">Alle</option>
-              {% for key, label in status_choices %}
-                <option value="{{ key }}" {% if cur_status==key %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="prio">Priorität</label>
-            {% set cur_prio = request.query_params.get('prio','') %}
-            <select id="prio" name="prio" onchange="this.form.requestSubmit()">
-              <option value="">Alle</option>
-              <option value="0" {% if cur_prio=='0' %}selected{% endif %}>Keine (0)</option>
-              <option value="1" {% if cur_prio=='1' %}selected{% endif %}>Niedrig (1)</option>
-              <option value="2" {% if cur_prio=='2' %}selected{% endif %}>Normal (2)</option>
-              <option value="3" {% if cur_prio=='3' %}selected{% endif %}>Hoch (3)</option>
-              <option value="4" {% if cur_prio=='4' %}selected{% endif %}>Kritisch (4)</option>
-              <option value="5" {% if cur_prio=='5' %}selected{% endif %}>Blockierend (5)</option>
-            </select>
-          </div>
-
-          <div class="field" title="Private anzeigen/ausblenden">
-            <label for="show_private">Private</label>
-            <input id="show_private" type="checkbox" name="show_private" value="1" {% if request.query_params.get('show_private','0')=='1' %}checked{% endif %} onchange="this.form.requestSubmit()">
-          </div>
-
-          <div class="field" title="Vergangene/Erledigte anzeigen">
-            <label for="include_past">Vergangene</label>
-            <input id="include_past" type="checkbox" name="include_past" value="1" {% if request.query_params.get('include_past','0')=='1' %}checked{% endif %} onchange="this.form.requestSubmit()">
-          </div>
-        </div>
-
-        <!-- Zeile 3: Vorkommen-Vorschau -->
-        <div class="filter-row row-occurrence">
-          <div class="field">
-            <label>Vorkommen-Vorschau</label>
-            <div class="input" >
-              {% set cur_range = request.query_params.get('range','') %}
-              <div class="input">
-  {% set cur_range = request.query_params.get('range','') %}
-              <a class="btn btn-xs btn-primary preview-btn" {% if cur_range == 'heute' %}{% else %}href="{{ request.url.include_query_params(range='heute') }}"{% endif %} aria-current="{% if cur_range == 'heute' %}page{% else %}false{% endif %}">Heute</a>
-              <a class="btn btn-xs btn-primary preview-btn" {% if cur_range == 'woche' %}{% else %}href="{{ request.url.include_query_params(range='woche') }}"{% endif %} aria-current="{% if cur_range == 'woche' %}page{% else %}false{% endif %}">Diese Woche</a>
-              <a class="btn btn-xs btn-primary preview-btn" {% if cur_range == 'naechstewoche' %}{% else %}href="{{ request.url.include_query_params(range='naechstewoche') }}"{% endif %} aria-current="{% if cur_range == 'naechstewoche' %}page{% else %}false{% endif %}">Nächste Woche</a>
-              <a class="btn btn-xs btn-primary preview-btn" {% if not cur_range or cur_range == 'next3' %}{% else %}href="{{ request.url.include_query_params(range='next3') }}"{% endif %} aria-current="{% if not cur_range or cur_range == 'next3' %}page{% else %}false{% endif %}">Nächste 3</a>
-            </div>
-          </div>
+        <div class="field">
+          <label for="min_prio">Mindest-Prio</label>
+          {% set cur_min_prio = request.query_params.get('min_prio','') %}
+          <select id="min_prio" name="min_prio" title="Mindestpriorität filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle</option>
+            <option value="1" {% if cur_min_prio=='1' %}selected{% endif %}>≥ Niedrig</option>
+            <option value="2" {% if cur_min_prio=='2' %}selected{% endif %}>≥ Normal</option>
+            <option value="3" {% if cur_min_prio=='3' %}selected{% endif %}>≥ Hoch</option>
+            <option value="4" {% if cur_min_prio=='4' %}selected{% endif %}>≥ Kritisch</option>
+            <option value="5" {% if cur_min_prio=='5' %}selected{% endif %}>≥ Blockierend</option>
+          </select>
         </div>
       </div>
 
-      <!-- Rechte Gruppe: Sortierung -->
-      <div class="filter-group-right">
+      <!-- Zeile 2: Erweiterte Filter und Optionen -->
+      <div class="filter-row row-advanced">
+        <div class="field field-tags">
+          <label for="filter-tags">Tags</label>
+          <div class="input-group">
+            <div class="input">
+              <input id="filter-tags" type="text" name="tags" placeholder="#tag1, #tag2…" autocomplete="off" value="{{ tags }}" 
+                     hx-get="/tags/suggest"
+                     hx-trigger="keyup changed delay:200ms"
+                     hx-params="*"
+                     hx-include="#filter-tags"
+                     hx-target="next .tags-filter-suggest"
+                     hx-swap="innerHTML">
+              <div class="tags-filter-suggest"></div>
+            </div>
+            <select name="tag_mode" title="Tag-Verknüpfung" onchange="this.form.requestSubmit()" class="tag-mode-select">
+              <option value="all" {% if request.query_params.get('tag_mode','all')=='all' %}selected{% endif %}>UND</option>
+              <option value="any" {% if request.query_params.get('tag_mode','all')=='any' %}selected{% endif %}>ODER</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field field-toggles">
+          <label>Optionen</label>
+          <div class="toggle-group">
+            <label class="toggle-item" title="Private Items anzeigen/ausblenden">
+              <input id="show_private" type="checkbox" name="show_private" value="1" {% if request.query_params.get('show_private','0')=='1' %}checked{% endif %} onchange="this.form.requestSubmit()">
+              <span>🔒 Private</span>
+            </label>
+            <label class="toggle-item" title="Vergangene und erledigte Items anzeigen">
+              <input id="include_past" type="checkbox" name="include_past" value="1" {% if request.query_params.get('include_past','0')=='1' %}checked{% endif %} onchange="this.form.requestSubmit()">
+              <span>📜 Vergangene</span>
+            </label>
+          </div>
+        </div>
+        
         <div class="field">
-          <label for="sort">Sortierung</label>
-          {% set sort = request.query_params.get('sort','') %}
-          <select id="sort" name="sort" onchange="this.form.requestSubmit()">
-            <option value="">–</option>
-            <option value="type"     {% if sort=='type' %}selected{% endif %}>Typ</option>
-            <option value="name"     {% if sort=='name' %}selected{% endif %}>Name</option>
-            <option value="status"   {% if sort=='status' %}selected{% endif %}>Status</option>
-            <option value="start"    {% if sort=='start' %}selected{% endif %}>Start/Fällig</option>
-            <option value="priority" {% if sort=='priority' %}selected{% endif %}>Priorität</option>
-            <option value="tags"     {% if sort=='tags' %}selected{% endif %}>Tags-Anzahl</option>
-            <option value="links"    {% if sort=='links' %}selected{% endif %}>Links-Anzahl</option>
-            <option value="changed"
-              {% if sort in ['last_modified_utc'] %}selected{% endif %}
-            >Geändert</option>
+          <label for="status_group">Status-Gruppe</label>
+          {% set cur_status_group = request.query_params.get('status_group','') %}
+          <select id="status_group" name="status_group" title="Status-Gruppe filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Status</option>
+            <option value="active" {% if cur_status_group=='active' %}selected{% endif %}>🟢 Aktiv</option>
+            <option value="pending" {% if cur_status_group=='pending' %}selected{% endif %}>🟡 Wartend</option>
+            <option value="completed" {% if cur_status_group=='completed' %}selected{% endif %}>✅ Erledigt</option>
           </select>
         </div>
+        
         <div class="field">
-          <label for="dir">Richtung</label>
-          {% set dir  = request.query_params.get('dir','asc') %}
-          <select id="dir" name="dir" onchange="this.form.requestSubmit()">
-            <option value="asc"  {% if dir=='asc' %}selected{% endif %}>Aufsteigend</option>
-            <option value="desc" {% if dir=='desc' %}selected{% endif %}>Absteigend</option>
+          <label for="time_range">Zeit-Filter</label>
+          {% set cur_time_range = request.query_params.get('time_range','') %}
+          <select id="time_range" name="time_range" title="Zeitbereich filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Zeiten</option>
+            <option value="overdue" {% if cur_time_range=='overdue' %}selected{% endif %}>⚠️ Überfällig</option>
+            <option value="next_3h" {% if cur_time_range=='next_3h' %}selected{% endif %}>⏰ Nächste 3h</option>
+            <option value="today" {% if cur_time_range=='today' %}selected{% endif %}>🌅 Heute</option>
+            <option value="this_week" {% if cur_time_range=='this_week' %}selected{% endif %}>📆 Diese Woche</option>
+            <option value="next_week" {% if cur_time_range=='next_week' %}selected{% endif %}>➡️ Nächste Woche</option>
+            <option value="this_month" {% if cur_time_range=='this_month' %}selected{% endif %}>📅 Dieser Monat</option>
           </select>
+        </div>
+        
+        <div class="field">
+          <label for="created_by">Ersteller</label>
+          {% set cur_created_by = request.query_params.get('created_by','') %}
+          <select id="created_by" name="created_by" title="Nach Ersteller filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Ersteller</option>
+            <option value="me" {% if cur_created_by=='me' %}selected{% endif %}>👤 Von mir</option>
+          </select>
+        </div>
+        
+        <div class="field">
+          <label for="assigned_to">Zugewiesen</label>
+          {% set cur_assigned_to = request.query_params.get('assigned_to','') %}
+          <select id="assigned_to" name="assigned_to" title="Nach Zuweisung filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Zuweisungen</option>
+            <option value="me" {% if cur_assigned_to=='me' %}selected{% endif %}>🎯 An mich</option>
+          </select>
+        </div>
+
+        <!-- Verbesserte Vorkommen-Vorschau -->
+        <div class="field field-occurrence">
+          <label>Zeitraum</label>
+          <div class="occurrence-controls">
+            {% set cur_range = request.query_params.get('range','') %}
+            <a class="range-btn{% if cur_range == 'heute' %} active{% endif %}" 
+               {% if cur_range != 'heute' %}href="{{ request.url.include_query_params(range='heute') }}"{% endif %} 
+               title="Nur heutige Vorkommen anzeigen">
+              📅 Heute
+            </a>
+            <a class="range-btn{% if cur_range == 'woche' %} active{% endif %}" 
+               {% if cur_range != 'woche' %}href="{{ request.url.include_query_params(range='woche') }}"{% endif %}
+               title="Vorkommen dieser Woche">
+               📆 Diese Woche
+            </a>
+            <a class="range-btn{% if cur_range == 'naechstewoche' %} active{% endif %}" 
+               {% if cur_range != 'naechstewoche' %}href="{{ request.url.include_query_params(range='naechstewoche') }}"{% endif %}
+               title="Vorkommen der nächsten Woche">
+               ⏭️ Nächste Woche
+            </a>
+            <a class="range-btn{% if not cur_range or cur_range == 'next3' %} active{% endif %}" 
+               {% if cur_range and cur_range != 'next3' %}href="{{ request.url.include_query_params(range='next3') }}"{% endif %}
+               title="Nächste 3 Vorkommen pro Item (Standard)">
+               🔄 Standard
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -177,8 +280,6 @@
 <div id="alerts"></div>
 
 <!-- Tabelle in voller Breite -->
-{% set sort = request.query_params.get('sort','') %}
-{% set dir  = request.query_params.get('dir','asc') %}
 {% macro sort_link(label, field) -%}
   {% set is_cur = (sort == field) %}
   {% set next_dir = 'desc' if (is_cur and dir=='asc') else 'asc' %}
@@ -191,7 +292,6 @@
   <thead>
     <tr>
       <th class="col-sel"><input type="checkbox" id="sel-all" aria-label="Alle auswählen"></th>
-      <th class="col-type">{{ sort_link('Typ','type') }}</th>
       <th class="col-name">{{ sort_link('Name','name') }}</th>
       <th class="col-status">{{ sort_link('Status','status') }}</th>
       <th class="col-priority">{{ sort_link('Priorität','priority') }}</th>
@@ -217,7 +317,7 @@
     const data = new FormData(form);
     const o = {};
     for (const [k,v] of data.entries()) {
-      if (k === 'q' || k === 'types' || k === 'status' || k === 'show_private' || k === 'tags' || k === 'include_past' || k === 'sort' || k === 'dir' || k === 'range' || k === 'prio') {
+      if (k === 'q' || k === 'types' || k === 'status' || k === 'show_private' || k === 'tags' || k === 'include_past' || k === 'range' || k === 'prio' || k === 'min_prio' || k === 'tag_mode' || k === 'status_group' || k === 'time_range' || k === 'created_by' || k === 'assigned_to') {
         o[k] = v;
       }
     }
@@ -229,13 +329,9 @@
     o.include_past = form.querySelector('input[name="include_past"]')?.checked ? '1' : '0';
 
     const statusSel = form.querySelector('select[name="status"]');
-    const sortSel   = form.querySelector('select[name="sort"]');
-    const dirSel    = form.querySelector('select[name="dir"]');
     const prioSel   = form.querySelector('select[name="prio"]');
 
     if (statusSel) o.status = statusSel.value || '';
-    if (sortSel)   o.sort   = sortSel.value || '';
-    if (dirSel)    o.dir    = dirSel.value || 'asc';
     if (prioSel)   o.prio   = prioSel.value || '';
 
     return o;
@@ -267,14 +363,26 @@
     const cbp = form.querySelector('input[name="include_past"]');
     if (cbp && o.include_past !== undefined) cbp.checked = (o.include_past === '1');
 
-    const sortSel = form.querySelector('select[name="sort"]');
-    if (sortSel && o.sort !== undefined) sortSel.value = o.sort || '';
-
-    const dirSel = form.querySelector('select[name="dir"]');
-    if (dirSel && o.dir !== undefined) dirSel.value = o.dir || 'asc';
-
     const prioSel = form.querySelector('select[name="prio"]');
     if (prioSel && o.prio !== undefined) prioSel.value = o.prio || '';
+    
+    const minPrioSel = form.querySelector('select[name="min_prio"]');
+    if (minPrioSel && o.min_prio !== undefined) minPrioSel.value = o.min_prio || '';
+    
+    const tagModeSel = form.querySelector('select[name="tag_mode"]');
+    if (tagModeSel && o.tag_mode !== undefined) tagModeSel.value = o.tag_mode || 'all';
+    
+    const statusGroupSel = form.querySelector('select[name="status_group"]');
+    if (statusGroupSel && o.status_group !== undefined) statusGroupSel.value = o.status_group || '';
+    
+    const timeRangeSel = form.querySelector('select[name="time_range"]');
+    if (timeRangeSel && o.time_range !== undefined) timeRangeSel.value = o.time_range || '';
+    
+    const createdBySel = form.querySelector('select[name="created_by"]');
+    if (createdBySel && o.created_by !== undefined) createdBySel.value = o.created_by || '';
+    
+    const assignedToSel = form.querySelector('select[name="assigned_to"]');
+    if (assignedToSel && o.assigned_to !== undefined) assignedToSel.value = o.assigned_to || '';
   }
 
   function syncURL(o){
@@ -295,19 +403,15 @@
     // Suche: dirty-state für Button
     const q = form.querySelector('#q');
     const btnSearch = form.querySelector('#btn-search');
-    // Falls Button keine ID hat, fallback auf den ersten Submit-Button im Suche-Block
     const btn = btnSearch || form.querySelector('.row-search .input button[type="submit"]');
 
-    // Initialwerte bestimmen (Pageload und bestätigte Suche)
     let initialQ = '';
     let confirmedQ = '';
 
     if (q) {
-      // Werte aus URL (bereits in initial geschrieben), ansonsten aktueller Value
       initialQ = q.getAttribute('data-initial-q') ?? (q.value ?? '');
       confirmedQ = q.getAttribute('data-confirmed-q') ?? initialQ;
 
-      // Sicherstellen, dass data-* konsistent sind
       q.setAttribute('data-initial-q', initialQ);
       q.setAttribute('data-confirmed-q', confirmedQ);
     }
@@ -315,7 +419,6 @@
     function updateSearchButtonState() {
       if (!q || !btn) return;
       const cur = q.value ?? '';
-      // Dirty, wenn cur != confirmed und cur != initial
       const isDirty = (cur !== confirmedQ) && (cur !== initialQ);
       btn.classList.toggle('btn-dirty', isDirty);
     }
@@ -327,13 +430,11 @@
         if (e.key === 'Enter') {
           confirmedQ = q.value ?? '';
           q.setAttribute('data-confirmed-q', confirmedQ);
-          // Nach Enter nicht dirty
           btn && btn.classList.remove('btn-dirty');
         }
       });
     }
 
-    // Formular-Submit per Klick auf „Suchen“
     form.addEventListener('submit', () => {
       if (q) {
         confirmedQ = q.value ?? '';
@@ -342,7 +443,6 @@
       btn && btn.classList.remove('btn-dirty');
     });
 
-    // Initialer Zustand setzen (falls q bereits vorbefüllt ist)
     updateSearchButtonState();
 
     const url = new URL(window.location.href);
@@ -354,8 +454,6 @@
       include_past: url.searchParams.get('include_past') || '0',
       range: url.searchParams.get('range') || '',
       tags: url.searchParams.get('tags') || '',
-      sort: url.searchParams.get('sort') || '',
-      dir: url.searchParams.get('dir') || 'asc',
       prio: url.searchParams.get('prio') || ''
     };
     const stored = JSON.parse(localStorage.getItem(FILTER_KEY) || 'null');
@@ -368,7 +466,7 @@
       const data = new FormData(form);
       const o = {};
       for (const [k,v] of data.entries()) {
-        if (k === 'q' || k === 'types' || k === 'status' || k === 'show_private' || k === 'tags' || k === 'include_past' || k === 'sort' || k === 'dir' || k === 'range' || k === 'prio') {
+        if (k === 'q' || k === 'types' || k === 'status' || k === 'show_private' || k === 'tags' || k === 'include_past' || k === 'range' || k === 'prio') {
           o[k] = v;
         }
       }
@@ -376,14 +474,22 @@
       o.include_past = form.querySelector('input[name="include_past"]')?.checked ? '1' : '0';
 
       const statusSel = form.querySelector('select[name="status"]');
-      const sortSel   = form.querySelector('select[name="sort"]');
-      const dirSel    = form.querySelector('select[name="dir"]');
       const prioSel   = form.querySelector('select[name="prio"]');
+      const minPrioSel = form.querySelector('select[name="min_prio"]');
+      const tagModeSel = form.querySelector('select[name="tag_mode"]');
+      const statusGroupSel = form.querySelector('select[name="status_group"]');
+      const timeRangeSel = form.querySelector('select[name="time_range"]');
+      const createdBySel = form.querySelector('select[name="created_by"]');
+      const assignedToSel = form.querySelector('select[name="assigned_to"]');
 
       if (statusSel) o.status = statusSel.value || '';
-      if (sortSel)   o.sort   = sortSel.value || '';
-      if (dirSel)    o.dir    = dirSel.value || 'asc';
       if (prioSel)   o.prio   = prioSel.value || '';
+      if (minPrioSel) o.min_prio = minPrioSel.value || '';
+      if (tagModeSel) o.tag_mode = tagModeSel.value || 'all';
+      if (statusGroupSel) o.status_group = statusGroupSel.value || '';
+      if (timeRangeSel) o.time_range = timeRangeSel.value || '';
+      if (createdBySel) o.created_by = createdBySel.value || '';
+      if (assignedToSel) o.assigned_to = assignedToSel.value || '';
 
       localStorage.setItem(FILTER_KEY, JSON.stringify(o));
 
@@ -414,14 +520,14 @@
     });
   });
 
-  // Auswahl für Export (Seitenformular)
+  // Auswahl für Export
   (function(){
     const selAll = document.getElementById('sel-all');
     function allRowCbs(){ return Array.from(document.querySelectorAll('input.sel-row')); }
     selAll && selAll.addEventListener('change', () => {
       allRowCbs().forEach(cb => cb.checked = selAll.checked);
     });
-    const exportForm = document.getElementById('export-form'); // optional
+    const exportForm = document.getElementById('export-form');
     if (exportForm) {
       exportForm.addEventListener('submit', (e) => {
         Array.from(exportForm.querySelectorAll('input[name="ids"]')).forEach(n => n.remove());
@@ -436,7 +542,7 @@
     }
   })();
 
-  // HTMX Multi-Fragment: Antwort mit <template data-target="#selector">...</template>
+  // HTMX Multi-Fragment
   document.addEventListener('htmx:afterOnLoad', (e) => {
     const root = e.detail && (e.detail.elt || e.detail.target) ? (e.detail.elt || e.detail.target) : null;
     if (!root || !root.querySelector) return;
@@ -449,28 +555,80 @@
     });
   });
 
-  // Priorität Inline: Badge -> Select und zurück
+  // Status: Badge -> Select
   document.addEventListener('click', (e) => {
-    const badge = e.target.closest && e.target.closest('.prio-badge');
+    const badge = e.target.closest('.status-badge');
     if (!badge) return;
-    const wrap = badge.closest('.prio-wrap');
-    const sel  = wrap.querySelector('.prio-select');
+    e.preventDefault();
+    const wrap = badge.closest('.status-wrap');
+    const sel = wrap?.querySelector('.status-select');
+    if (!sel) return;
     badge.classList.add('hidden');
     sel.classList.remove('hidden');
+    sel.style.display = 'inline-block';  // ✅ WICHTIG: Überschreibt .hidden
     sel.focus();
   });
 
+  // Status: Select -> Badge (blur)
   document.addEventListener('blur', (e) => {
-    const sel = e.target && e.target.classList && e.target.classList.contains('prio-select') ? e.target : null;
+    const sel = e.target;
+    if (!(sel.classList && sel.classList.contains('status-select'))) return;
+    setTimeout(() => {
+      if (document.activeElement === sel) return;
+      const wrap = sel.closest('.status-wrap');
+      const badge = wrap?.querySelector('.status-badge');
+      sel.classList.add('hidden');
+      sel.style.display = 'none';  // ✅ WICHTIG: Versteckt explizit
+      if (badge) badge.classList.remove('hidden');
+    }, 0);
+  }, true);
+
+  // Status: Keyboard-Support
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const badge = e.target.closest('.status-badge');
+    if (!badge) return;
+    e.preventDefault();
+    badge.click();
+  });
+
+  // Priority: Badge -> Select
+  document.addEventListener('click', (e) => {
+    const badge = e.target.closest('.prio-badge');
+    if (!badge) return;
+    e.preventDefault();
+    const wrap = badge.closest('.prio-wrap');
+    const sel = wrap?.querySelector('.prio-select');
     if (!sel) return;
+    badge.classList.add('hidden');
+    sel.classList.remove('hidden');
+    sel.style.display = 'inline-block';  // ✅ WICHTIG: Überschreibt .hidden
+    sel.focus();
+  });
+
+  // Priority: Select -> Badge (blur)
+  document.addEventListener('blur', (e) => {
+    const sel = e.target;
+    if (!(sel.classList && sel.classList.contains('prio-select'))) return;
     setTimeout(() => {
       if (document.activeElement === sel) return;
       const wrap = sel.closest('.prio-wrap');
-      const badge = wrap.querySelector('.prio-badge');
+      const badge = wrap?.querySelector('.prio-badge');
       sel.classList.add('hidden');
-      badge && badge.classList.remove('hidden');
+      sel.style.display = 'none';  // ✅ WICHTIG: Versteckt explizit
+      if (badge) badge.classList.remove('hidden');
     }, 0);
   }, true);
+
+  // Priority: Keyboard-Support
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const badge = e.target.closest('.prio-badge');
+    if (!badge) return;
+    e.preventDefault();
+    badge.click();
+  });
+
 
   document.addEventListener('htmx:afterRequest', (e) => {
     const el = e.target;
@@ -483,6 +641,9 @@
       const label = opt.textContent || 'Keine';
       if (badge) {
         badge.textContent = label;
+        badge.style.borderColor = color;
+        badge.style.background = color + '22';
+        badge.setAttribute('data-priority', opt.value);
       }
       el.setAttribute('data-current', el.value);
       Array.from(el.options).forEach(o => o.removeAttribute('selected'));
@@ -512,6 +673,32 @@
       window.open(url.toString(), '_blank');
     });
   })();
+
+  // Datum und Zeit aktualisieren
+  function updateListDateTime() {
+    const now = new Date();
+    const options = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    const dateStr = now.toLocaleDateString('de-DE', options);
+    const timeStr = now.toLocaleTimeString('de-DE', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    
+    const dateEl = document.getElementById('list-current-date');
+    const timeEl = document.getElementById('list-current-time');
+    if (dateEl) dateEl.textContent = dateStr;
+    if (timeEl) timeEl.textContent = timeStr;
+  }
+
+  // Datum und Zeit sofort aktualisieren und dann jede Sekunde
+  updateListDateTime();
+  setInterval(updateListDateTime, 1000);
 
 })();
 </script>

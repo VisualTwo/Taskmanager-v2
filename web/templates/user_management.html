@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Benutzerverwaltung{% endblock %}
+
+{% block content %}
+<div class="user-management-header">
+    <h1>👥 Benutzerverwaltung</h1>
+    <div>
+        <a href="/dashboard" class="btn btn-secondary">← Zurück zum Dashboard</a>
+    </div>
+</div>
+
+{% if success_message %}
+<div class="alert alert-success" role="alert">
+    {{ success_message }}
+</div>
+{% endif %}
+
+{% if error_message %}
+<div class="alert alert-danger" role="alert">
+    {{ error_message }}
+</div>
+{% endif %}
+
+<div class="stats-cards">
+    <div class="stat-card total-users">
+        <span class="stat-icon">👥</span>
+        <h3>{{ stats.total_users }}</h3>
+        <p>Benutzer insgesamt</p>
+    </div>
+    <div class="stat-card active-users">
+        <span class="stat-icon">✅</span>
+        <h3>{{ stats.active_users }}</h3>
+        <p>Aktive Benutzer</p>
+    </div>
+    <div class="stat-card pending-users">
+        <span class="stat-icon">⏳</span>
+        <h3>{{ stats.pending_users }}</h3>
+        <p>Wartend auf Aktivierung</p>
+    </div>
+    <div class="stat-card admin-users">
+        <span class="stat-icon">👑</span>
+        <h3>{{ stats.admin_users }}</h3>
+        <p>Administratoren</p>
+    </div>
+</div>
+
+<div class="search-filter">
+    <input type="text" id="searchInput" class="search-input" placeholder="Nach Name, Login oder E-Mail suchen...">
+    <select id="statusFilter" class="filter-select">
+        <option value="">Alle Benutzer</option>
+        <option value="active">Nur aktive</option>
+        <option value="inactive">Nur inaktive</option>
+        <option value="admin">Nur Admins</option>
+    </select>
+    <a href="/auth/admin/users/new" class="btn btn-primary">Neuer Benutzer</a>
+</div>
+
+{% if users %}
+<table class="user-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>E-Mail</th>
+            <th>Status</th>
+            <th>Rolle</th>
+            <th>Letzter Login</th>
+            <th>Aktionen</th>
+        </tr>
+    </thead>
+    <tbody id="userTableBody">
+        {% for user in users %}
+        <tr class="user-row" data-login="{{ user.login }}" data-status="{{ 'active' if user.is_active else 'inactive' }}" data-role="{{ 'admin' if user.is_admin else 'user' }}">
+            <td>
+                <div>
+                    <strong>{{ user.full_name or user.login }}</strong>
+                    {% if user.full_name %}
+                        <br>
+                        <small style="color: var(--color-muted);">@{{ user.login }}</small>
+                    {% endif %}
+                </div>
+            </td>
+            <td>
+                <div class="email-status">
+                    {{ user.email or '-' }}
+                    {% if user.email %}
+                        {% if user.email_confirmed %}
+                            <span class="email-confirmed">✓</span>
+                        {% else %}
+                            <span class="email-unconfirmed">⚠</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </td>
+            <td>
+                <span class="status-badge {{ 'active' if user.is_active else 'inactive' }}">
+                    {{ 'Aktiv' if user.is_active else 'Inaktiv' }}
+                </span>
+            </td>
+            <td>
+                <span class="status-badge {{ 'admin' if user.is_admin else 'user' }}">
+                    {{ 'Administrator' if user.is_admin else 'Benutzer' }}
+                </span>
+            </td>
+            <td>
+                {% if user.last_login_at %}
+                    {{ user.last_login_at | format_local }}
+                {% else %}
+                    <span style="color: var(--color-muted);">Nie</span>
+                {% endif %}
+            </td>
+            <td>
+                <div class="action-buttons">
+                    <a href="/auth/admin/users/{{ user.id }}/edit" class="btn-small btn-edit">Bearbeiten</a>
+                    {% if user.login != current_user.login %}
+                        {% if user.is_active %}
+                            <form method="post" action="/auth/admin/users/{{ user.id }}/deactivate" style="display: inline;">
+                                <button type="submit" class="btn-small btn-deactivate" onclick="return confirm('Benutzer {{ user.login }} deaktivieren?')">Deaktivieren</button>
+                            </form>
+                        {% else %}
+                            <form method="post" action="/auth/admin/users/{{ user.id }}/activate" style="display: inline;">
+                                <button type="submit" class="btn-small btn-activate">Aktivieren</button>
+                            </form>
+                        {% endif %}
+                        <form method="post" action="/auth/admin/users/{{ user.id }}/delete" style="display: inline;">
+                            <button type="submit" class="btn-small btn-delete" onclick="return confirm('Benutzer {{ user.login }} wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden!')">Löschen</button>
+                        </form>
+                    {% else %}
+                        <span style="color: var(--color-muted);">-</span>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="no-users">
+    <p>Keine Benutzer gefunden.</p>
+    <a href="/auth/admin/users/new" class="btn btn-primary">Ersten Benutzer erstellen</a>
+</div>
+{% endif %}
+
+<script>
+// Search and filter functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    const userRows = document.querySelectorAll('.user-row');
+
+    function filterUsers() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const statusFilterValue = statusFilter.value;
+
+        userRows.forEach(row => {
+            const login = row.dataset.login.toLowerCase();
+            const status = row.dataset.status;
+            const role = row.dataset.role;
+            
+            const nameCell = row.cells[0].textContent.toLowerCase();
+            const emailCell = row.cells[1].textContent.toLowerCase();
+            
+            const matchesSearch = !searchTerm || 
+                                login.includes(searchTerm) || 
+                                nameCell.includes(searchTerm) || 
+                                emailCell.includes(searchTerm);
+            
+            const matchesStatus = !statusFilterValue || 
+                                status === statusFilterValue || 
+                                (statusFilterValue === 'admin' && role === 'admin');
+            
+            row.style.display = matchesSearch && matchesStatus ? '' : 'none';
+        });
+    }
+
+    searchInput.addEventListener('input', filterUsers);
+    statusFilter.addEventListener('change', filterUsers);
+});
+</script>
+{% endblock %}

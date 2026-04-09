@@ -103,10 +103,13 @@ def _clamp_priority_0_5(p: Optional[int]) -> Optional[int]:
     if v > 5: v = 5
     return v
 
-def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
+def import_ics(text: str, *, creator: str) -> List[Event | Appointment | Task | Reminder]:
     """
     Parst den ICS-Text und liefert angereicherte Domain-Items zurück.
     """
+    if not creator:
+        raise ValueError("creator is required for ICS import")
+
     from icalendar import Calendar
     cal = Calendar.from_ical(text)
     out: List[Event | Appointment | Task | Reminder] = []
@@ -172,6 +175,7 @@ def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
 
         ics_status = _to_plain_str(comp.get("status") or "")
         x_app_status = _to_plain_str(comp.get("X-APP-STATUS") or "").strip().upper()
+        x_app_type = _to_plain_str(comp.get("X-APP-TYPE") or "").strip().lower()
 
         # Event
         kind = "event"
@@ -239,6 +243,12 @@ def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
             due_utc = parse_ics_datetime_to_utc(due) if due else None
             kind = "task"
             status_key = _ics_status_to_app(kind, ics_status)
+            # DEBUG: show imported x_app_type/status for troubleshooting (disabled)
+            # print(f"DEBUG VTODO x_app_type={x_app_type!r} x_app_status={x_app_status!r} ics_status={ics_status!r}")
+            # if exporter set X-APP-TYPE, prefer that to reconstruct original item class
+            if x_app_type == "reminder":
+                kind = "reminder"
+                status_key = x_app_status if x_app_status else _ics_status_to_app(kind, ics_status)
 
             description = _compose_description(summary, desc_norm, location, organizer, attendees, url, geo)
             links = tuple(dict.fromkeys((links_in_desc + ((url,) if url else ()))))
@@ -249,7 +259,28 @@ def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
             if geo: meta["geo"] = geo
             if ics_uid: meta["ics_uid"] = ics_uid
 
-            it = Task(
+            if kind == "reminder":
+                it = Reminder(
+                    id="",
+                    type="reminder",
+                    name=summary or "Ohne Titel",
+                    status=status_key,
+                    is_private=False,
+                    description=description or None,
+                    tags=tags,
+                    links=links,
+                    metadata=meta,
+                    reminder_utc=due_utc,
+                    recurrence=None,
+                    created_utc=created_utc,
+                    last_modified_utc=last_modified_utc,
+                    ics_uid=ics_uid,
+                    priority=priority,
+                    creator=creator,
+                    participants=(creator,),
+                )
+            else:
+                it = Task(
                 id="",
                 type="task",
                 name=summary or "Ohne Titel",
@@ -265,6 +296,8 @@ def import_ics(text: str) -> List[Event | Appointment | Task | Reminder]:
                 last_modified_utc=last_modified_utc,
                 ics_uid=ics_uid,
                 priority=priority,
+                creator=creator,
+                participants=(creator,),
             )
             out.append(it)
 

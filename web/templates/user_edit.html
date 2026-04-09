@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Benutzer bearbeiten{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 600px; margin: 2rem auto;">
+    <div class="card">
+        <div class="card-header">
+            <h2>Benutzer bearbeiten</h2>
+            <div class="breadcrumb">
+                <a href="/auth/admin/users">Benutzerverwaltung</a> → 
+                <span>{{ user_to_edit.full_name or user_to_edit.login }}</span>
+            </div>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" class="form-vertical">
+            <div class="form-group">
+                <label for="login">Benutzername</label>
+                <input type="text" id="login" name="login" value="{{ user_to_edit.login }}" 
+                       disabled class="form-control" style="background-color: var(--color-bg-alt); cursor: default; color: var(--color-muted);">
+                <div class="form-help">Der Benutzername kann nicht geändert werden.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">E-Mail-Adresse</label>
+                <input type="email" id="email" name="email" value="{{ user_to_edit.email }}" 
+                       required class="form-control">
+            </div>
+
+            <div class="form-group">
+                <label for="full_name">Vollständiger Name</label>
+                <input type="text" id="full_name" name="full_name" value="{{ user_to_edit.full_name or '' }}" 
+                       class="form-control">
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_active" value="1" 
+                               {% if user_to_edit.is_active %}checked{% endif %}>
+                        Benutzer ist aktiv
+                    </label>
+                    <div class="form-help">Inaktive Benutzer können sich nicht anmelden.</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_admin" value="1" 
+                               {% if user_to_edit.is_admin %}checked{% endif %}>
+                        Administrator-Berechtigung
+                    </label>
+                    <div class="form-help">Administratoren können andere Benutzer verwalten.</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Registriert am</label>
+                <div class="form-static">
+                    {{ user_to_edit.created_utc | format_local("%d.%m.%Y %H:%M") if user_to_edit.created_utc else "Unbekannt" }}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>E-Mail bestätigt</label>
+                <div class="form-static">
+                    {% if user_to_edit.is_email_confirmed %}
+                        <span style="color: green;">✓ Ja</span>
+                    {% else %}
+                        <span style="color: red;">✗ Nein</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Änderungen speichern</button>
+                <a href="/auth/admin/users" class="btn btn-secondary">Abbrechen</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .container {
+        padding: 0 1rem;
+    }
+    .card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .card-header {
+        background: var(--bg-tertiary);
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .card-header h2 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text-primary);
+    }
+    .breadcrumb {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+    .breadcrumb a {
+        color: var(--color-primary);
+        text-decoration: none;
+    }
+    .breadcrumb a:hover {
+        text-decoration: underline;
+    }
+    .form-vertical {
+        padding: 2rem;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.1);
+    }
+    .form-help {
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+    .form-static {
+        padding: 0.75rem;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        color: var(--text-primary);
+    }
+    .checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-weight: normal;
+    }
+    .checkbox-label input[type="checkbox"] {
+        margin: 0;
+    }
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border-color);
+    }
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+    }
+    .btn-primary {
+        background: var(--color-primary);
+        color: white;
+    }
+    .btn-primary:hover {
+        background: var(--color-primary-hover);
+    }
+    .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover {
+        background: var(--bg-quaternary);
+    }
+    .alert {
+        padding: 1rem;
+        margin: 1rem 2rem;
+        border-radius: 4px;
+    }
+    .alert-error {
+        background: var(--alert-error-bg);
+        border: 1px solid var(--alert-error-border);
+        color: var(--alert-error-fg);
+    }
+</style>
+{% endblock %}

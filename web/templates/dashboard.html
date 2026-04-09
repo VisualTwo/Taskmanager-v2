@@ -1,387 +1,768 @@
-{# /web/templates/dashboard.html #}
 {% extends "base.html" %}
+
+{% block title %}Dashboard - Task Manager{% endblock %}
+
 {% block content %}
+<!-- Kalenderdaten für JS: tasks werden im Hauptscript gesetzt -->
+<!-- Dashboard Content -->
 
-<div class="header-row" style="justify-content: space-between; align-items:center;">
-  <h2 style="margin:0;">{{ header_today }}</h2>
+<!-- Date and Time Header -->
+<div class="dashboard-header">
+  <div class="current-datetime">
+    <div class="current-date" id="current-date">Heute</div>
+    <div class="current-time" id="current-time">00:00</div>
+  </div>
 </div>
 
-<div class="table-toolbar" style="display:flex; justify-content:flex-end; gap:.5rem; margin:.5rem 0;">
-  <a class="preview-btn"
-     href="/dashboard/export.xlsx?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ cal_weeks }}&show_private={{ show_private }}&q={{ q|urlencode }}&types={{ types|urlencode }}&status={{ status|urlencode }}&tags={{ tags|urlencode }}"
-     download="kalender_kw{{ calendar_week.weeks[0].week_number if calendar_week and calendar_week.weeks else '' }}.xlsx"
-     title="Kalender in Excel exportieren">
-    Kalender exportieren (Excel)
-  </a>
-</div>
+<!-- Filter-Toolbar für Dashboard -->
+<section class="filterbar">
+  <form method="get" action="/dashboard" class="filters" role="search" aria-label="Suche und Filter" id="dashboard-filters">
+    <div class="filter-toolbar">
 
-<style>
-  .cards-grid {
-    display: grid;
-    gap: .6rem;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    margin:.5rem 0;
-  }
-  .card { grid-column: span 4; }
-  .card--span2 { grid-column: span 8; }
-  .card--full { grid-column: 1 / -1; }
-  .row-sep { grid-column: 1 / -1; height:.2rem; }
+      <!-- Zeile 1: Hauptsuche und Grundfilter -->
+      <div class="filter-row row-main">
+        <div class="field field-search">
+          <label for="q">Suche</label>
+          <div class="input">
+            <input id="q" type="text" name="q" placeholder="Name oder Beschreibung suchen…" value="{{ request.query_params.get('q','') }}" maxlength="120"
+                  data-initial-q="{{ request.query_params.get('q','') }}"
+                  data-confirmed-q="{{ request.query_params.get('q','') }}"
+                  hx-get="/dashboard"
+                  hx-trigger="keyup changed delay:300ms, search"
+                  hx-include="#dashboard-filters"
+                  hx-target=".dashboard-grid"
+                  hx-swap="outerHTML"
+                  hx-push-url="true"
+                  autocomplete="off">
+            <button type="submit" class="btn btn-xs preview-btn" id="btn-search" aria-label="Suchen" title="Suchen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="21 21l-4.35-4.35"></path>
+              <!-- ...existing button markup... -->
+          <label for="status_key">Status</label>
+          {% set cur_status = request.query_params.get('status','') %}
+          <select id="status_key" name="status" title="Status filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle Status</option>
+            {% for key, label in status_choices %}
+              <option value="{{ key }}" {% if cur_status==key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-  .card-title { font-weight:600; margin-bottom:.25rem; }
-  .list-plain { margin:.25rem 0; padding-left:0; list-style:none; }
-  .muted { color: var(--muted, #666); }
+        <div class="field">
+          <label for="prio">Priorität</label>
+          {% set cur_prio = request.query_params.get('prio','') %}
+          <select id="prio" name="prio" title="Nach Priorität filtern" onchange="this.form.requestSubmit()">
+            <option value="">Alle</option>
+            <option value="5" {% if cur_prio=='5' %}selected{% endif %}>🚨 Blockierend</option>
+            <option value="4" {% if cur_prio=='4' %}selected{% endif %}>🔥 Kritisch</option>
+            <option value="3" {% if cur_prio=='3' %}selected{% endif %}>⚡ Hoch</option>
+            <option value="2" {% if cur_prio=='2' %}selected{% endif %}>📋 Normal</option>
+            <option value="1" {% if cur_prio=='1' %}selected{% endif %}>💤 Niedrig</option>
+            <option value="0" {% if cur_prio=='0' %}selected{% endif %}>⚪ Keine</option>
+          </select>
+        </div>
+      </div>
 
-  .chip { display:inline-block; font-size:.8rem; padding:.05rem .35rem; background:var(--chip-bg, #e5e7eb); border-radius:.5rem; }
+      <!-- Zeile 2: Erweiterte Filter und Optionen -->
+      <div class="filter-row row-advanced">
+        <div class="field field-tags">
+          <label for="filter-tags">Tags</label>
+          <div class="input">
+            <input id="filter-tags" type="text" name="tags" placeholder="#tag1, #tag2…" autocomplete="off" value="{{ tags or '' }}" 
+                   hx-get="/tags/suggest"
+                   hx-trigger="keyup changed delay:200ms"
+                   hx-params="*"
+                   hx-include="#filter-tags"
+                   hx-target="next .tags-filter-suggest"
+                   hx-swap="innerHTML">
+            <div class="tags-filter-suggest"></div>
+          </div>
+        </div>
 
-  .status-badge {
-    display:inline-block;
-    padding:.1rem .4rem;
-    border-radius:.35rem;
-    font-size:.78rem;
-    line-height:1.2;
-    color:#111;
-    background:#e5e7eb; /* fallback */
-    white-space: nowrap;
-  }
+        <div class="field field-toggles">
+          <label>Optionen</label>
+          <div class="toggle-group">
+            <label class="toggle-item" title="Private Items anzeigen/ausblenden">
+              <input id="show_private" type="checkbox" name="show_private" value="1" {% if request.query_params.get('show_private','0')=='1' %}checked{% endif %} onchange="this.form.requestSubmit()">
+              <span>🔒 Private</span>
+            </label>
+            <label class="toggle-item" title="Vergangene und erledigte Items anzeigen">
+              <input id="include_past" type="checkbox" name="include_past" value="1" {% if request.query_params.get('include_past','0')=='1' %}checked{% endif %} onchange="this.form.requestSubmit()">
+              <span>📜 Vergangene</span>
+            </label>
+          </div>
+        </div>
 
-  .calendar { width:100%; border-collapse: collapse; table-layout: fixed; }
-  .calendar th, .calendar td { border: 1px solid var(--border, #ddd); padding:.25rem; vertical-align: top; }
-  .calendar thead th { background: var(--bg-muted, #f6f6f6); font-weight:600; text-align:center; }
-  .cal-day { font-size:.8rem; font-weight:600; margin-bottom:.25rem; text-align:right; }
-  .cal-slot { font-size:.8rem; line-height:1.2; }
-  .badge-ev { display:inline-block; color: #000; font-size:.75rem; padding:.05rem .3rem; border-radius:.35rem; background:#e8f0fe; }
-
-  /* NEU: Prioritäts- und Überfällig-Styles */
-  .priority-high { border-left: 3px solid #dc2626; padding-left: .3rem; }
-  .priority-medium { border-left: 3px solid #f59e0b; padding-left: .3rem; }
-  .priority-low { border-left: 3px solid #3b82f6; padding-left: .3rem; }
-  .overdue { background: rgba(220, 38, 38, 0.08); }
-  .birthday-icon { width: 1rem; height: 1rem; display: inline-block; vertical-align: middle; margin-right: .2rem; }
-</style>
-
-<section class="cards-grid">
-
-  <!-- Zeile 1 -->
-  <div class="card">
-    <div class="card-title">Überfällig</div>
-    <div class="card-body">
-      {% set L = overdue if overdue is defined else [] %}
-      {% if L %}
-        <ul class="list-plain">
-          {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} overdue">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
-              {% else %}
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
-              {% endif %}
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
-                {{ it.name }}
-              </a>
-              <span class="muted">
-                {% if it.type in ('appointment','event') %}
-                  {{ format_dashboard_time(it.start_utc, "next_events", berlin_tz) }}
-                {% else %}
-                  {{ format_dashboard_time(it.due_utc or it.reminder_utc, "next_events", berlin_tz) }}
-                {% endif %}
-              </span>
-              {% if not is_birthday(it) %}
-              <span class="status-badge"
-                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
-                {{ status_display(it.status) }}
-              </span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="muted">Nichts überfällig.</div>
-      {% endif %}
+        <!-- Verbesserte Vorkommen-Vorschau -->
+        <div class="field field-occurrence">
+          <label>Zeitraum</label>
+          <div class="occurrence-controls">
+            {% set cur_range = request.query_params.get('range','') %}
+            <a class="range-btn{% if cur_range == 'heute' %} active{% endif %}" 
+               {% if cur_range != 'heute' %}href="{{ request.url.include_query_params(range='heute') }}"{% endif %} 
+               title="Nur heutige Vorkommen anzeigen">
+              📅 Heute
+            </a>
+            <a class="range-btn{% if cur_range == 'woche' %} active{% endif %}" 
+               {% if cur_range != 'woche' %}href="{{ request.url.include_query_params(range='woche') }}"{% endif %}
+               title="Vorkommen dieser Woche">
+               📆 Diese Woche
+            </a>
+            <a class="range-btn{% if cur_range == 'naechstewoche' %} active{% endif %}" 
+               {% if cur_range != 'naechstewoche' %}href="{{ request.url.include_query_params(range='naechstewoche') }}"{% endif %}
+               title="Vorkommen der nächsten Woche">
+               ⏭️ Nächste Woche
+            </a>
+            <a class="range-btn{% if not cur_range or cur_range == 'next3' %} active{% endif %}" 
+               {% if cur_range and cur_range != 'next3' %}href="{{ request.url.include_query_params(range='next3') }}"{% endif %}
+               title="Nächste 3 Vorkommen pro Item (Standard)">
+               🔄 Standard
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-
-  <div class="card card--span2">
-    <div class="card-title">Heute</div>
-    <div class="card-body">
-      {% set L = upcoming_today if upcoming_today is defined else [] %}
-      {% if L %}
-        <ul class="list-plain">
-          {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }} {% if is_overdue_item(it, today) %}overdue{% endif %}">
-              {% if is_birthday(it) %}<img src="static/icons/birthday.svg" alt="🎂" class="birthday-icon">{% endif %}
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
-                {{ it.name }}
-              </a>
-              <span class="muted">
-                {% if it.type in ('appointment','event') %}
-                  {{ format_dashboard_time(it.start_utc, "today", berlin_tz) }}
-                {% else %}
-                  {{ format_dashboard_time(it.due_utc or it.reminder_utc, "today", berlin_tz) }}
-                {% endif %}
-              </span>
-              {% if not is_birthday(it) %}
-              <span class="status-badge"
-                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
-                {{ status_display(it.status) }}
-              </span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="muted">Keine heutigen Einträge.</div>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="row-sep"></div>
-
-  <!-- Zeile 2 -->
-  <div class="card">
-    <div class="card-title">Nächste 7 Tage</div>
-    <div class="card-body">
-      {% set L = upcoming_next7 if upcoming_next7 is defined else [] %}
-      {% if L %}
-        <ul class="list-plain">
-          {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
-              {% else %}
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
-              {% endif %}
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
-                {{ it.name }}
-              </a>
-              <span class="muted">
-                {% if it.type in ('appointment','event') %}
-                  {{ format_dashboard_time(it.start_utc, "next_7d", berlin_tz) }}
-                {% else %}
-                  {{ format_dashboard_time(it.due_utc or it.reminder_utc, "next_7d", berlin_tz) }}
-                {% endif %}
-              </span>
-              {% if not is_birthday(it) %}
-              <span class="status-badge"
-                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
-                {{ status_display(it.status) }}
-              </span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="muted">Keine Einträge in den nächsten 7 Tagen.</div>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Serien aktiv</div>
-    <div class="card-body">
-      {% set L = recurring_items if recurring_items is defined else [] %}
-      {% if L %}
-        <ul class="list-plain">
-          {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="birthday-icon">
-              {% endif %}
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
-                {{ it.name }}
-              </a>
-              <span class="muted">
-                {% if it.type in ('appointment','event') and it.start_utc %}
-                  {{ format_dashboard_time(it.start_utc, "series", berlin_tz) }}
-                {% endif %}
-              </span>
-              {% if not is_birthday(it) %}
-              <span class="status-badge"
-                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
-                {{ status_display(it.status) }}
-              </span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="muted">Keine aktiven Serien.</div>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Ohne Termin</div>
-    <div class="card-body">
-      {% set L = without_date if without_date is defined else [] %}
-      {% if L %}
-        <ul class="list-plain">
-          {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              <span class="chip" title="{{ it.type }}">{{ it.type }}</span>
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
-                {{ it.name }}
-              </a>
-              {% if not is_birthday(it) %}
-              <span class="status-badge"
-                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
-                {{ status_display(it.status) }}
-              </span>
-              {% endif %}
-              {% if it.last_modified_utc %}
-                <span class="muted">{{ format_dashboard_time(it.last_modified_utc, "no_date", berlin_tz) }}</span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="muted">Alle Einträge sind terminiert.</div>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="row-sep"></div>
-
-  <!-- Zeile 3 -->
-  <div class="card">
-    <div class="card-title">Nächste Ereignisse</div>
-    <div class="card-body">
-      {% set L = (events_next2m if events_next2m is defined else [])[:20] %}
-      {% if L %}
-        <ul class="list-plain">
-          {% for it in L %}
-            <li style="display:flex; align-items:center; gap:.5rem; margin:.2rem 0;" class="{{ get_priority_class(it) }}">
-              {% if is_birthday(it) %}<img src="/static/icons/birthday.svg" alt="🎂" class="icon-btn">
-              {% else %}
-              <span class="badge-ev">Event</span>
-              {% endif %}
-              <a class="link" href="/items/{{ it.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
-                {{ it.name }}
-              </a>
-              <span class="muted">
-                {{ format_dashboard_time(it.start_utc, "next_events", berlin_tz) }}
-              </span>
-              {% if not is_birthday(it) %}
-              <span class="status-badge"
-                    style="background: {{ type_status_colors.get(it.type, {}).get(it.status, '#e5e7eb') }};">
-                {{ status_display(it.status) }}
-              </span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="muted">Keine Ereignisse in den nächsten 2 Monaten.</div>
-      {% endif %}
-    </div>
-  </div>
-  
-  <div class="card card--span2" style="padding: 0; border: none; background: transparent;">
-    {% set W = calendar_week if calendar_week is defined else None %}
-    {% if W %}
-    
-    <!-- Kompakte Kalender-Navigation -->
-    <div class="cal-nav">
-    <div class="cal-nav-group">
-        <a href="?cal_week_offset={{ cal_week_offset - 1 }}&cal_weeks={{ cal_weeks }}&show_private={{ request.query_params.get('show_private','0') }}" class="cal-nav-btn" title="Eine Woche zurück">‹</a>
-        <a href="?cal_week_offset={{ cal_week_offset + 1 }}&cal_weeks={{ cal_weeks }}&show_private={{ request.query_params.get('show_private','0') }}" class="cal-nav-btn" title="Eine Woche vor">›</a>
-    </div>
-
-    <div class="cal-nav-status">
-        {% if cal_week_offset == 0 %}
-        <span class="cal-nav-label">Diese Woche</span>
-        {% elif cal_week_offset > 0 %}
-        <span class="cal-nav-label cal-nav-label--future">+{{ cal_week_offset }}W</span>
-        {% else %}
-        <span class="cal-nav-label cal-nav-label--past">{{ cal_week_offset }}W</span>
-        {% endif %}
-    </div>
-
-    <div class="cal-nav-group">
-        {% if cal_week_offset != 0 %}
-        <a href="?cal_week_offset=0&cal_weeks={{ cal_weeks }}&show_private={{ request.query_params.get('show_private','0') }}" class="cal-nav-btn" title="Zurück zu heute">Heute</a>
-        {% endif %}
-
-        <span class="cal-nav-label">Wochen</span>
-        {% for k in [1,2,3,4] %}
-        <a
-            href="?cal_week_offset={{ cal_week_offset }}&cal_weeks={{ k }}&show_private={{ request.query_params.get('show_private','0') }}"
-            class="cal-nav-btn {% if cal_weeks|int == k %}cal-nav-btn--active{% endif %}"
-            title="{{ k }} Kalenderwochen anzeigen"
-          >{{ k }}</a>
-        {% endfor %}
-    </div>
-    </div>
-
-    <!-- Bestehende Kalender-Tabelle -->
-    <table class="calendar" aria-label="Kalender 2 Wochen">
-        <thead>
-        <tr>
-        <th scope="col" class="cal-week-col">KW</th>
-        {% for d in W.headers %}
-        <th scope="col">{{ d }}</th>
-        {% endfor %}
-        </tr>
-        </thead>
-        <tbody>
-        {% for week in W.weeks %}
-        <tr>
-        {# Kalenderwoche-Zelle #}
-        <td class="cal-week-cell">{{ week.week_number }}</td>
-        
-        {# Tages-Zellen #}
-        {% for day in week.days %}
-        <td class="{% if day.is_weekend %}cal-weekend{% endif %} {% if day.is_today %}cal-today{% endif %}">
-            <div class="cal-day">{{ day.label }}</div>
-            <div class="cal-slot">
-                {% for ev in day["items"] %}
-                    {% set ev_dt = None %}
-                    {% if ev.type in ('appointment','event') %}
-                        {# Start, sonst Ende #}
-                        {% set ev_dt = ev.end_utc or ev.start_utc %}
-                    {% elif ev.type in ('task','reminder') %}
-                        {# Fälligkeit, sonst Erinnerung #}
-                        {% set ev_dt = ev.due_utc or ev.reminder_utc %}
-                    {% endif %}
-
-                    {# Nur terminale Einträge werden als „vergangen“ markiert #}
-                    {% set is_terminal = (ev.status and status_display(ev.status) and true) %}
-                    {# Alternativ genauer: eigener Helper is_terminal im ctx nutzen, falls vorhanden #}
-                    {% set is_terminal = is_terminal_status(ev.status) %}
-
-                    {% set is_past = false %}
-                    {% if ev_dt and is_terminal %}
-                        {% set now_in_ev_tz = now_local.astimezone(ev_dt.tzinfo) if ev_dt.tzinfo else now_local %}
-                        {% set is_past = ev_dt < now_in_ev_tz %}
-                    {% elif not ev_dt and is_terminal %}
-                        {% set is_past = day.date.date() < now_local.date() %}
-                    {% endif %}
-                <div class="{{ get_priority_class(ev) }} {% if is_past %}cal-past{% endif %}">
-                    {% if is_birthday(ev) %}<img src="/static/icons/birthday.svg" alt="🎂" class="icon-btn">{% endif %}
-                    
-                    {# Uhrzeit zuerst #}
-                    <span class="cal-time">
-                    {% if ev.type in ('appointment', 'event') and ev.start_utc %}
-                        {{ format_dashboard_time(ev.start_utc, "calendar", berlin_tz) }}
-                        {% if ev.end_utc and ev.end_utc != ev.start_utc %}-{{ format_dashboard_time(ev.end_utc, "calendar", berlin_tz) }}{% endif %}
-                    {% elif ev.type in ('task', 'reminder') and (ev.due_utc or ev.reminder_utc) %}
-                        {{ format_dashboard_time(ev.due_utc or ev.reminder_utc, "calendar", berlin_tz) }}
-                    {% endif %}
-                    </span>
-                    
-                    <a class="link" href="/items/{{ ev.id }}/edit{% set qs = request.query_params | urlencode_qs %}{% if qs %}?{{ qs }}{% endif %}">
-                    {{ ev.name }}
-                    </a>
-                </div>
-                {% endfor %}
-            </div>
-        </td>
-        {% endfor %}
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-  <div class="muted" style="padding: 1rem;">Kalender nicht verfügbar.</div>
-  {% endif %}
-</div>
+  </form>
 </section>
+
+<div class="dashboard-grid">
+
+  <!-- Priority Tasks -->
+  <div class="dashboard-card">
+    <div class="card-header">
+      <span>⚠️</span>
+      <h2 class="card-title">
+        {% if overdue|length == 1 %}
+          1 überfällige Aufgabe
+        {% else %}
+          {{ overdue|length }} überfällige Aufgaben
+        {% endif %}
+      </h2>
+    </div>
+    {% if overdue %}
+      <ul class="priority-list">
+        {% for item in overdue[:10] %}
+          <li class="priority-item overdue">
+            <div class="item-info">
+              <div class="item-name">
+                <a href="/items/{{ item.id }}/edit" target="_blank" title="{{ item.type|title }}: {{ item.name }}{% if item.priority %} | Priorität: {{ item.priority|title }}{% endif %}{% if (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None) %} | Fällig: {{ ((item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None)).astimezone(berlin_tz).strftime('%d.%m.%Y %H:%M') }}{% endif %}">
+                  {{ item.name }}
+                </a>
+              </div>
+              <div class="item-time">
+                {% if (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None) %}
+                  {{ format_dashboard_time((item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None), "overdue", berlin_tz) }}
+                {% endif %}
+              </div>
+            </div>
+            <span class="status-chip status-{{ item.type }}-{{ item.status }}">
+              {{ status_display(item.status) }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state success">✅ Keine überfälligen Aufgaben</p>
+    {% endif %}
+  </div>
+
+  <!-- Today's Schedule -->
+  <div class="dashboard-card">
+    <div class="card-header">
+      <span>📅</span>
+      <div class="day-nav-container">
+        <button class="day-nav day-nav-left" onclick="changeDay(-1)">‹</button>
+        <h2 class="card-title" id="today-title">
+          {% if upcoming_today|length == 1 %}
+            Heute (1 Element)
+          {% elif upcoming_today|length > 1 %}
+            Heute ({{ upcoming_today|length }} Elemente)
+          {% else %}
+            Heute
+          {% endif %}
+        </h2>
+        <button class="day-nav day-nav-right" onclick="changeDay(1)">›</button>
+      </div>
+    </div>
+    <div id="today-content">
+    {% if upcoming_today %}
+      <ul class="priority-list">
+        {% for item in upcoming_today %}
+          <li class="priority-item">
+            <div class="item-info">
+              <div class="item-name">
+                {% if item.is_holiday %}
+                  🎌 {{ item.name }}
+                {% else %}
+                  <a href="/items/{{ item.id }}/edit" target="_blank">{{ item.name }}</a>
+                {% endif %}
+              </div>
+              <div class="item-time">
+                {{ format_dashboard_time((item.start_utc if item.type != 'task' else None) or (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None), "today", berlin_tz) if ((item.start_utc if item.type != 'task' else None) or (item.due_utc if item.type == 'task' else None) or (item.reminder_utc if item.type == 'reminder' else None)) }}
+              </div>
+            </div>
+            <span class="btn-simple status-{{ item.type }}-{{ item.status }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+              {{ status_display(item.status) }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">🏖️ Heute ist frei</p>
+    {% endif %}
+    </div>
+  </div>
+
+
+  <!-- Next 7 Days Panel -->
+  <div class="dashboard-card">
+    <div class="card-header">
+      <span>⏳</span>
+      <h2 class="card-title">
+        {% if upcoming_next7|length == 1 %}
+          1 Termin in den nächsten 7 Tagen
+        {% else %}
+          {{ upcoming_next7|length }} Termine in den nächsten 7 Tagen
+        {% endif %}
+      </h2>
+    </div>
+    {% if upcoming_next7 %}
+      <ul class="priority-list">
+        {% for item in upcoming_next7 %}
+          <li class="priority-item">
+            <div class="item-info">
+              <div class="item-name">
+                <a href="/items/{{ item.id }}/edit" target="_blank">{{ item.name }}</a>
+              </div>
+              <div class="item-time">
+                {% if item.type == 'task' and item.due_utc %}
+                  {{ item.due_utc.astimezone(berlin_tz).strftime('%d.%m.%Y %H:%M') }}
+                {% elif item.type == 'appointment' and item.start_utc %}
+                  {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y %H:%M') }}
+                {% endif %}
+              </div>
+            </div>
+            <span class="btn-simple status-{{ item.type }}-{{ item.status }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+              {{ status_display(item.status) }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">📭 Keine Termine in den nächsten 7 Tagen</p>
+    {% endif %}
+  </div>
+
+  <!-- Upcoming Events -->
+  <div class="dashboard-card">
+    <div class="card-header">
+      <span>📅</span>
+      <h2 class="card-title">
+        {% if upcoming_appointments|length == 1 %}
+          1 kommender Termin
+        {% else %}
+          {{ upcoming_appointments|length }} kommende Termine
+        {% endif %}
+      </h2>
+    </div>
+    {% if upcoming_appointments %}
+      <ul class="priority-list">
+        {% for item in upcoming_appointments %}
+          <li class="priority-item">
+            <div class="item-info">
+              <div class="item-name">
+                {% if is_holiday_item(item) %}
+                  🎌 {{ item.name }}
+                {% else %}
+                <a href="/items/{{ item.id }}/edit" target="_blank" title="{{ item.type|title }}: {{ item.name }}{% if is_birthday(item) %} | Geburtstag{% endif %}{% if item.type != 'task' and item.start_utc %} | {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y') }}{% if item.start_utc and item.type != 'task' and item.end_utc and not (item.is_all_day or (item.start_utc.astimezone(berlin_tz).hour <= 1 and item.end_utc.astimezone(berlin_tz).hour >= 23)) %} {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }}-{{ item.end_utc.astimezone(berlin_tz).strftime('%H:%M') }}{% endif %}{% endif %}">
+                  {% if is_birthday(item) %}🎂{% endif %}
+                  {{ item.name }}
+                </a>
+                {% endif %}
+              </div>
+              <div class="item-time">
+                {% if item.type != 'task' and item.start_utc %}
+                  {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y') }}
+                  {% set is_all_day = item.is_all_day or (item.start_utc and item.type != 'task' and item.end_utc and ((item.start_utc.astimezone(berlin_tz).hour <= 1 and item.end_utc.astimezone(berlin_tz).hour >= 23) or (item.end_utc.astimezone(berlin_tz) - item.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
+                  {% if not is_all_day %}
+                    {% if item.start_utc and item.type != 'task' and item.end_utc %}
+                      {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }} - {{ item.end_utc.astimezone(berlin_tz).strftime('%H:%M') }}
+                    {% elif item.type != 'task' and item.start_utc %}
+                      {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">📭 Keine Termine</p>
+    {% endif %}
+  </div>
+
+  <!-- Tasks without Date -->
+  <div class="dashboard-card">
+    <div class="card-header">
+      <span>⏳</span>
+      <h2 class="card-title">
+        {% if without_date|length == 1 %}
+          1 Aufgabe ohne Termin
+        {% else %}
+          {{ without_date|length }} Aufgaben ohne Termin
+        {% endif %}
+      </h2>
+    </div>
+    {% if without_date %}
+      <ul class="priority-list">
+        {% for item in without_date %}
+          <li class="priority-item priority-{{ item.priority or 'medium' }}">
+            <div class="item-info">
+              <div class="item-name">
+                <a href="/items/{{ item.id }}/edit" target="_blank" title="{{ item.type|title }}: {{ item.name }}{% if item.priority %} | Priorität: {{ item.priority|title }}{% endif %}{% if item.ice_total %} | ICE: {{ item.ice_total }}{% endif %}">
+                  {{ item.name }}
+                </a>
+              </div>
+              <div class="item-time">
+                {% if item.priority %}
+                  Prio: {{ item.priority }}
+                {% endif %}
+                {% if item.ice_total and item.priority %} | {% endif %}
+                {% if item.ice_total %}
+                  ICE: {{ item.ice_total }}
+                {% endif %}
+              </div>
+            </div>
+            <span class="btn-simple status-{{ item.type }}-{{ item.status }}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+              {{ status_display(item.status) }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state success">✅ Alle Aufgaben haben Termine</p>
+    {% endif %}
+  </div>
+
+  <!-- Next 3 Months Events -->
+  <div class="dashboard-card">
+    <div class="card-header">
+      <span>🎉</span>
+      <h2 class="card-title">
+        {% if events_next2m|length == 1 %}
+          1 Ereignis in den nächsten 3 Monaten
+        {% else %}
+          {{ events_next2m|length }} Ereignisse in den nächsten 3 Monaten
+        {% endif %}
+      </h2>
+    </div>
+    {% if events_next2m %}
+      <ul class="priority-list">
+        {% for item in events_next2m %}
+          <li class="priority-item {% if is_overdue_item(item, today) %}overdue{% endif %}">
+            <div class="item-info">
+              <div class="item-name">
+                {% if is_holiday_item(item) %}
+                  🎌 {{ item.name }}
+                {% else %}
+                <a href="/items/{{ item.id }}/edit" target="_blank" title="{{ item.type|title }}: {{ item.name }}{% if is_birthday(item) %} | Geburtstag{% endif %}{% if item.type != 'task' and item.start_utc %} | {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y') }}{% if item.start_utc and item.type != 'task' and item.end_utc and not (item.is_all_day or (item.start_utc.astimezone(berlin_tz).hour <= 1 and item.end_utc.astimezone(berlin_tz).hour >= 23)) %} {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }}-{{ item.end_utc.astimezone(berlin_tz).strftime('%H:%M') }}{% endif %}{% endif %}">
+                  {% if is_birthday(item) %}🎂{% endif %}
+                  {{ item.name }}
+                </a>
+                {% endif %}
+              </div>
+              <div class="item-time">
+                {% if item.type != 'task' and item.start_utc %}
+                  {{ item.start_utc.astimezone(berlin_tz).strftime('%d.%m.%Y') }}
+                  {% set is_all_day = item.is_all_day or (item.start_utc and item.type != 'task' and item.end_utc and ((item.start_utc.astimezone(berlin_tz).hour <= 1 and item.end_utc.astimezone(berlin_tz).hour >= 23) or (item.end_utc.astimezone(berlin_tz) - item.start_utc.astimezone(berlin_tz)).total_seconds() >= 82800)) %}
+                  {% if not is_all_day %}
+                    {% if item.start_utc and item.type != 'task' and item.end_utc %}
+                      {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }} - {{ item.end_utc.astimezone(berlin_tz).strftime('%H:%M') }}
+                    {% elif item.type != 'task' and item.start_utc %}
+                      {{ item.start_utc.astimezone(berlin_tz).strftime('%H:%M') }}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">📅 Nichts geplant</p>
+    {% endif %}
+  </div>
+
+  <!-- Mini Calendar -->
+  <div class="dashboard-card calendar-widget">
+    <div class="card-header">
+      <span>📅</span>
+      <h2 class="card-title">Kalender</h2>
+    </div>
+    <div class="mini-calendar">
+      <div class="calendar-header">
+        <button class="calendar-nav" onclick="changeMonth(-1)">‹</button>
+        <div class="calendar-month" id="calendar-month">Januar 2026</div>
+        <button class="calendar-nav" onclick="changeMonth(1)">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <div>Mo</div><div>Di</div><div>Mi</div><div>Do</div><div>Fr</div><div>Sa</div><div>So</div>
+      </div>
+      <div class="calendar-days" id="calendar-days">
+        <!-- Days will be generated by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== CRITICAL: Global variables for calendar =====
+let currentDate = new Date();  // For calendar month navigation
+let currentViewDate = new Date();  // For today view navigation
+
+function changeDay(delta) {
+  currentViewDate.setDate(currentViewDate.getDate() + delta);
+  updateTodayView();
+
+function updateTodayView() {
+  const today = new Date();
+  const isToday = currentViewDate.toDateString() === today.toDateString();
+  const isYesterday = currentViewDate.toDateString() === new Date(today.getTime() - 86400000).toDateString();
+  const isTomorrow = currentViewDate.toDateString() === new Date(today.getTime() + 86400000).toDateString();
+  
+  let titleText;
+  if (isToday) {
+    titleText = 'Heute';
+  } else if (isYesterday) {
+    titleText = 'Gestern';
+  } else if (isTomorrow) {
+    titleText = 'Morgen';
+  } else {
+    const options = { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' };
+    titleText = currentViewDate.toLocaleDateString('de-DE', options);
+  }
+  
+  document.getElementById('today-title').textContent = titleText;
+  
+  // Load content for the selected date
+  const dateStr = currentViewDate.toISOString().split('T')[0];
+  
+  // Combine all calendar data (tasks and events) for date filtering
+  const allItems = [
+    ...calendarEvents.tasks.map(task => ({
+      id: task.id,
+      name: task.title,
+      date: task.date,
+      time: task.time,
+      status: task.overdue ? 'Überfällig' : 'Offen',
+      statusColor: task.overdue ? '#dc2626' : '#059669',
+      type: 'task',
+      priority: task.priority
+    })),
+    ...calendarEvents.events.map(event => ({
+      id: event.id, 
+      name: event.title,
+      date: event.date,
+      time: event.is_birthday ? '' : (event.time || ''),
+      endTime: event.is_birthday ? '' : (event.endTime || ''),
+      status: event.is_birthday ? 'Geburtstag' : 'Ereignis',
+      statusColor: event.is_birthday ? '#f59e0b' : '#2563eb',
+      type: 'event',
+      is_birthday: event.is_birthday,
+      is_holiday: event.is_holiday
+    }))
+  ];
+  
+  const dayItems = allItems.filter(item => item.date === dateStr);
+  let html;
+  if (dayItems.length > 0) {
+    html = '<ul class="priority-list">';
+    dayItems.forEach(item => {
+      const timeDisplay = item.endTime ? `${item.time}-${item.endTime}` : item.time;
+      const displayTime = timeDisplay ? timeDisplay : '';
+      
+      // Create tooltip with metadata
+      let tooltip = `${item.type === 'task' ? 'Aufgabe' : item.type === 'event' ? 'Ereignis' : 'Termin'}: ${item.name}`;
+      if (item.priority) tooltip += ` | Priorität: ${item.priority}`;
+      if (displayTime) tooltip += ` | Zeit: ${displayTime}`;
+      if (item.is_birthday) tooltip += ` | Geburtstag`;
+      if (item.is_holiday) tooltip += ` | Feiertag`;
+      
+      const priorityClass = item.priority ? `priority-${item.priority}` : 'priority-medium';
+      const prefix = item.is_birthday ? '🎂 ' : (item.is_holiday ? '🎌 ' : '');
+      const itemLink = item.is_holiday 
+        ? `${prefix}${item.name}` 
+        : `<a href="/items/${item.id}/edit" target="_blank" title="${tooltip}">${prefix}${item.name}</a>`;
+      
+      html += `<li class="priority-item ${priorityClass}">
+        <div class="item-info">
+          <div class="item-name">${itemLink}</div>
+          <div class="item-time">${displayTime}</div>
+        </div>
+        <span class="status-chip" style="border-color: ${item.statusColor}; color: ${item.statusColor};">
+          ${item.status}
+        </span>
+      </li>`;
+    });
+    html += '</ul>';
+  } else {
+    html = '<p class="empty-state">🏖️ Keine Termine</p>';
+  }
+  
+  document.getElementById('today-content').innerHTML = html;
+}
+
+// ===== CRITICAL: Doppelte Deklaration entfernt! =====
+// currentDate ist bereits oben (Zeile 395) deklariert: let currentDate = new Date();
+
+// Calendar data from backend - include ALL items for calendar display
+let calendarEvents = {
+  tasks: calendarTasks,
+  appointments: [], // TODO: Provide appointments as needed
+  events: [] // TODO: Provide events as needed
+};
+
+function changeMonth(delta) {
+  console.log('Changing month by:', delta);
+  currentDate.setMonth(currentDate.getMonth() + delta);
+    console.error('❌ Calendar days container not found (#calendar-days)');
+    return;
+  }
+  
+  console.log('✓ Calendar DOM elements found');
+  
+  // Set header
+  monthHeader.textContent = `${months[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+  
+  // Clear container
+  daysContainer.innerHTML = '';
+  
+  // Calculate calendar layout
+  const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+  const startingDayOfWeek = (firstDay.getDay() + 6) % 7; // Monday = 0
+  const today = new Date();
+  
+  // Add empty cells for previous month
+  for (let i = 0; i < startingDayOfWeek; i++) {
+    const emptyDay = document.createElement('div');
+    emptyDay.className = 'calendar-day empty';
+    daysContainer.appendChild(emptyDay);
+  }
+  
+  // Add all days of current month
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const dayElement = document.createElement('div');
+    dayElement.className = 'calendar-day';
+    
+    // Add day number
+    const dayNumber = document.createElement('div');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = day;
+    dayElement.appendChild(dayNumber);
+    
+    // Add events for this day
+    const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateKey = dayDate.getFullYear() + '-' + 
+                    String(dayDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(day).padStart(2, '0');
+    
+    const dayItems = getEventsForDate(dateKey);
+    
+    if (dayItems.length > 0) {
+      dayElement.classList.add('has-events');
+      
+      // Add class for many events to increase height
+      if (dayItems.length >= 4) {
+        dayElement.classList.add('has-many-events');
+      }
+      
+      const eventsContainer = document.createElement('div');
+      eventsContainer.className = 'day-events';
+      
+      // Show up to 3 events
+      dayItems.slice(0, 3).forEach(item => {
+        const eventEl = document.createElement('div');
+        let icon = '📋';
+        
+        if (item.itemType === 'task') {
+          icon = item.overdue ? '⚠️' : (item.priority === 'high' ? '🔥' : '📋');
+        } else if (item.itemType === 'appointment') {
+          icon = '👥';
+        } else if (item.itemType === 'event') {
+          icon = item.is_birthday ? '🎂' : (item.is_holiday ? '🎌' : '🎉');
+        }
+        
+        // Format time/date prefix
+        let timePrefix = '';
+        if (item.time && item.time.trim() && !item.allDay) {
+          timePrefix = `${item.time} `;
+          if (item.endTime) {
+            timePrefix = `${item.time}-${item.endTime} `;
+          }
+        }
+        
+        // Create title (limit length based on whether time is shown)
+        const titleMaxLength = timePrefix ? 8 : 15;
+        const title = (item.title || item.summary);
+        const truncatedTitle = title.length > titleMaxLength ? 
+                               title.substring(0, titleMaxLength) + '...' : title;
+        
+        eventEl.className = `day-event ${item.itemType}-event`;
+        
+        // Make event clickable for editing (except holidays)
+        if (item.id && !item.is_holiday) {
+          eventEl.style.cursor = 'pointer';
+          eventEl.onclick = function(e) {
+            e.stopPropagation(); // Prevent day click
+            try {
+              window.open(`/items/${item.id}/edit`, '_blank');
+            } catch (error) {
+              alert('Fehler beim Öffnen des Elements.');
+            }
+          };
+        }
+        
+        // Build display text: time + icon + title
+        let displayText;
+        if (timePrefix) {
+          eventEl.innerHTML = `<span class="event-time">${timePrefix}</span>${icon} ${truncatedTitle}`;
+        } else {
+          eventEl.textContent = `${icon} ${truncatedTitle}`;
+        }
+        
+        // Create comprehensive tooltip with all available information
+        let tooltip = `${item.itemType === 'task' ? 'Aufgabe' : 
+                          item.itemType === 'appointment' ? 'Termin' : 'Ereignis'}: ${title}`;
+        
+        // Add time information
+        if (timePrefix.trim()) {
+          tooltip += ` | Zeit: ${timePrefix.trim()}`;
+        }
+        
+        // Add task-specific information
+        if (item.itemType === 'task') {
+          if (item.priority && item.priority !== '0') {
+            const prioNames = {'5': 'Blockierend', '4': 'Kritisch', '3': 'Hoch', '2': 'Normal', '1': 'Niedrig'};
+            tooltip += ` | Priorität: ${prioNames[item.priority] || item.priority}`;
+          }
+          if (item.status && item.status !== 'offen') {
+            tooltip += ` | Status: ${item.status}`;
+          }
+          if (item.overdue) {
+            tooltip += ' | ÜBERFÄLLIG!';
+          }
+        }
+        
+        // Add recurrence information
+        if (item.recurrence && item.recurrence.trim()) {
+          tooltip += ` | Wiederholung: ${item.recurrence}`;
+        }
+        
+        // Add description if available
+        if (item.description && item.description.trim()) {
+          const desc = item.description.length > 50 ? 
+                       item.description.substring(0, 50) + '...' : item.description;
+          tooltip += ` | Beschreibung: ${desc}`;
+        }
+        
+        // Add tags if available
+        if (item.tags && item.tags.trim()) {
+          tooltip += ` | Tags: ${item.tags}`;
+        }
+        
+        // Add event-specific information
+        if (item.is_birthday) tooltip += ' | Geburtstag';
+        if (item.is_holiday) tooltip += ' | Feiertag';
+        if (item.allDay) tooltip += ' | Ganztägig';
+        
+        eventEl.title = tooltip;
+        eventsContainer.appendChild(eventEl);
+      });
+      
+      dayElement.appendChild(eventsContainer);
+    }
+    
+    // Highlight today
+    if (dayDate.toDateString() === today.toDateString()) {
+      dayElement.classList.add('today');
+    }
+    
+    // Make clickable
+    dayElement.onclick = function() {
+      currentViewDate.setFullYear(dayDate.getFullYear());
+      currentViewDate.setMonth(dayDate.getMonth());
+      currentViewDate.setDate(dayDate.getDate());
+      updateTodayView();
+    };
+    
+    daysContainer.appendChild(dayElement);
+  }
+  
+  console.log('✅ Calendar rendered with', daysContainer.children.length, 'cells');
+}
+
+// ===== CRITICAL: Update current date and time =====
+// Läuft jede Sekunde via setInterval in DOMContentLoaded
+function updateDateTime() {
+  try {
+    const now = new Date();
+    const options = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    const dateStr = now.toLocaleDateString('de-DE', options);
+    const timeStr = now.toLocaleTimeString('de-DE', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    
+    const dateElement = document.getElementById('current-date');
+    const timeElement = document.getElementById('current-time');
+    
+    if (dateElement) {
+      dateElement.textContent = dateStr;
+    } else {
+      console.error('❌ CRITICAL: Date element #current-date not found in DOM!');
+    }
+    
+    if (timeElement) {
+      timeElement.textContent = timeStr;
+    } else {
+      console.error('❌ CRITICAL: Time element #current-time not found in DOM!');
+    }
+  } catch (error) {
+    console.error('❌ Error updating date/time:', error);
+  }
+}
+
+// ===== CRITICAL: Initialize dashboard when DOM is ready =====
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('🚀 Dashboard initializing...');
+  
+  // Update date and time immediately and then every second
+  console.log('⏰ Starting time updates...');
+  updateDateTime();
+  setInterval(updateDateTime, 1000);
+  
+  // Render calendar immediately (no delay needed)
+  console.log('📅 Rendering calendar...');
+  try {
+    renderCalendar();
+    console.log('✅ Dashboard initialization complete');
+  } catch (error) {
+    console.error('❌ CRITICAL: Calendar initialization failed:', error);
+    console.error('Stack trace:', error.stack);
+  }
+});
+</script>
 
 {% endblock %}

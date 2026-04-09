@@ -6,15 +6,13 @@
 {% set fmt_mmdd = "%d.%m." %}
 
 {# Lokale Macros IM PARTIAL definieren, damit sie beim Include verfügbar sind #}
-{% macro wk_short(dt) -%} {{ dt | format_local_short_weekday_de("%a") }}.{%- endmacro %}
+{% macro wk_short(dt) -%} {{ dt | format_local_short_weekday_de }}.{%- endmacro %}
 {% macro d_de(dt) -%} {{ dt | format_local(fmt_date) }}{%- endmacro %}
 {% macro t_de(dt) -%} {{ dt | format_local(fmt_time) }}{%- endmacro %}
 {% macro iso(dt) -%} {{ dt | format_local(fmt_iso) }}{%- endmacro %}
 {% macro day_key(dt) -%} {{ dt | format_local(fmt_day) }}{%- endmacro %}
 
-{% macro has_birthday_tag(it) -%}
-  {% if it.type == 'event' and (it.tags or []) and ('geburtstag' in it.tags) %}true{% else %}false{% endif %}
-{%- endmacro %}
+{# macro has_birthday_tag removed: not used in new context #}
 
 {% macro is_all_day_disp(ds,de) -%}
   {% if not ds or not de %}{{ false }}{% else %}
@@ -35,8 +33,9 @@
 {% set uniq = [] %}
 {% for occ in (occs or []) %}
   {% set s = occ.start_utc %}
-  {% set e = occ.end_utc %}
-  {% set key = (s and s.isoformat() or '') ~ '|' ~ (e and e.isoformat() or '') %}
+  {% set e = occ.end_utc if occ.item_type != 'task' else None %}
+  {# Include item_id in key to avoid falsely deduplicating different items or occurrences #}
+  {% set key = (occ.item_id or '') ~ '|' ~ (s and s.isoformat() or '') ~ '|' ~ (e and e.isoformat() or '') %}
   {% if not seen.get(key) %}
     {% set _ = seen.update({key:1}) %}
     {% set _ = uniq.append(occ) %}
@@ -45,7 +44,7 @@
 
 <!-- DEBUG: uniq|length = {{ uniq|length }} -->
 {% for occ in uniq %}
-  <!-- OCC: start={{ occ.start_utc }}, end={{ occ.end_utc }} -->
+  <!-- OCC: start={{ occ.start_utc }}, end={{ occ.end_utc if occ.item_type != 'task' else 'N/A (Task)' }} -->
 {% endfor %}
 
 {% if uniq|length == 0 %}
@@ -60,15 +59,11 @@
       {% endif %}
     {% else %}
       {% set s = occ.start_utc %}
-      {% set e = occ.end_utc %}
+      {% set e = occ.end_utc if occ.item_type != 'task' else None %}
 
       {# Hole Original-Item für Tag-Prüfung #}
+      {# occ_item lookup removed: not needed with new row structure #}
       {% set occ_item = none %}
-      {% for item_tuple in rows %}
-        {% if item_tuple[0].id == occ.item_id %}
-          {% set occ_item = item_tuple[0] %}
-        {% endif %}
-      {% endfor %}
 
       {% if s %}
         {# Effektive Anzeigezeiten: pro Occurrence, nicht aus dem Item-Kontext #}

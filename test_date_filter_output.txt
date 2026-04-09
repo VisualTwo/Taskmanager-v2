@@ -1,0 +1,137 @@
+TaskManager
+Dashboard
+Liste
+Import
+Login
+Light
+Heute
+00:00
+Name
+Typ…
+Aufgabe
+Erinnerung
+Termin
+Ereignis
+Anlegen
+Erweitert
+Priorität
+Keine
+Niedrig
+Normal
+Hoch
+Kritisch
+Blockierend
+Impact
+1
+2
+3
+4
+5
+Confidence
+Sehr gering
+Gering
+Mittel
+Hoch
+Sehr hoch
+Ease
+1
+2
+3
+4
+5
+Auswahl exportieren (ICS)
+Suche
+Typ
+Alle Typen
+📋 Aufgaben
+⏰ Erinnerungen
+📅 Termine
+🎉 Ereignisse
+Status
+Alle Status
+Offen
+Geplant
+Aktiv
+Bestätigt
+Blockiert
+Deaktiviert
+In Bearbeitung
+Wartet
+Zurückgestellt
+Erledigt
+Stattgefunden
+Abgesagt
+Priorität
+Alle
+🚨 Blockierend
+🔥 Kritisch
+⚡ Hoch
+📋 Normal
+💤 Niedrig
+⚪ Keine
+Mindest-Prio
+Alle
+≥ Niedrig
+≥ Normal
+≥ Hoch
+≥ Kritisch
+≥ Blockierend
+Tags
+UND
+ODER
+Optionen
+🔒 Private
+📜 Vergangene
+Status-Gruppe
+Alle Status
+🟢 Aktiv
+🟡 Wartend
+✅ Erledigt
+Zeit-Filter
+Alle Zeiten
+⚠️ Überfällig
+⏰ Nächste 3h
+🌅 Heute
+📆 Diese Woche
+➡️ Nächste Woche
+📅 Dieser Monat
+Ersteller
+Alle Ersteller
+👤 Von mir
+Zugewiesen
+Alle Zuweisungen
+🎯 An mich
+Zeitraum
+📅 Heute
+📆 Diese Woche
+⏭️ Nächste Woche
+🔄 Standard
+Name
+Status
+Priorität
+Zeiten
+Vorkommen
+Links
+Tags
+Aktion
+Task for 07.01.2026
+TASK_BACKLOG
+Zurückgestellt
+Offen
+In Bearbeitung
+Blockiert
+Erledigt
+Keine
+Keine
+Niedrig
+Normal
+Hoch
+Kritisch
+Blockierend
+07.01.2026 11:00
+Mi. 07.01.2026 11:00
+Hinzufügen
+Hinzufügen
+Löschen?
+Ja
+Nein

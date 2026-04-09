@@ -5,6 +5,7 @@ from typing import List, Tuple
 from domain.ports import Repository, StatusServicePort, Notifier
 from domain.models import BaseItem, Occurrence
 from services.recurrence_service import expand_item
+from utils.datetime_helpers import now_utc
 
 class SchedulerService:
     def __init__(self, repo: Repository, status: StatusServicePort, notifier: Notifier, lead_minutes: int = 10):
@@ -39,7 +40,7 @@ class SchedulerService:
     def should_notify(self, status_key: str, occ: Occurrence) -> bool:
         if self.status.is_terminal(status_key):
             return False
-        now = datetime.utcnow()
+        now = now_utc()
         ref = occ.due_utc if occ.item_type in ("task","reminder") else occ.start_utc
         if ref is None:
             return False

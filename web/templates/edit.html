@@ -1,5 +1,8 @@
 {# /web/templates/edit.html #}
 {% extends "base.html" %}
+
+{% block title %}TM: {{ (it.name or 'Unbenannt') | e }}{% endblock %}
+
 {% block content %}
 
 <div id="alerts"></div>
@@ -14,7 +17,7 @@
   </script>
 {% endif %}
 
-<div class="edit-actions" style="display:flex; justify-content:flex-end; margin:.25rem 0;">
+<div class="edit-actions actions-right">
   <button class="preview-btn"
           hx-post="/items/{{ it.id }}/copy"
           hx-swap="none"
@@ -23,22 +26,23 @@
   </button>
   <a class="btn btn-xs" href="/export.ics?ids={{ it.id }}" target="_blank" rel="noopener">
     Exportieren (ICS)
-    </a>
+  </a>
 </div>
+
 <div class="edit-container">
   <!-- Grunddaten -->
   <fieldset class="card">
     <legend class="card-title">Grunddaten</legend>
     <div class="card-body form-grid">
-      <div class="full" style="max-width: 720px;">
+      <div class="full">
         <label for="name">Titel</label>
         <input id="name" type="text" name="name" value="{{ it.name }}" placeholder="Kurzer, prägnanter Titel"
-              hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
-              hx-include="#name"
-              hx-swap="none">
+               hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
+               hx-include="#name"
+               hx-swap="none">
       </div>
 
-      <div class="full" style="max-width: 720px;">
+      <div class="full">
         <label for="description">Beschreibung</label>
         <textarea id="description" name="description" placeholder="Ausführliche Beschreibung, Hinweise, Checkliste… (Markdown unterstützt)"
                   hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:400ms"
@@ -47,32 +51,97 @@
         <div class="muted">Markdown möglich: Überschriften, Listen, Links.</div>
       </div>
 
-      <div>
-        <label for="status_key">Status</label>
-        <select id="status_key" name="status_key"
-                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
-                hx-include="#status_key"
-                hx-swap="none">
-          {% for key, label in status_options %}
-            <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      <div class="edit-compact-row">
+        <div>
+          <label for="status_key">Status</label>
+          <select id="status_key" name="status_key"
+                  hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                  hx-include="#status_key"
+                  hx-swap="none">
+            <option value="" disabled {% if not it.status %}selected{% endif %}>– Status wählen –</option>
+            {% for key, label in status_options %}
+              <option value="{{ key }}" {% if key == it.status %}selected{% endif %}>
+                {% set icon = '/static/icons/status/' ~ key|lower ~ '.svg' %}
+                {% if false %}<img src="{{ icon }}" alt="" style="width:1em;vertical-align:middle;"> {% endif %}{{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
 
-      <div>
-        <label for="priority">Priorität</label>
-        <select id="priority" name="priority"
-                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
-                hx-include="#priority"
-                hx-swap="none">
-          <option value="0" {% if (it.priority or 0) == 0 %}selected{% endif %}>Keine</option>
-          <option value="1" {% if it.priority == 1 %}selected{% endif %}>Niedrig</option>
-          <option value="2" {% if it.priority == 2 %}selected{% endif %}>Normal</option>
-          <option value="3" {% if it.priority == 3 %}selected{% endif %}>Hoch</option>
-          <option value="4" {% if it.priority == 4 %}selected{% endif %}>Kritisch</option>
-          <option value="5" {% if it.priority == 5 %}selected{% endif %}>Blockierend</option>
-        </select>
-      </div>
+        <div>
+          <label for="priority">Priorität</label>
+          <select id="priority" name="priority"
+                  hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                  hx-include="#priority"
+                  hx-swap="none">
+            <option value="" disabled {% if it.priority is none or it.priority == '' %}selected{% endif %}>– Priorität wählen –</option>
+            <option value="0" {% if (it.priority or 0) == 0 %}selected{% endif %}>Keine</option>
+            <option value="1" {% if it.priority == 1 %}selected{% endif %}>Niedrig</option>
+            <option value="2" {% if it.priority == 2 %}selected{% endif %}>Normal</option>
+            <option value="3" {% if it.priority == 3 %}selected{% endif %}>Hoch</option>
+            <option value="4" {% if it.priority == 4 %}selected{% endif %}>Kritisch</option>
+            <option value="5" {% if it.priority == 5 %}selected{% endif %}>Blockierend</option>
+          </select>
+        </div>
+
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+          <div style="min-width:180px;">
+            <label for="ice_impact">Impact</label>
+            <select id="ice_impact" name="ice_impact"
+                    onchange="computeIce()"
+                    hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                    hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
+                    hx-swap="none">
+              <option value="" disabled {% if not it.metadata.get('ice_impact') %}selected{% endif %}>– Impact wählen –</option>
+              <option value="0" {% if it.metadata.get('ice_impact') == '0' %}selected{% endif %}>0 - Nicht zutreffend</option>
+              <option value="1" {% if it.metadata.get('ice_impact') == '1' %}selected{% endif %}>1 - Minimal</option>
+              <option value="2" {% if it.metadata.get('ice_impact') == '2' %}selected{% endif %}>2 - Gering</option>
+              <option value="3" {% if it.metadata.get('ice_impact') == '3' %}selected{% endif %}>3 - Mittel</option>
+              <option value="4" {% if it.metadata.get('ice_impact') == '4' %}selected{% endif %}>4 - Hoch</option>
+              <option value="5" {% if it.metadata.get('ice_impact') == '5' %}selected{% endif %}>5 - Transformativ</option>
+            </select>
+          </div>
+
+          <div style="min-width:180px;">
+            <label for="ice_confidence">Zuversicht</label>
+            <select id="ice_confidence" name="ice_confidence"
+                    onchange="computeIce()"
+                    hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                    hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
+                    hx-swap="none">
+              <option value="" disabled {% if not it.metadata.get('ice_confidence') %}selected{% endif %}>– Zuversicht wählen –</option>
+              <option value="very_low" {% if it.metadata.get('ice_confidence') == 'very_low' %}selected{% endif %}>Sehr niedrig (10%)</option>
+              <option value="low" {% if it.metadata.get('ice_confidence') == 'low' %}selected{% endif %}>Niedrig (30%)</option>
+              <option value="medium" {% if it.metadata.get('ice_confidence') == 'medium' %}selected{% endif %}>Mittel (50%)</option>
+              <option value="high" {% if it.metadata.get('ice_confidence') == 'high' %}selected{% endif %}>Hoch (70%)</option>
+              <option value="very_high" {% if it.metadata.get('ice_confidence') == 'very_high' %}selected{% endif %}>Sehr hoch (90%)</option>
+            </select>
+          </div>
+
+          <div style="min-width:180px;">
+            <label for="ice_ease">Realisierbarkeit</label>
+            <select id="ice_ease" name="ice_ease"
+                    onchange="computeIce()"
+                    hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
+                    hx-include="#ice_impact,#ice_confidence,#ice_ease,#ice_score"
+                    hx-swap="none">
+              <option value="" disabled {% if not it.metadata.get('ice_ease') %}selected{% endif %}>– Realisierbarkeit wählen –</option>
+              <option value="1" {% if it.metadata.get('ice_ease') == '1' %}selected{% endif %}>Extrem schwierig</option>
+              <option value="2" {% if it.metadata.get('ice_ease') == '2' %}selected{% endif %}>Schwierig</option>
+              <option value="3" {% if it.metadata.get('ice_ease') == '3' %}selected{% endif %}>Moderat</option>
+              <option value="4" {% if it.metadata.get('ice_ease') == '4' %}selected{% endif %}>Leicht</option>
+              <option value="5" {% if it.metadata.get('ice_ease') == '5' %}selected{% endif %}>Trivial</option>
+            </select>
+          </div>
+
+          <div style="min-width:140px;">
+            <label for="ice_score">ICE Score</label>
+            <input id="ice_score" name="ice_score" type="text" readonly
+                   value="{{ it.metadata.get('ice_score','') }}"
+                   style="background-color:#f5f5f5; cursor:default; color: #333;"
+                   class="ice-score-field">
+          </div>
+        </div>
 
       {# Links-Editor: nur das Partial einbinden #}
       {% include "_links_block.html" with context %}
@@ -80,35 +149,37 @@
       <div>
         <label>Privatsphäre</label>
         <label class="inline">
-          <input id="is_private" type="checkbox" name="is_private" value="1" {% if it.is_private %}checked{% endif %}
-                hx-post="/items/{{ it.id }}/edit" hx-trigger="change"
-                hx-include="#is_private"
-                hx-swap="none">
+          <input id="is_private" type="checkbox" name="is_private" value="1" 
+                 {% if it.is_private %}checked{% endif %}
+                 hx-post="/items/{{ it.id }}/edit" 
+                 hx-trigger="change"
+                 hx-vals='js:{"is_private": document.getElementById("is_private").checked ? "1" : "0"}'
+                 hx-swap="none">
           Eintrag ist privat
         </label>
-        <div class="muted">Private Einträge werden nur angezeigt, wenn in der Liste „Private“ aktiviert ist.</div>
+        <div class="muted">Private Einträge werden nur angezeigt, wenn in der Liste „Private" aktiviert ist.</div>
       </div>
 
-      <div class="full" style="max-width: 720px;">
+      <div class="full">
         <label for="tags">Tags</label>
         <input id="tags" type="text" name="tags" value="{{ (it.tags or []) | join(', ') }}" placeholder="z. B. Arbeit, Dringend"
-              hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
-              hx-include="#tags"
-              hx-swap="none">
+               hx-post="/items/{{ it.id }}/edit" hx-trigger="change delay:300ms"
+               hx-include="#tags"
+               hx-swap="none">
         <div class="muted">Mehrere Tags durch Komma trennen.</div>
       </div>
 
       <!-- Audit: erstellt/geändert -->
-      <div class="full" style="max-width: 720px; margin-top:.25rem;">
+      <div class="edit-audit">
         <div class="muted">
           {% if it.created_utc %}
-            Erstellt: {{ it.created_utc | format_local_short_weekday_de("%a %d.%m.%Y %H:%M") }}. {{ it.created_utc | format_local("%d.%m.%Y %H:%M") }}
+            Erstellt: {{ it.created_utc | format_local("%a. %d.%m.%Y %H:%M") }}
           {% else %}
             Erstellt: –
           {% endif %}
           ·
           {% if it.last_modified_utc %}
-            Zuletzt geändert: {{ it.last_modified_utc | format_local_short_weekday_de("%a %d.%m.%Y %H:%M") }}. {{ it.last_modified_utc | format_local("%d.%m.%Y %H:%M") }}
+            Zuletzt geändert: {{ it.last_modified_utc | format_local("%a. %d.%m.%Y %H:%M") }}
           {% else %}
             Zuletzt geändert: –
           {% endif %}
@@ -117,56 +188,132 @@
     </div>
   </fieldset>
 
+  <!-- Teilnehmer-Verwaltung -->
+  {% if current_user and all_users %}
+  <fieldset class="card">
+    <legend>Zugriff verwalten</legend>
+    <div class="edit-container">
+      <div>
+        <label for="participants">Teilnehmer</label>
+        <div class="participants-container">
+          {% set current_participants = it.participants if it.participants else [] %}
+          <div class="current-participants">
+            {% if current_participants %}
+              {% for participant_id in current_participants %}
+                {% if participant_id and participant_id.strip() %}
+                  {% for user in all_users %}
+                    {% if user.id == participant_id.strip() %}
+                      <span class="participant-badge">
+                        {{ user.full_name }} ({{ user.login }})
+                        <button type="button" class="remove-participant" 
+                                hx-post="/items/{{ it.id }}/participants/remove"
+                                hx-vals='{"user_id": "{{ user.id }}"}'
+                                hx-target=".participants-container"
+                                hx-swap="innerHTML"
+                                title="Teilnehmer entfernen">×</button>
+                      </span>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <span class="muted">Nur Sie haben Zugriff auf dieses Item</span>
+            {% endif %}
+          </div>
+          
+          <div class="add-participant">
+            <select id="new-participant" name="new_participant">
+              <option value="">Teilnehmer hinzufügen...</option>
+              {% for user in all_users %}
+                {% if user.id not in current_participants %}
+                  <option value="{{ user.id }}">
+                    {{ user.full_name }} ({{ user.login }})
+                    {% if user.id == current_user.id %} - Sie selbst{% endif %}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button type="button" class="btn btn-sm"
+                    hx-post="/items/{{ it.id }}/participants/add"
+                    hx-include="#new-participant"
+                    hx-target=".participants-container"
+                    hx-swap="innerHTML">Hinzufügen</button>
+          </div>
+        </div>
+        <div class="muted">Hinzugefügte Benutzer können dieses Item sehen und bearbeiten.</div>
+        
+        <!-- Quick-Add für sich selbst -->
+        {% if current_user.id not in current_participants %}
+        <div style="margin-top: 1rem; padding: 0.75rem; background-color: var(--color-info-light); border-radius: 4px;">
+          <p style="margin: 0 0 0.5rem; font-size: 0.9em; color: var(--color-info-dark);">
+            💡 Sie sind noch nicht als Teilnehmer eingetragen
+          </p>
+          <button type="button" class="btn btn-sm btn-primary"
+                  hx-post="/items/{{ it.id }}/participants/add"
+                  hx-vals='{"new_participant": "{{ current_user.id }}"}'
+                  hx-target=".participants-container"
+                  hx-swap="innerHTML"
+                  title="Sich selbst als Teilnehmer hinzufügen">
+            + Mich als Teilnehmer hinzufügen
+          </button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </fieldset>
+  {% endif %}
+
   <!-- Zeitangaben -->
   <fieldset class="card">
     <legend class="card-title">Zeitangaben</legend>
     <div class="card-body form-grid">
       {% if it.type == 'task' %}
-        <div style="max-width: 420px;">
+        <div>
           <label for="due">Fällig am</label>
-          <input id="due" class="fp-datetime" type="text" name="due" value="{{ it.due_utc | format_local }}"
+          <input id="due" class="fp-datetime" type="text" name="due" value="{{ (it.due_utc if it.type == 'task' else None) | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
                  hx-post="/items/{{ it.id }}/due" hx-trigger="change" hx-swap="none">
           <div class="muted">Optionales Fälligkeitsdatum.</div>
         </div>
       {% elif it.type in ('appointment','event') %}
-        <div style="max-width: 420px;">
+        <div>
           <label for="start_local">Beginn</label>
           <input id="start_local" class="fp-datetime" type="text" name="start_local" value="{{ it.start_utc | format_local }}"
-                 placeholder="dd.mm.yyyy hh:mm"
-                 hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
-                 hx-include="[name='start_local']" hx-target="#occ" hx-swap="innerHTML">
+                 placeholder="dd.mm.yyyy hh:mm">
         </div>
-        <div style="max-width: 420px;">
+        <div>
           <label for="end_local">Ende</label>
-          <input id="end_local" class="fp-datetime" type="text" name="end_local" value="{{ it.end_utc | format_local }}"
-                 placeholder="dd.mm.yyyy hh:mm"
-                 hx-post="/items/{{ it.id }}/start_end" hx-trigger="change"
-                 hx-include="[name='end_local']" hx-target="#occ" hx-swap="innerHTML">
+          <input id="end_local" class="fp-datetime" type="text" name="end_local" value="{{ (it.end_utc if it.type != 'task' else None) | format_local }}"
+                 placeholder="dd.mm.yyyy hh:mm">
         </div>
-        <div class="full" style="max-width: 720px;">
+        <div class="full">
           <label class="inline" title="Ganztägiger Eintrag ohne Uhrzeiten">
-            <input id="is_all_day" type="checkbox" name="is_all_day" value="1" {% if it.is_all_day %}checked{% endif %}>
+            <input id="is_all_day" type="checkbox" name="is_all_day" value="1" 
+                   {% if it.is_all_day %}checked{% endif %}
+                   hx-post="/items/{{ it.id }}/edit" 
+                   hx-trigger="change"
+                   hx-vals='js:{"is_all_day": document.getElementById("is_all_day").checked ? "1" : "0"}'
+                   hx-swap="none">
             Ganztägig
           </label>
         </div>
         {% set has_recur = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
         {% if not has_recur %}
-          <div class="full" style="max-width: 720px;">
+          <div class="full">
             <a href="#" class="add-recur" id="show_recur">+ Wiederholung hinzufügen</a>
           </div>
         {% endif %}
       {% elif it.type == 'reminder' %}
-        <div style="max-width: 420px;">
+        <div>
           <label for="until_local">Erinnern am</label>
-          <input id="until_local" class="fp-datetime" type="text" name="until_local" value="{{ it.reminder_utc | format_local }}"
+          <input id="until_local" class="fp-datetime" type="text" name="until_local" value="{{ (it.reminder_utc if it.type == 'reminder' else None) | format_local }}"
                  placeholder="dd.mm.yyyy hh:mm"
                  hx-post="/items/{{ it.id }}/snooze" hx-trigger="change"
                  hx-target="#occ" hx-swap="innerHTML">
         </div>
         {% set has_recur = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
         {% if not has_recur %}
-          <div class="full" style="max-width: 720px;">
+          <div class="full">
             <a href="#" class="add-recur" id="show_recur_rem">+ Wiederholung hinzufügen</a>
           </div>
         {% endif %}
@@ -198,11 +345,12 @@
         <label for="recur_interval">Intervall</label>
         <div class="inline">
           <span>Alle</span>
-          <input type="number" id="recur_interval" min="1" value="1" style="width:4.5rem">
+          <input type="number" id="recur_interval" min="1" value="1">
           <span id="recur_unit">Wochen</span>
         </div>
       </div>
 
+      <!-- Wochentage: WEEKLY + MONTHLY -->
       <div class="span-2" id="recur_weekdays" style="display:none;">
         <label>Wochentage</label>
         <div class="weekdays">
@@ -213,6 +361,27 @@
             </label>
           {% endfor %}
         </div>
+      </div>
+
+      <!-- MONTHLY: Position (BYSETPOS) -->
+      <div class="span-2" id="recur_monthly_pos" style="display:none;">
+        <label for="recur_setpos">Position im Monat (optional)</label>
+        <select id="recur_setpos">
+          <option value="">Alle Vorkommen</option>
+          <option value="1">Erster</option>
+          <option value="2">Zweiter</option>
+          <option value="3">Dritter</option>
+          <option value="4">Vierter</option>
+          <option value="-1">Letzter</option>
+        </select>
+        <div class="muted">Z.B. "Erster Montag" oder "Letzter Freitag"</div>
+      </div>
+
+      <!-- MONTHLY: Tag im Monat (BYMONTHDAY) -->
+      <div class="span-2" id="recur_monthly_day" style="display:none;">
+        <label for="recur_monthday">Tag im Monat (optional)</label>
+        <input type="text" id="recur_monthday" placeholder="z.B. 15, -1 (letzter Tag)">
+        <div class="muted">Mehrere durch Komma: 1,15,-1</div>
       </div>
 
       <div>
@@ -226,16 +395,29 @@
 
       <div class="inline" id="recur_end_until" style="display:none;">
         <label for="recur_until" class="sr-only">Bis</label>
-        <input class="fp-datetime" type="text" id="recur_until" placeholder="dd.mm.yyyy hh:mm" style="max-width: 260px;">
+        <input class="fp-datetime" type="text" id="recur_until" placeholder="dd.mm.yyyy hh:mm">
       </div>
 
       <div class="inline" id="recur_end_count" style="display:none;">
         <label for="recur_count" class="sr-only">Anzahl</label>
-        <input type="number" id="recur_count" min="1" max="999" value="10" style="width:5rem;">
+        <input type="number" id="recur_count" min="1" max="999" value="10">
         <span class="muted">Vorkommen</span>
       </div>
 
-      <div class="full btn-row" style="margin-top:.25rem;">
+      <!-- Erweiterte RRULE (Freitext) -->
+      <div class="full">
+        <label class="inline">
+          <input type="checkbox" id="recur_advanced"> Erweiterte RRULE manuell eingeben
+        </label>
+      </div>
+
+      <div class="full" id="recur_manual" style="display:none;">
+        <label for="recur_raw">RRULE (roh)</label>
+        <input type="text" id="recur_raw" placeholder="FREQ=MONTHLY;BYDAY=2MO">
+        <div class="muted">Für komplexe Regeln direkt eingeben</div>
+      </div>
+
+      <div class="full btn-row">
         <button type="button" class="btn btn-xs" id="save_recurrence">Wiederholung speichern</button>
         <button type="button" class="btn btn-xs" id="clear_recurrence">Wiederholung entfernen</button>
       </div>
@@ -249,9 +431,14 @@
     <div class="card-body">
       {% set has_recur_preview = (it.recurrence is defined and it.recurrence and (it.recurrence.rrule_string or (it.recurrence.exdates_utc or ()))) %}
       {% if has_recur_preview %}
-        <h3 class="muted" style="margin-top:0; display:flex; align-items:center; gap:.5rem;">
+        <h3 class="muted">
           Nächste
-          <select id="occ-n" class="btn btn-xs" style="min-height:auto; padding:.1rem .35rem;">
+          <select id="occ-n" class="btn btn-xs" name="n"
+                  hx-get="/items/{{ it.id }}/occurrences"
+                  hx-trigger="change"
+                  hx-target="#occ"
+                  hx-swap="innerHTML"
+                  hx-include="#occ-n">
             {% for k in range(1,11) %}
               <option value="{{ k }}" {% if k == 10 %}selected{% endif %}>{{ k }}</option>
             {% endfor %}
@@ -259,19 +446,16 @@
           Vorkommen
         </h3>
         <div id="occ"
-             hx-get="/items/{{ it.id }}/occurrences"
-             hx-trigger="load from:#occ-n changed"
-             hx-include="#occ-n"
-             hx-params="*"
+             hx-get="/items/{{ it.id }}/occurrences?n=10"
+             hx-trigger="load"
              data-locale="de">
           {% include "_occurrences.html" with context %}
         </div>
       {% else %}
-        <h3 class="muted" style="margin-top:0;">Nächster Termin</h3>
+        <h3 class="muted">Nächster Termin</h3>
         <div id="occ"
              hx-get="/items/{{ it.id }}/occurrences"
              hx-trigger="load"
-             hx-params="*"
              data-locale="de">
           {% include "_occurrences.html" with context %}
         </div>
@@ -279,10 +463,332 @@
       <div class="muted">Wochentage in Vorschau werden deutsch formatiert.</div>
     </div>
   </fieldset>
-</div>
+
+  <!-- Änderungsjournal -->
+  <fieldset class="card" id="change-journal-card">
+    <legend class="card-title" style="cursor: pointer; user-select: none;" id="journal-toggle">
+      <span id="journal-icon">▶</span> Änderungsjournal
+      <span class="muted" style="font-weight: normal; font-size: 0.9em;" id="journal-count">(0 Einträge)</span>
+    </legend>
+    <div class="card-body" id="journal-body" style="display: none;">
+      <div class="muted" style="margin-bottom: 1rem;">
+        Hier werden alle Änderungen dieser Sitzung protokolliert. Das Journal wird beim Schließen des Tabs gelöscht.
+      </div>
+      <ul id="journal-entries" class="list-plain" style="margin: 0; max-height: 400px; overflow-y: auto;">
+        <li class="muted" style="font-style: italic;">Noch keine Änderungen vorgenommen.</li>
+      </ul>
+      <div style="margin-top: 1rem;">
+        <button type="button" class="btn btn-xs" id="clear-journal">Journal leeren</button>
+      </div>
+    </div>
+  </fieldset>
+
+</div> <!-- Schließt edit-container -->
 
 <script>
-  // Custom Erfolgsmeldungen via HX-Trigger (z. B. links-updated)
+  // ===== 1. ÄNDERUNGSJOURNAL (ZUERST!) =====
+  (function(){
+    const journal = [];
+    const journalList = document.getElementById('journal-entries');
+    const journalCount = document.getElementById('journal-count');
+    const journalBody = document.getElementById('journal-body');
+    const journalIcon = document.getElementById('journal-icon');
+    const journalToggle = document.getElementById('journal-toggle');
+    const clearBtn = document.getElementById('clear-journal');
+
+    // Speichere aktuelle Werte aller Felder beim Laden
+    const initialValues = {};
+    
+    function captureInitialValues() {
+      // Text-Inputs und Textareas
+      document.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
+        const name = el.getAttribute('name');
+        if (name) {
+          if (el.type === 'checkbox') {
+            initialValues[name] = el.checked ? 'Ja' : 'Nein';
+          } else if (el.tagName === 'SELECT') {
+            const option = el.options[el.selectedIndex];
+            initialValues[name] = option ? option.textContent.trim() : el.value;
+          } else {
+            initialValues[name] = el.value;
+          }
+        }
+      });
+    }
+    
+    // Beim Laden Werte speichern
+    captureInitialValues();
+
+    // Mache initialValues global verfügbar für Start/End-Handler
+    window.journalInitialValues = initialValues;
+
+    // Deutsch formatierter Timestamp
+    function getTimestamp() {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      return `${day}.${month}.${year}, ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Feldname-Mapping (technisch → lesbar)
+    const fieldLabels = {
+      'name': 'Titel',
+      'description': 'Beschreibung',
+      'status_key': 'Status',
+      'priority': 'Priorität',
+      'ice_impact': 'Impact (ICE)',
+      'ice_confidence': 'Confidence (ICE)',
+      'ice_ease': 'Ease (ICE)',
+      'ice_score': 'ICE-Score',
+      'is_private': 'Privatsphäre',
+      'is_all_day': 'Ganztägig',
+      'tags': 'Tags',
+      'due': 'Fälligkeit',
+      'start_local': 'Beginn',
+      'end_local': 'Ende',
+      'until_local': 'Erinnerung',
+      'rrule_line': 'Wiederholung',
+      'url': 'Link'
+    };
+
+    // Wert kürzen wenn zu lang
+    function truncateValue(val, maxLen = 50) {
+      if (!val) return '–';
+      const str = String(val).trim();
+      if (str.length > maxLen) {
+        return str.substring(0, maxLen) + '…';
+      }
+      return str;
+    }
+
+    // Aktuellen Wert eines Feldes ermitteln
+    function getCurrentValue(fieldName) {
+      const el = document.querySelector(`[name="${fieldName}"]`);
+      if (!el) return null;
+      
+      if (el.type === 'checkbox') {
+        return el.checked ? 'Ja' : 'Nein';
+      } else if (el.tagName === 'SELECT') {
+        const option = el.options[el.selectedIndex];
+        return option ? option.textContent.trim() : el.value;
+      } else {
+        return el.value;
+      }
+    }
+
+    // Eintrag zum Journal hinzufügen
+    function addEntry(field, action = 'geändert', oldVal = null, newVal = null) {
+      const timestamp = getTimestamp();
+      const label = fieldLabels[field] || field;
+      
+      // Falls alte/neue Werte nicht übergeben, versuche sie zu ermitteln
+      if (oldVal === null && field in initialValues) {
+        oldVal = initialValues[field];
+      }
+      if (newVal === null) {
+        newVal = getCurrentValue(field);
+      }
+
+      journal.push({ 
+        timestamp, 
+        field: label, 
+        action,
+        oldValue: truncateValue(oldVal),
+        newValue: truncateValue(newVal)
+      });
+
+      // Aktualisiere gespeicherten Wert
+      if (newVal !== null) {
+        initialValues[field] = newVal;
+      }
+
+      // Journal-Liste aktualisieren
+      renderJournal();
+    }
+
+    // Mache addEntry global verfügbar
+    window.addJournalEntry = addEntry;
+
+    // Journal neu rendern
+    function renderJournal() {
+      if (journal.length === 0) {
+        journalList.innerHTML = '<li class="muted" style="font-style: italic;">Noch keine Änderungen vorgenommen.</li>';
+        journalCount.textContent = '(0 Einträge)';
+        return;
+      }
+
+      // Neueste zuerst
+      const reversed = [...journal].reverse();
+      
+      journalList.innerHTML = reversed.map(entry => {
+        let changeText = '';
+        
+        if (entry.action === 'hinzugefügt') {
+          changeText = `<strong>${entry.field}</strong> ${entry.action}`;
+          if (entry.newValue && entry.newValue !== '–') {
+            changeText += `: <code style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1);); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+          }
+        } else if (entry.action === 'entfernt') {
+          changeText = `<strong>${entry.field}</strong> ${entry.action}`;
+          if (entry.oldValue && entry.oldValue !== '–') {
+            changeText += `: <code style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.oldValue}</code>`;
+          }
+        } else {
+          // geändert
+          changeText = `<strong>${entry.field}</strong> ${entry.action}`;
+          if (entry.oldValue !== entry.newValue && entry.oldValue !== '–' && entry.newValue !== '–') {
+            changeText += `: <code style="background: rgba(var(--color-error-rgb, 192, 2121, 47), 0.1); padding: 2px 4px; border-radius: 3px; text-decoration: line-through;">${entry.oldValue}</code> → <code style="background: rgba(var(--color-success-rgb, 33, 128, 141), 0.1); paddingng: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+          } else if (entry.newValue !== '–') {
+            changeText += `: <code style="background: rgba(var(--color-success-rgb, 33, 128, 141),), 0.1); padding: 2px 4px; border-radius: 3px;">${entry.newValue}</code>`;
+          }
+        }
+
+        return `
+          <li style="padding: 0.75rem; border-bottom: 1px solid var(--color-border, #e0e0e0); display: flex; flex-direction: column; gap: 0.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <span style="flex: 1;">${changeText}</span>
+              <span class="muted" style="font-size: 0.85em; white-space: nowrap; margin-left: 1rem;">${entry.timestamp}</span>
+            </div>
+          </li>
+        `;
+      }).join('');
+
+      journalCount.textContent = `(${journal.length} ${journal.length === 1 ? 'Eintrag' : 'Einträge'})`;
+    }
+
+    // Toggle Journal auf/zu
+    journalToggle.addEventListener('click', () => {
+      const isOpen = journalBody.style.display !== 'none';
+      journalBody.style.display = isOpen ? 'none' : 'block';
+      journalIcon.textContent = isOpen ? '▶' : '▼';
+    });
+
+    // Journal leeren
+    clearBtn.addEventListener('click', () => {
+      if (confirm('Möchten Sie das Journal wirklich leeren?')) {
+        journal.length = 0;
+        renderJournal();
+      }
+    });
+
+    // HTMX-Requests überwachen
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      const target = e.target;
+      const xhr = e.detail.xhr;
+
+      // Nur erfolgreiche Requests (200, 204)
+      if (xhr.status !== 200 && xhr.status !== 204) return;
+
+      // Feldname ermitteln
+      let fieldName = null;
+      let action = 'geändert';
+      let oldVal = null;
+      let newVal = null;
+
+      // 1. Input/Textarea/Select (aber NICHT #occ-n)
+      if (target.matches && (
+        target.matches('input[name]') || 
+        target.matches('textarea[name]') || 
+        target.matches('select[name]')
+      )) {
+        // Ignoriere das Occurrences-Select
+        if (target.id === 'occ-n') return;
+        
+        fieldName = target.getAttribute('name');
+        oldVal = initialValues[fieldName] || null;
+        newVal = getCurrentValue(fieldName);
+      }
+
+      // 2. Form mit URL-Pattern (nur für Tags, Links werden per Custom Event behandelt)
+      if (!fieldName && target.matches && target.matches('form')) {
+        const url = target.getAttribute('hx-post') || '';
+        
+        if (url.includes('/tags/add')) {
+          fieldName = 'tags';
+          action = 'hinzugefügt';
+        } else if (url.includes('/tags/remove')) {
+          fieldName = 'tags';
+          action = 'entfernt';
+        }
+      }
+
+      // 3. Button mit hx-post (z.B. Kopieren)
+      if (!fieldName && target.matches && target.matches('button[hx-post]')) {
+        const url = target.getAttribute('hx-post') || '';
+        if (url.includes('/copy')) {
+          fieldName = 'Item';
+          action = 'kopiert';
+        }
+      }
+
+      // Eintrag hinzufügen
+      if (fieldName) {
+        addEntry(fieldName, action, oldVal, newVal);
+        
+        // Journal automatisch öffnen beim ersten Eintrag
+        if (journal.length === 1 && journalBody.style.display === 'none') {
+          journalBody.style.display = 'block';
+          journalIcon.textContent = '▼';
+        }
+      }
+    });
+
+    // Höre auf links-updated Event
+    document.addEventListener('links-updated', (e) => {
+      const url = e.detail?.url || 'Link';
+      const action = e.detail?.action || 'geändert';
+      
+      addEntry('url', action, null, url);
+      
+      // Journal automatisch öffnen beim ersten Eintrag
+      if (journal.length === 1 && journalBody.style.display === 'none') {
+        journalBody.style.display = 'block';
+        journalIcon.textContent = '▼';
+      }
+    });
+
+    // Initial rendern
+    renderJournal();
+  })();
+
+  // ===== 2. FLATPICKR INITIALISIERUNG =====
+  (function(){
+    function initFlatpickr() {
+      if (!window.flatpickr) {
+        console.warn('Flatpickr nicht geladen!');
+        return;
+      }
+
+      // Alle Datums-/Zeit-Inputs initialisieren
+      const dateInputs = document.querySelectorAll('.fp-datetime');
+      dateInputs.forEach(input => {
+        // Zerstöre alte Instanz falls vorhanden
+        if (input._flatpickr) {
+          input._flatpickr.destroy();
+        }
+        
+        flatpickr(input, {
+          enableTime: true,
+          time_24hr: true,
+          dateFormat: "d.m.Y H:i",
+          locale: "de",
+          allowInput: true
+        });
+      });
+    }
+
+    // Initial
+    initFlatpickr();
+
+    // Nach jedem HTMX-Swap
+    document.body.addEventListener('htmx:afterSwap', initFlatpickr);
+  })();
+
+  // ===== 3. LINKS UPDATED EVENT =====
   (function(){
     function onLinksUpdated(){
       const alerts = document.getElementById('alerts');
@@ -290,12 +796,10 @@
       alerts.innerHTML = '<div class="alert alert-success">Links aktualisiert.</div>';
       setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
     }
-
-    // Delegation: document existiert immer, kein body nötig
     document.addEventListener('links-updated', onLinksUpdated);
   })();
 
-  // htmx Feedback
+  // ===== 4. HTMX ERROR HANDLING =====
   document.addEventListener('htmx:afterRequest', (e) => {
     const t = e.target;
     if (e.detail.xhr.status === 422) {
@@ -309,6 +813,9 @@
       if (t.matches && t.matches('input[name="is_private"]')) {
         t.checked = {{ 'true' if it.is_private else 'false' }};
       }
+      if (t.matches && t.matches('input[name="is_all_day"]')) {
+        t.checked = {{ 'true' if it.is_all_day else 'false' }};
+      }
     } else if (e.detail.xhr.status === 204) {
       if (t.matches && t.matches('select[name="status_key"]')) {
         const sel = t;
@@ -319,7 +826,7 @@
     }
   });
 
-  // Wiederholung – Sichtbarkeit, Hydrierung aus RRULE und Speichern
+  // ===== 5. RECURRENCE EDITOR =====
   (function(){
     const type = "{{ it.type }}";
     if (!(type === "appointment" || type === "event" || type === "reminder")) return;
@@ -333,9 +840,13 @@
     const interval = document.getElementById('recur_interval');
     const unit = document.getElementById('recur_unit');
     const weekdays = document.getElementById('recur_weekdays');
+    const monthlyPos = document.getElementById('recur_monthly_pos');
+    const monthlyDay = document.getElementById('recur_monthly_day');
     const endMode = document.getElementById('recur_end_mode');
     const untilBox = document.getElementById('recur_end_until');
     const countBox = document.getElementById('recur_end_count');
+    const advancedCb = document.getElementById('recur_advanced');
+    const manualBox = document.getElementById('recur_manual');
 
     function reveal(){ if (recurCard) { recurCard.style.display=''; setTimeout(()=>freqSel?.focus(),0); } }
     showBtnApt && showBtnApt.addEventListener('click', (e)=>{ e.preventDefault(); reveal(); });
@@ -344,13 +855,29 @@
     function updateVisibility(){
       const f = freqSel.value;
       if (unit) unit.textContent = f === 'DAILY' ? 'Tage' : (f === 'WEEKLY' ? 'Wochen' : (f === 'MONTHLY' ? 'Monate' : 'Jahre'));
-      if (weekdays) weekdays.style.display = (f === 'WEEKLY') ? '' : 'none';
+      
+      if (weekdays) weekdays.style.display = (f === 'WEEKLY' || f === 'MONTHLY') ? '' : 'none';
+      
+      if (monthlyPos) monthlyPos.style.display = (f === 'MONTHLY') ? '' : 'none';
+      if (monthlyDay) monthlyDay.style.display = (f === 'MONTHLY') ? '' : 'none';
+      
       const m = endMode.value;
       if (untilBox) untilBox.style.display = (m === 'UNTIL') ? '' : 'none';
       if (countBox) countBox.style.display = (m === 'COUNT') ? '' : 'none';
     }
     freqSel && freqSel.addEventListener('change', updateVisibility);
     endMode && endMode.addEventListener('change', updateVisibility);
+
+    advancedCb && advancedCb.addEventListener('change', (e) => {
+      if (manualBox) manualBox.style.display = e.target.checked ? '' : 'none';
+      if (e.target.checked) {
+        const rawInput = document.getElementById('recur_raw');
+        if (rawInput && !rawInput.value && rruleRaw) {
+          const rrLine = (rruleRaw.split(/\n/).find(l => l.startsWith('RRULE:')) || rruleRaw).replace(/^RRULE:/,'').trim();
+          rawInput.value = rrLine;
+        }
+      }
+    });
 
     (function hydrateFromRRule(){
       if (!rruleRaw) return;
@@ -359,6 +886,7 @@
       const parts = Object.fromEntries(rrLine.split(';').map(p => {
         const [k,v] = p.split('='); return [k.toUpperCase(), (v||'').trim()];
       }));
+      
       const FREQ = parts.FREQ || '';
       if (FREQ) freqSel.value = FREQ;
 
@@ -366,12 +894,45 @@
       interval.value = isNaN(INTERVAL) ? '1' : String(Math.max(1, INTERVAL));
 
       const BYDAY = (parts.BYDAY || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-      if (FREQ === 'WEEKLY' && BYDAY.length) {
-        document.querySelectorAll('.byday').forEach(cb => { cb.checked = BYDAY.includes(cb.value.toUpperCase()); });
+      if (BYDAY.length) {
+        const clean = BYDAY.map(d => d.replace(/^[+-]?\d+/, ''));
+        document.querySelectorAll('.byday').forEach(cb => { 
+          cb.checked = clean.includes(cb.value.toUpperCase()); 
+        });
+      }
+
+      const BYSETPOS = parts.BYSETPOS;
+      if (BYSETPOS) {
+        const setposEl = document.getElementById('recur_setpos');
+        if (setposEl) setposEl.value = BYSETPOS;
+      }
+
+      const BYMONTHDAY = parts.BYMONTHDAY;
+      if (BYMONTHDAY) {
+        const monthdayEl = document.getElementById('recur_monthday');
+        if (monthdayEl) monthdayEl.value = BYMONTHDAY;
       }
 
       if (parts.UNTIL) {
         endMode.value = 'UNTIL';
+        const untilEl = document.getElementById('recur_until');
+        if (untilEl && parts.UNTIL.endsWith('Z')) {
+          try {
+            const utcStr = parts.UNTIL.replace('Z', '');
+            const y = parseInt(utcStr.substring(0, 4), 10);
+            const m = parseInt(utcStr.substring(4, 6), 10);
+            const d = parseInt(utcStr.substring(6, 8), 10);
+            const H = parseInt(utcStr.substring(9, 11), 10);
+            const M = parseInt(utcStr.substring(11, 13), 10);
+            const utcDate = new Date(Date.UTC(y, m-1, d, H, M));
+            const dd = String(utcDate.getDate()).padStart(2, '0');
+            const MM = String(utcDate.getMonth() + 1).padStart(2, '0');
+            const yyyy = utcDate.getFullYear();
+            const hh = String(utcDate.getHours()).padStart(2, '0');
+            const mm = String(utcDate.getMinutes()).padStart(2, '0');
+            untilEl.value = `${dd}.${MM}.${yyyy} ${hh}:${mm}`;
+          } catch (e) {}
+        }
       } else if (parts.COUNT) {
         endMode.value = 'COUNT';
         const c = parseInt(parts.COUNT, 10);
@@ -397,14 +958,40 @@
     }
 
     function buildRRule(){
-      const f = freqSel.value; if (!f) return null;
+      if (advancedCb?.checked) {
+        const raw = document.getElementById('recur_raw')?.value.trim() || null;
+        return raw;
+      }
+
+      const f = freqSel.value; 
+      if (!f) return null;
+      
       const parts = [`FREQ=${f}`];
       const n = Math.max(1, parseInt(interval.value || '1', 10));
       if (n > 1) parts.push(`INTERVAL=${n}`);
+
       if (f === 'WEEKLY') {
         const by = Array.from(document.querySelectorAll('.byday:checked')).map(x => x.value);
         if (by.length) parts.push(`BYDAY=${by.join(',')}`);
       }
+
+      if (f === 'MONTHLY') {
+        const by = Array.from(document.querySelectorAll('.byday:checked')).map(x => x.value);
+        const setpos = document.getElementById('recur_setpos')?.value.trim();
+        const monthday = document.getElementById('recur_monthday')?.value.trim();
+
+        if (by.length && setpos) {
+          parts.push(`BYDAY=${by.join(',')}`);
+          parts.push(`BYSETPOS=${setpos}`);
+        } else if (by.length) {
+          parts.push(`BYDAY=${by.join(',')}`);
+        }
+
+        if (monthday) {
+          parts.push(`BYMONTHDAY=${monthday}`);
+        }
+      }
+
       const m = endMode.value;
       if (m === 'UNTIL') {
         const u = (document.getElementById('recur_until')?.value || '').trim();
@@ -413,93 +1000,36 @@
         const c = Math.max(1, parseInt((document.getElementById('recur_count')?.value || '1'), 10));
         parts.push(`COUNT=${c}`);
       }
+
       return parts.join(';');
     }
 
     function postRecurrence(rrule){
       const formValues = {
-        name: document.getElementById('name')?.value || "",
-        description: document.getElementById('description')?.value || "",
-        status_key: document.getElementById('status_key')?.value || "",
-        is_private: (document.getElementById('is_private')?.checked ? "1" : "0"),
-        tags: document.getElementById('tags')?.value || "",
-        dtstart_local: "",
-        rrule_line: rrule || "",
-        exdates_local: ""
+        rrule_line: rrule || ""
       };
-      htmx.ajax('POST', '/items/{{ it.id }}/edit', { values: formValues, target: '#occ', swap: 'innerHTML' })
-        .then(()=> {
-          const alerts = document.getElementById('alerts');
-          alerts.innerHTML = `<div class="alert alert-success">${rrule ? 'Wiederholung gespeichert.' : 'Wiederholung entfernt.'}</div>`;
-        });
+      
+      htmx.ajax('POST', '/items/{{ it.id }}/edit', { 
+        values: formValues, 
+        target: '#occ', 
+        swap: 'innerHTML' 
+      }).then(()=> {
+        const alerts = document.getElementById('alerts');
+        alerts.innerHTML = `<div class="alert alert-success">${rrule ? 'Wiederholung gespeichert.' : 'Wiederholung entfernt.'}</div>`;
+        setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
+      }).catch(err => {
+        console.error('Fehler beim Speichern der Wiederholung:', err);
+        const alerts = document.getElementById('alerts');
+        alerts.innerHTML = '<div class="alert alert-error">Fehler beim Speichern der Wiederholung.</div>';
+        setTimeout(() => { if (alerts.firstChild) alerts.innerHTML = ''; }, 3000);
+      });
     }
 
     document.getElementById('save_recurrence')?.addEventListener('click', () => postRecurrence(buildRRule()));
     document.getElementById('clear_recurrence')?.addEventListener('click', () => postRecurrence(""));
   })();
 
-  // Export-Button: öffnet den ICS-Export für dieses Item
-  (function(){
-    const btn = document.getElementById('export-selected');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      const url = new URL('/export.ics', window.location.origin);
-      url.searchParams.append('ids', '{{ it.id }}');
-      window.open(url.toString(), '_blank');
-    });
-  })();
-
-  (function(){
-    const type = "{{ it.type }}";
-    if (!(type === "appointment" || type === "event")) return;
-
-    const startInput = document.getElementById('start_local');
-    const endInput   = document.getElementById('end_local');
-    if (!startInput || !endInput) return;
-
-    // Merke initiale Werte, um Überschreiben nur bei "leeren"/gleichen Werten zu erlauben
-    let lastStart = startInput.value || "";
-    let lastEnd   = endInput.value || "";
-
-    function mirrorIfAppropriate() {
-      const curStart = startInput.value.trim();
-      const curEnd   = endInput.value.trim();
-
-      // Spiegeln nur wenn:
-      // - Ende leer ist, oder
-      // - Ende bisher exakt dem vorherigen Start entsprach (typischer Erstfall)
-      const shouldMirror = (curEnd.length === 0) || (curEnd === lastStart);
-
-      if (shouldMirror && curStart.length) {
-        endInput.value = curStart;
-
-        // Optional: gleich die Vorschau aktualisieren, ohne manuellen Blur nötig
-        // Nur end_local posten, um deine Route /start_end unverändert zu nutzen
-        try {
-          if (window.htmx) {
-            htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
-              target: '#occ',
-              swap: 'innerHTML',
-              values: { end_local: curStart }
-            });
-          }
-        } catch (e) { /* no-op */ }
-      }
-
-      // Stände aktualisieren
-      lastStart = curStart;
-      lastEnd   = endInput.value.trim();
-    }
-
-    // Auf Änderungen am Startfeld reagieren
-    startInput.addEventListener('change', mirrorIfAppropriate);
-    // Auch auf Eingabe (live), damit sofort gespiegelt wird
-    startInput.addEventListener('input', mirrorIfAppropriate);
-
-    // Ende-Änderungen verfolgen, damit "curEnd === lastStart"-Heuristik korrekt bleibt
-    endInput.addEventListener('change', () => { lastEnd = endInput.value.trim(); });
-  })();
-
+  // ===== 6. START/END MIRROR LOGIC =====
   (function(){
     const type = "{{ it.type }}";
     if (!(type === "appointment" || type === "event")) return;
@@ -509,30 +1039,62 @@
     const alldayCb   = document.getElementById('is_all_day');
     if (!startInput || !endInput || !alldayCb) return;
 
-    // Merker für Spiegel-/Schutzlogik
     let lastStart = startInput.value || "";
     let lastEnd   = endInput.value || "";
+    let userTouchedEnd = false;
+    let changeTimeout = null;
+
+    // Beide Parameter zusammen senden + Journal-Eintrag
+    function sendStartEnd() {
+      clearTimeout(changeTimeout);
+      changeTimeout = setTimeout(() => {
+        const startVal = startInput.value.trim();
+        const endVal = endInput.value.trim();
+        
+        if (!startVal || !endVal) return;
+
+        // Speichere alte Werte für Journal
+        const oldStart = window.journalInitialValues['start_local'] || null;
+        const oldEnd = window.journalInitialValues['end_local'] || null;
+
+        htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
+          target: '#occ',
+          swap: 'innerHTML',
+          values: {
+            start_local: startVal,
+            end_local: endVal
+          }
+        }).then(() => {
+          // Journal-Einträge hinzufügen
+          if (window.addJournalEntry && oldStart !== startVal) {
+            window.addJournalEntry('start_local', 'geändert', oldStart, startVal);
+          }
+          if (window.addJournalEntry && oldEnd !== endVal) {
+            window.addJournalEntry('end_local', 'geändert', oldEnd, endVal);
+          }
+          
+          // Aktualisiere gespeicherte Werte
+          window.journalInitialValues['start_local'] = startVal;
+          window.journalInitialValues['end_local'] = endVal;
+        }).catch(err => {
+          console.error('Fehler beim Speichern von Start/End:', err);
+        });
+      }, 500); // Debounce 500ms
+    }
 
     function mirrorIfAppropriate() {
       const curStart = startInput.value.trim();
       const curEnd   = endInput.value.trim();
-      const shouldMirror = (curEnd.length === 0) || (curEnd === lastStart);
+      const shouldMirror = !userTouchedEnd && ((curEnd.length === 0) || (curEnd === lastStart));
+      
       if (shouldMirror && curStart.length) {
         endInput.value = curStart;
-        try {
-          if (window.htmx) {
-            htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
-              target: '#occ', swap: 'innerHTML', values: { end_local: curStart }
-            });
-          }
-        } catch (e) {}
+        lastEnd = curStart;
       }
       lastStart = curStart;
-      lastEnd   = endInput.value.trim();
     }
 
     function parseLocal(str) {
-      // erwartet "dd.mm.yyyy hh:mm" oder "dd.mm.yyyy"
       const m = str.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
       if (!m) return null;
       const [, dd, MM, yyyy, hh = "00", mm = "00"] = m;
@@ -551,24 +1113,12 @@
       return { startStr: fmtLocal(startDay), endStr: fmtLocal(endDay) };
     }
 
-    function postIsAllDay(val) {
-      try {
-        if (window.htmx) {
-          htmx.ajax('POST', '/items/{{ it.id }}/edit', {
-            swap: 'none',
-            values: { is_all_day: val ? "1" : "0" }
-          });
-        }
-      } catch (e) {}
-    }
-
     function applyAllDayOn() {
       const curStart = startInput.value.trim();
       if (!curStart) return;
       const bounds = setAllDayBounds(curStart);
       if (!bounds) return;
 
-      // Start auf 00:00, Ende auf 23:59 – Ende nur überschreiben, wenn leer oder gleich lastStart/alter AllDay-Ende
       startInput.value = bounds.startStr;
 
       const curEnd = endInput.value.trim();
@@ -579,70 +1129,85 @@
         endInput.value = bounds.endStr;
       }
 
-      // Server informieren: is_all_day=1 und neue Zeiten posten
-      postIsAllDay(true);
-      try {
-        if (window.htmx) {
-          htmx.ajax('POST', '/items/{{ it.id }}/start_end', {
-            target: '#occ',
-            swap: 'innerHTML',
-            values: { start_local: startInput.value, end_local: endInput.value }
-          });
-        }
-      } catch (e) {}
-
       lastStart = startInput.value.trim();
       lastEnd   = endInput.value.trim();
+      userTouchedEnd = false;
+
+      // Sende beide Werte
+      sendStartEnd();
     }
 
     function applyAllDayOff() {
-      // Nur Flag zurücksetzen; Zeiten bleiben, Nutzer kann Uhrzeiten anpassen
-      postIsAllDay(false);
+      htmx.ajax('POST', '/items/{{ it.id }}/edit', {
+        swap: 'none',
+        values: { is_all_day: "0" }
+      });
     }
 
-    // Events
-    startInput.addEventListener('change', mirrorIfAppropriate);
-    startInput.addEventListener('input', mirrorIfAppropriate);
+    startInput.addEventListener('change', () => {
+      mirrorIfAppropriate();
+      sendStartEnd();
+    });
 
-    endInput.addEventListener('change', () => { lastEnd = endInput.value.trim(); });
+    endInput.addEventListener('change', () => { 
+      lastEnd = endInput.value.trim(); 
+      userTouchedEnd = true;
+      sendStartEnd();
+    });
 
     alldayCb.addEventListener('change', () => {
       if (alldayCb.checked) applyAllDayOn();
       else applyAllDayOff();
     });
-  
+  })();
+
+  // ===== 7. COPY BUTTON =====
   (function(){
-    const btn = document.getElementById('copy-item');
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      try {
-        // HTMX kann Redirects automatisch folgen; mit fetch geht's explizit:
-        const resp = await fetch('/items/{{ it.id }}/copy', { method: 'POST' });
-        if (resp.redirected) {
-          window.location.href = resp.url;
-        } else if (resp.status === 200 || resp.status === 204) {
-          // Falls Server 200+Location liefert, manuell aus Location weiterleiten
-          const loc = resp.headers.get('Location');
-          if (loc) { window.location.href = loc; return; }
-          // Fallback: Alerts
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      const t = e.target;
+      if (!t.matches || !t.matches('button[hx-post*="/copy"]')) return;
+      
+      if (e.detail.xhr.status === 200 || e.detail.xhr.status === 204) {
+        const loc = e.detail.xhr.getResponseHeader('Location');
+        if (loc) {
+          window.location.href = loc;
+        } else {
           const alerts = document.getElementById('alerts');
           if (alerts) alerts.innerHTML = '<div class="alert alert-success">Kopie erstellt.</div>';
-        } else {
-          const txt = await resp.text();
-          const alerts = document.getElementById('alerts') || document.body;
-          const wrap = document.createElement('div');
-          wrap.innerHTML = txt || '<div class="alert alert-danger">Kopieren fehlgeschlagen.</div>';
-          alerts.prepend(wrap);
         }
-      } catch (e) {
-        const alerts = document.getElementById('alerts') || document.body;
-        const wrap = document.createElement('div');
-        wrap.innerHTML = '<div class="alert alert-danger">Netzwerkfehler beim Kopieren.</div>';
-        alerts.prepend(wrap);
       }
     });
   })();
 </script>
 
+<script>
+  // Compute ICE score with Impact weighting (0-5 scale)
+  // Formula: Impact² × Confidence × Ease (Impact is double-weighted)
+  // Max score: 5² × 5 × 5 = 625
+  function computeIce() {
+    try {
+      const impEl = document.getElementById('ice_impact');
+      const confEl = document.getElementById('ice_confidence');
+      const easeEl = document.getElementById('ice_ease');
+      const scoreEl = document.getElementById('ice_score');
+
+      const imp = impEl ? parseInt(impEl.value) || 0 : 0;
+      const conf = confEl ? parseInt(confEl.value) || 0 : 0;
+      const ease = easeEl ? parseInt(easeEl.value) || 0 : 0;
+
+      // Impact gets squared (double weight) for scientific prioritization
+      const raw = (imp * imp) * conf * ease;
+      const rounded = Math.round(raw * 100) / 100;
+      if (scoreEl) scoreEl.value = (rounded && !isNaN(rounded)) ? String(rounded) : '';
+    } catch (e) {
+      // silent
+    }
+  }
+
+  // Initialize on load
+  document.addEventListener('DOMContentLoaded', () => computeIce());
+  // Also compute once immediately (in case template rendered after DOMContentLoaded)
+  setTimeout(() => computeIce(), 50);
+</script>
 
 {% endblock %}

@@ -18,33 +18,28 @@ from utils.datetime_helpers import now_utc, format_display_datetime
 def _gen_id() -> str:
     return str(uuid.uuid4())
 
-def seed_data(repo, *, due_delta_min=8, reminder_delta_min=5):
+def seed_data(repo, *, creator: str, due_delta_min: int = 8, reminder_delta_min: int = 5):
+    """Seed sample data using the provided creator as owner/participant."""
+    if not creator:
+        raise ValueError("creator is required for seeding items")
+
     t1 = Task(
-        id=_gen_id(), type="task", name="Bericht finalisieren", status="TASK_OPEN",
-        is_private=False, due_utc=now_utc() + timedelta(minutes=due_delta_min), recurrence=None,
+        id=_gen_id(),
+        type="task",
+        name="Bericht finalisieren",
+        status="TASK_OPEN",
+        is_private=False,
+        due_utc=now_utc() + timedelta(minutes=due_delta_min),
+        recurrence=None,
+        creator=creator,
+        participants=(creator,),
     )
     repo.upsert(t1)
 
     dtstart = (now_utc() - timedelta(days=1)).replace(second=0, microsecond=0)
-    rrule_str = "\n".join([f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}", "RRULE:FREQ=WEEKLY;COUNT=5;BYDAY=WE"])
-    ap1 = Appointment(
-        id=_gen_id(), type="appointment", name="Team Sync", status="APPOINTMENT_PLANNED",
-        is_private=False, start_utc=dtstart, end_utc=dtstart + timedelta(hours=1),
-        is_all_day=False, recurrence=Recurrence(rrule_string=rrule_str, exdates_utc=()),
-    )
-    repo.upsert(ap1)
-
-    rem = Reminder(
-        id=_gen_id(), type="reminder", name="Wasser trinken", status="REMINDER_ACTIVE",
-        is_private=False, reminder_utc=now_utc() + timedelta(minutes=reminder_delta_min), recurrence=None,
-    )
-    repo.upsert(rem)
-
-    # Wöchentlicher Termin (RRULE via iCal-Linie mit DTSTART in UTC)
-    dtstart = (now_utc() - timedelta(days=1)).replace(second=0, microsecond=0)
     rrule_str = "\n".join([
         f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}",
-        "RRULE:FREQ=WEEKLY;COUNT=5;BYDAY=WE"
+        "RRULE:FREQ=WEEKLY;COUNT=5;BYDAY=WE",
     ])
     ap1 = Appointment(
         id=_gen_id(),
@@ -56,6 +51,8 @@ def seed_data(repo, *, due_delta_min=8, reminder_delta_min=5):
         end_utc=dtstart + timedelta(hours=1),
         is_all_day=False,
         recurrence=Recurrence(rrule_string=rrule_str, exdates_utc=()),
+        creator=creator,
+        participants=(creator,),
     )
     repo.upsert(ap1)
 
@@ -67,6 +64,8 @@ def seed_data(repo, *, due_delta_min=8, reminder_delta_min=5):
         is_private=False,
         reminder_utc=now_utc() + timedelta(minutes=reminder_delta_min),
         recurrence=None,
+        creator=creator,
+        participants=(creator,),
     )
     repo.upsert(rem)
 
@@ -78,19 +77,21 @@ def _import_key(it) -> tuple:
             name = name.split("]",1)[-1].strip()
         return (it.type, name, it.reminder_utc)
     if it.type == "task":
-        return (it.type, name, it.due_utc)
+        return (it.type, name, it.due_utc if it.type == 'task' else None)
     if it.type in ("appointment","event"):
         return (it.type, name, it.start_utc, it.end_utc)
     return (it.type, name)
 
 
-def apply_import(repo, path: str):
+def apply_import(repo, path: str, *, creator: str):
     if not os.path.exists(path):
         print(f"(Warn) Import-Datei nicht gefunden: {path}")
         return 0
+    if not creator:
+        raise ValueError("creator is required for ICS import")
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
-    items = import_ics(text)
+    items = import_ics(text, creator=creator)
 
     existing = {it.id for it in repo.list_all()}
     new, updated = 0, 0
@@ -183,6 +184,9 @@ def parse_args():
     return p.parse_args()
 
 def main():
+    creator = os.getenv("TASKMAN_CREATOR_ID")
+    if not creator:
+        raise ValueError("TASKMAN_CREATOR_ID environment variable must be set to create or import items")
     args = parse_args()
     status = make_status_service()
     repo = DbRepository("taskman.db")
@@ -195,13 +199,16 @@ def main():
         except AttributeError:
             # Fallback: harte Löschung der Datei, wenn clear nicht existiert
             db_path = "taskman.db"
-            if os.path.exists(db_path):
-                os.remove(db_path)
-            repo = DbRepository(db_path)
-
-    if not repo.list_all():
+        seed_data(
+            repo,
+            creator=creator,
+            due_delta_min=args.seed_due_min if args.seed_due_min is not None else 8,
+            reminder_delta_min=args.seed_rem_min if args.seed_rem_min is not None else 5,
+        )
+            if not creator:  # Ensure creator is required
+                raise ValueError("creator is required for ICS import")
         seed_data(repo,
-                  due_delta_min=args.seed_due_min if args.seed_due_min is not None else 8,
+        apply_import(repo, args.import_file, creator=creator)
                   reminder_delta_min=args.seed_rem_min if args.seed_rem_min is not None else 5)
 
     # Optionaler Import
@@ -234,7 +241,7 @@ def main():
     win_end = now_utc() + timedelta(hours=24)
     print("=== Items ===")
     for it in items:
-        print(f"- {it.type} {it.name} [{status.display_name(it.status)}]")
+        print(f"- {it.type} {it.name} [{status.get_display_name(it.status)}]")
         occs = expand_item(it, win_start, win_end)
         for occ in occs:
             if occ.item_type == "task":

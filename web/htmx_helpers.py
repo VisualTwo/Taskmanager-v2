@@ -1,4 +1,21 @@
-# web/server.py
+def get_keys_for_status_label(label, type_status_options):
+    """
+    Given a status label (display name) and a dict of type_status_options,
+    return all status keys (across all types) that have this label.
+    """
+    keys = []
+    for type_opts in type_status_options.values():
+        for key, display in type_opts:
+            if display == label:
+                keys.append(key)
+    return keys
+"""
+Imports, App-Initialisierung und Helper Functions
+werden an den Anfang der Datei verschoben, damit alle Symbole
+wie app, get_repo etc. vor der Nutzung definiert sind.
+"""
+
+# --- Imports ---
 from fastapi import FastAPI, Request, Form, UploadFile, File, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +24,6 @@ from datetime import timedelta, datetime
 from zoneinfo import ZoneInfo
 from typing import Optional
 import uuid
-
 from infrastructure.db_repository import DbRepository
 from bootstrap import make_status_service
 from services.filter_service import filter_items
@@ -16,11 +32,12 @@ from infrastructure.ical_mapper import to_ics
 from infrastructure.ical_importer import import_ics
 from utils.datetime_helpers import now_utc
 
-
+# --- App Initialization ---
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
 templates = Jinja2Templates(directory="web/templates")
 
+# --- Helper Functions ---
 def is_htmx(request: Request) -> bool:
     return request.headers.get("HX-Request", "false").lower() == "true"
 
@@ -44,6 +61,13 @@ def format_local(dt: Optional[datetime], fmt: str = "%d.%m.%Y %H:%M") -> str:
         return ""
 
 templates.env.filters["format_local"] = format_local
+
+# Jinja-Filter für Beschreibung: '\n' → Zeilenumbruch, '\,' → Komma
+def unescape_description(value):
+    if not value:
+        return ""
+    return value.replace('\\n', '\n').replace('\\,', ',')
+templates.env.filters["unescape_description"] = unescape_description
 
 def get_repo():
     return DbRepository("taskman.db")
@@ -95,6 +119,47 @@ def _build_recurrence(rrule_string: Optional[str], exdates_utc: Optional[tuple])
         return None
     return Recurrence(rrule_string=rrule_string or "", exdates_utc=exdates_utc or ())
 
+
+ # --- Übersicht / Index ---
+ 
+# --- Item-Edit (GET/POST) ---
+@app.get("/edit/{uid}", response_class=HTMLResponse)
+def edit_item(
+    request: Request,
+    uid: str,
+    repo: DbRepository = Depends(get_repo),
+    status=Depends(get_status),
+):
+    item = repo.get(uid)
+    if not item:
+        return hx_redirect("/")
+    return templates.TemplateResponse(request, "edit.html", {
+        "request": request,
+        "item": item,
+        "status_options": [(k, status.get_display_name(k)) for k in _type_allowed_status_keys(status, item.type)],
+    })
+
+@app.post("/edit/{uid}", response_class=HTMLResponse)
+async def save_item(
+    request: Request,
+    uid: str,
+    repo: DbRepository = Depends(get_repo),
+    status=Depends(get_status),
+):
+    form = await request.form()
+    item = repo.get(uid)
+    if not item:
+        return hx_redirect("/")
+    # Update fields
+    item.title = form.get("title", item.title)
+    item.description = form.get("description", item.description)
+    item.status = form.get("status", item.status)
+    item.due = _parse_local_dt(form.get("due"))
+    item.start = _parse_local_dt(form.get("start"))
+    item.end = _parse_local_dt(form.get("end"))
+    item.rrule = _normalize_rrule_input(form.get("rrule"))
+    repo.update(item)
+    return hx_refresh()
 @app.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
@@ -119,19 +184,17 @@ def index(
     else:
         win_end = now_utc() + timedelta(hours=48)
 
-    rows = []
-    for it in items:
-        rows.append((it, expand_item(it, win_start, win_end)))
+    rows = [(it, expand_item(it, win_start, win_end)) for it in items]
 
     try:
         type_status_options = {
-            t: [(k, status.display_name(k)) for k in _type_allowed_status_keys(status, t)]
+            t: [(k, status.get_display_name(k)) for k in _type_allowed_status_keys(status, t)]
             for t in ("task","reminder","appointment","event")
         }
     except Exception:
         type_status_options = {}
 
-    return templates.TemplateResponse("index.html", {
+    return templates.TemplateResponse(request, "index.html", {
         "request": request,
         "rows": rows,
         "type_status_options": type_status_options,
@@ -145,7 +208,7 @@ def edit_item_page(item_id: str, request: Request, repo: DbRepository = Depends(
         raise HTTPException(404, "Item nicht gefunden")
 
     allowed = _type_allowed_status_keys(status, it.type)
-    status_options = [(k, status.display_name(k)) for k in allowed]
+    status_options = [(k, status.get_display_name(k)) for k in allowed]
 
     rrule_line = ""
     dtstart_local = ""
@@ -163,7 +226,7 @@ def edit_item_page(item_id: str, request: Request, repo: DbRepository = Depends(
     if getattr(it, "recurrence", None) and it.recurrence.exdates_utc:
         exdates_local = ", ".join(format_local(d) for d in it.recurrence.exdates_utc)
 
-    return templates.TemplateResponse("edit.html", {
+    return templates.TemplateResponse(request, "edit.html", {
         "request": request,
         "it": it,
         "status_options": status_options,
@@ -186,21 +249,132 @@ def edit_item_submit(
     dtstart_local: str = Form(""),
     rrule_line: str = Form(""),
     exdates_local: str = Form(""),
+    ice_impact: str = Form(None),
+    ice_confidence: str = Form(None),
+    ice_ease: str = Form(None),
     repo: DbRepository = Depends(get_repo),
     status=Depends(get_status),
 ):
+
     it = repo.get(item_id)
     if not it:
         raise HTTPException(404, "Item nicht gefunden")
 
+    import logging
+    logger = logging.getLogger("edit_item_submit")
+
+    # Aktuellen User aus Header holen (nur für Logging, nicht zum Überschreiben!)
+    user_id = request.headers.get("X-User-Id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="X-User-Id header required")
+
+
+    # Status normalisieren und validieren wie in server.py
+    requested_status_key = status_key if (status_key or "") != "" else getattr(it, "status", None)
+    requested_status_key = status.normalize_input(requested_status_key or "", it.type) if requested_status_key else requested_status_key
+
     allowed = _type_allowed_status_keys(status, it.type)
-    if status_key not in allowed:
-        status_key = it.status
+    if requested_status_key not in allowed:
+        msg = f"Ungültiger Status für diesen Typ."
+        logger.error(f"Status-Validierung fehlgeschlagen: {requested_status_key} nicht in {allowed}")
+        html = templates.get_template("_alerts.html").render({"messages": [msg]})
+        return HTMLResponse(content=html, status_code=422)
+
+    # Status-Transition prüfen (wie in server.py)
+    old_key = getattr(it, "status", None)
+    new_key = status.normalize_input(requested_status_key or old_key, getattr(it, "type", None)) if (requested_status_key or old_key) else None
+    is_recurring = bool(getattr(it, "recurrence", None))
+    ok, reason = status.validate_transition(old_key, new_key, is_recurring=is_recurring)
+    if not ok:
+        if is_htmx(request):
+            html = templates.get_template("_alerts.html").render({"messages": [reason or "Ungültiger Status für diesen Typ."]})
+            return HTMLResponse(content=html, status_code=422)
+        raise HTTPException(status_code=422, detail=reason or "Ungültiger Status für diesen Typ.")
 
     tags_list = [t.strip() for t in tags.split(",") if t.strip()]
     private_bool = bool(int(is_private))
 
-    payload = {**it.__dict__, "name": name, "status": status_key, "is_private": private_bool, "tags": tags_list}
+
+    # ICE-Metadaten robust validieren und speichern wie in server.py
+    from domain.ice_definitions import compute_ice_score
+    cur_meta = dict(getattr(it, "metadata", {}) or {})
+    final_impact = None
+    final_confidence = None
+    final_ease = None
+    final_score = None
+    # Impact: integer 1-5
+    if ice_impact is not None:
+        ice_impact_str = (ice_impact or "").strip()
+        if ice_impact_str:
+            try:
+                imp_val = int(ice_impact_str)
+                if 1 <= imp_val <= 5:
+                    final_impact = imp_val
+            except ValueError:
+                pass
+    # Confidence: accept string label or integer, always store as string label for DB, use int for calculation
+    CONFIDENCE_LABEL_TO_INT = {
+        "very_low": 1, "low": 2, "medium": 3, "high": 4, "very_high": 5,
+        "sehr_niedrig": 1, "niedrig": 2, "mittel": 3, "hoch": 4, "sehr_hoch": 5
+    }
+    CONFIDENCE_INT_TO_LABEL = {v: k for k, v in CONFIDENCE_LABEL_TO_INT.items()}
+    confidence_label_for_db = None
+    if ice_confidence is not None:
+        ice_confidence_str = (ice_confidence or "").strip()
+        if ice_confidence_str:
+            if ice_confidence_str in CONFIDENCE_LABEL_TO_INT:
+                final_confidence = CONFIDENCE_LABEL_TO_INT[ice_confidence_str]
+                confidence_label_for_db = ice_confidence_str
+            else:
+                try:
+                    conf_val = int(ice_confidence_str)
+                    if 1 <= conf_val <= 5:
+                        final_confidence = conf_val
+                        confidence_label_for_db = CONFIDENCE_INT_TO_LABEL[conf_val]
+                except (ValueError, KeyError):
+                    pass
+    # Ease: integer 1-5
+    if ice_ease is not None:
+        ice_ease_str = (ice_ease or "").strip()
+        if ice_ease_str:
+            try:
+                ease_val = int(ice_ease_str)
+                if 1 <= ease_val <= 5:
+                    final_ease = ease_val
+            except ValueError:
+                pass
+    # ICE-Score neu berechnen (server-side validation)
+    if final_impact is not None or final_confidence is not None or final_ease is not None:
+        final_score = compute_ice_score(final_impact, final_confidence, final_ease)
+    # Speichern in Metadaten
+    if final_impact is not None:
+        cur_meta["ice_impact"] = str(final_impact)
+    elif ice_impact is not None and not (ice_impact or "").strip():
+        cur_meta.pop("ice_impact", None)
+    if final_confidence is not None:
+        cur_meta["ice_confidence"] = confidence_label_for_db
+    elif ice_confidence is not None and not (ice_confidence or "").strip():
+        cur_meta.pop("ice_confidence", None)
+    if final_ease is not None:
+        cur_meta["ice_ease"] = str(final_ease)
+    elif ice_ease is not None and not (ice_ease or "").strip():
+        cur_meta.pop("ice_ease", None)
+    if final_score is not None:
+        cur_meta["ice_score"] = str(final_score)
+    elif ("ice_score" in cur_meta) and (ice_impact is not None or ice_confidence is not None or ice_ease is not None):
+        # explizit löschen, wenn alle Felder leer
+        cur_meta.pop("ice_score", None)
+    metadata = cur_meta
+
+    # creator und participants NICHT überschreiben, sondern aus Original übernehmen
+    payload = {**it.__dict__,
+               "name": name,
+               "status": status_key,
+               "is_private": private_bool,
+               "tags": tags_list,
+               "metadata": metadata}
+
+    logger.debug(f"Vor Upsert: item_id={item_id}, name={name}, status={status_key}, is_private={private_bool}, tags={tags_list}, metadata={metadata}, creator={it.creator}, participants={it.participants}")
 
     if it.type == "task":
         payload["due_utc"] = _parse_local_dt(due) if due.strip() else getattr(it, "due_utc", None)
@@ -224,7 +398,7 @@ def edit_item_submit(
         # Nur Occurrence-Teil zurückgeben, damit die Seite ohne Reload aktualisiert werden kann
         win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
         occs = expand_item(it2, win_start, win_end)
-        return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+        return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
     return RedirectResponse(f"/items/{item_id}/edit", status_code=303)
 
 @app.get("/items/{item_id}/occurrences", response_class=HTMLResponse)
@@ -234,7 +408,7 @@ def item_occurrences_partial(item_id: str, request: Request, repo: DbRepository 
         return PlainTextResponse("Not found", status_code=404)
     win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
     occs = expand_item(it, win_start, win_end)
-    return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+    return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
 
 @app.post("/items/{item_id}/status")
 def change_status(request: Request, item_id: str, new_status: str = Form(...), repo: DbRepository = Depends(get_repo), status=Depends(get_status)):
@@ -263,7 +437,7 @@ def set_due(request: Request, item_id: str, due: str = Form(...), repo: DbReposi
     if is_htmx(request):
         win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
         occs = expand_item(it2, win_start, win_end)
-        return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+        return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
     return RedirectResponse("/", status_code=303)
 
 @app.post("/items/{item_id}/start_end")
@@ -292,7 +466,7 @@ def set_start_end(
     if is_htmx(request):
         win_start, win_end = now_utc(), now_utc() + timedelta(days=7)
         occs = expand_item(it2, win_start, win_end)
-        return templates.TemplateResponse("_occurrences.html", {"request": request, "occs": occs})
+        return templates.TemplateResponse(request, "_occurrences.html", {"request": request, "occs": occs})
     return RedirectResponse("/", status_code=303)
 
 @app.post("/items/{item_id}/snooze")
@@ -318,20 +492,6 @@ def delete_item(request: Request, item_id: str, repo: DbRepository = Depends(get
         return hx_refresh()
     return RedirectResponse("/", status_code=303)
 
-@app.post("/items/new")
-def create_item(request: Request, name: str = Form(...), item_type: str = Form(...), repo: DbRepository = Depends(get_repo)):
-    from domain.models import Task, Reminder, Appointment
-    nid = str(uuid.uuid4())
-    if item_type == "task":
-        it = Task(id=nid, type="task", name=name, status="TASK_OPEN", is_private=False, due_utc=None, recurrence=None)
-    elif item_type == "reminder":
-        it = Reminder(id=nid, type="reminder", name=name, status="REMINDER_ACTIVE", is_private=False, reminder_utc=None, recurrence=None)
-    else:
-        it = Appointment(id=nid, type="appointment", name=name, status="APPOINTMENT_PLANNED", is_private=False, start_utc=None, end_utc=None, is_all_day=False, recurrence=None)
-    repo.upsert(it)
-    if is_htmx(request):
-        return hx_refresh()
-    return RedirectResponse("/", status_code=303)
 
 @app.get("/export.ics")
 def export_ics(repo: DbRepository = Depends(get_repo)):
@@ -345,12 +505,16 @@ def export_ics(repo: DbRepository = Depends(get_repo)):
 
 @app.get("/import", response_class=HTMLResponse)
 def import_page(request: Request):
-    return templates.TemplateResponse("import.html", {"request": request})
+    return templates.TemplateResponse(request, "import.html", {"request": request})
 
 @app.post("/import", response_class=HTMLResponse)
 async def import_upload(request: Request, file: UploadFile = File(...), repo: DbRepository = Depends(get_repo)):
     text = (await file.read()).decode("utf-8", errors="ignore")
-    items = import_ics(text)
+    creator_id = request.headers.get("X-User-Id")
+    if not creator_id:
+        raise HTTPException(status_code=401, detail="Creator header X-User-Id is required")
+
+    items = import_ics(text, creator=creator_id)
     for it in items:
         if not it.id:
             it = it.__class__(**{**it.__dict__, "id": str(uuid.uuid4())})

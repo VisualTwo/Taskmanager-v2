@@ -22,11 +22,19 @@ STATUS_DEFINITIONS: Dict[str, Dict] = {
     # -------------------------
     # Tasks
     # -------------------------
+    "TASK_BACKLOG": {
+        "display_name": "Zurückgestellt",
+        "relevant_for_types": ["task"],
+        "is_terminal": False,
+        "ui_order": 1,
+        "tooltip": "Auf später verschoben / im Backlog (nicht aktiv).",
+        "color_light": "#9e9e9e",
+    },
     "TASK_OPEN": {
         "display_name": "Offen",
         "relevant_for_types": ["task"],
         "is_terminal": False,
-        "ui_order": 1,
+        "ui_order": 2,
         "tooltip": "Aufgabe ist offen.",
         "color_light": "#546e7a",
     },
@@ -34,7 +42,7 @@ STATUS_DEFINITIONS: Dict[str, Dict] = {
         "display_name": "In Bearbeitung",
         "relevant_for_types": ["task"],
         "is_terminal": False,
-        "ui_order": 2,
+        "ui_order": 3,
         "tooltip": "Aufgabe wird bearbeitet.",
         "color_light": "#1976d2",
     },
@@ -42,7 +50,7 @@ STATUS_DEFINITIONS: Dict[str, Dict] = {
         "display_name": "Blockiert",
         "relevant_for_types": ["task"],
         "is_terminal": False,
-        "ui_order": 3,
+        "ui_order": 4,
         "tooltip": "Aufgabe wartet.",
         "color_light": "#f57c00",
     },
@@ -58,11 +66,19 @@ STATUS_DEFINITIONS: Dict[str, Dict] = {
     # -------------------------
     # Reminders
     # -------------------------
+    "REMINDER_BACKLOG": {
+        "display_name": "Zurückgestellt",
+        "relevant_for_types": ["reminder"],
+        "is_terminal": False,
+        "ui_order": 11,
+        "tooltip": "Auf später verschoben / im Backlog (nicht aktiv).",
+        "color_light": "#9e9e9e",
+    },
     "REMINDER_ACTIVE": {
         "display_name": "Aktiv",
         "relevant_for_types": ["reminder"],
         "is_terminal": False,
-        "ui_order": 11,
+        "ui_order": 12,
         "tooltip": "Erinnerung ist aktiv.",
         "color_light": "#00897b",
     },
@@ -70,7 +86,7 @@ STATUS_DEFINITIONS: Dict[str, Dict] = {
         "display_name": "Wartet",
         "relevant_for_types": ["reminder"],
         "is_terminal": False,
-        "ui_order": 12,
+        "ui_order": 13,
         "tooltip": "Erinnerung wartet.",
         "color_light": "#4db6ac",
     },

@@ -201,7 +201,7 @@ def _choose_created_for_upsert(existing_created: Optional[datetime], incoming_cr
         return existing_created if existing_created <= incoming_created else existing_created
     return existing_created or incoming_created
 
-def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> List[object]:
+def import_ics(ics_text: str, *, creator: str, existing_lookup: Dict[str, dict] = None) -> List[object]:
     """
     existing_lookup: dict[ics_uid] -> bestehender DB-Datensatz (als dict) mit mindestens:
         {
@@ -209,6 +209,9 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         }
     Rückgabe: Domain-Instanzen (Task/Appointment/Event/Reminder) mit gefüllten Feldern inkl. priority, status etc.
     """
+    if not creator:
+        raise ValueError("creator is required for ICS import")
+    
     existing_lookup = existing_lookup or {}
     items: List[object] = []
 
@@ -222,7 +225,9 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         created = _read_created(block) or _read_dtstamp(block)
         last_mod = _read_last_modified(block) or _read_dtstamp(block)
         priority_ics = _read_priority(block)
-        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip().upper()
+        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip()
+        x_app_type = (_read_prop(block, "X-APP-TYPE") or "").strip().lower()
+        # prefer X-APP-STATUS (internal key) when present, otherwise map from ICS STATUS
         status_key = x_app_status if x_app_status else _status_for_task(ical_status)
 
         if not uid:
@@ -233,8 +238,8 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         links = _extract_links(desc)
         is_private = 0  # CLASS wird im Export nicht gesetzt; 0 als Default
 
-        # Reminder-Heuristik: Präfix, Tag "reminder" oder Kategorienhinweis
-        is_reminder = name.lower().startswith("[reminder]")
+        # Reminder-Heuristik: Präfix, X-APP-TYPE oder Tag "reminder" oder Kategorienhinweis
+        is_reminder = name.lower().startswith("[reminder]") or x_app_type == "reminder"
 
         base_kwargs = dict(
             id=uid,
@@ -247,10 +252,10 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
             ics_uid=uid,
             created_utc=format_db_datetime(created) if created else None,
             last_modified_utc=format_db_datetime(last_mod) if last_mod else None,
+            creator=creator,
         )
 
-        # Status
-        status_key = _status_for_task(ical_status)
+        # Note: keep status_key as determined above (prefer X-APP-STATUS when present)
 
         # Upsert: älteres CREATED bewahren, wenn vorhanden
         if uid in existing_lookup:
@@ -292,8 +297,9 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         created = _read_created(block) or _read_dtstamp(block)
         last_mod = _read_last_modified(block) or _read_dtstamp(block)
         priority_ics = _read_priority(block)
-        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip().upper()
-        status_key = x_app_status if x_app_status else _status_for_eventlike(ical_status, inferred_type)
+        x_app_status = (_read_prop(block, "X-APP-STATUS") or "").strip()
+        # Defer mapping to internal key until we know the inferred_type below
+        status_key = None
 
         if not uid:
             uid = _fallback_uid("VEVENT", name, s.strftime(DT_FMT_Z) if s else "", e.strftime(DT_FMT_Z) if e else "")
@@ -315,8 +321,8 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
         if is_birthday_tag:
             recur = _ensure_yearly_birthday(recur, s.strftime(DT_FMT_Z) if s else None)
 
-        # Status
-        status_key = _status_for_eventlike(ical_status, inferred_type)
+        # Status: prefer X-APP-STATUS (internal key) when present, otherwise map from ICS STATUS
+        status_key = x_app_status if x_app_status else _status_for_eventlike(ical_status, inferred_type)
 
         base_kwargs = dict(
             id=uid,
@@ -333,6 +339,7 @@ def import_ics(ics_text: str, *, existing_lookup: Dict[str, dict] = None) -> Lis
             ics_uid=uid,
             created_utc=format_db_datetime(created) if created else None,
             last_modified_utc=format_db_datetime(last_mod) if last_mod else None,
+            creator=creator,
         )
 
         # Upsert: älteres CREATED bewahren

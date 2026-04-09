@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fehler - TaskManager</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🚨 Fehler</h1>
+        </header>
+        
+        <main class="main-content">
+            <div class="error-card">
+                <h2>{{ error_message }}</h2>
+                
+                <div class="error-details">
+                    <p><strong>Details:</strong> {{ error_details }}</p>
+                    {% if error_id %}
+                    <p><strong>Fehler-ID:</strong> {{ error_id }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="error-actions">
+                    <a href="/dashboard" class="btn btn-primary">Zur Startseite</a>
+                    <a href="/dashboard" class="btn btn-secondary">Zum Dashboard</a>
+                </div>
+            </div>
+        </main>
+        
+        <style>
+            .error-card {
+                background: white;
+                border: 1px solid #e5e5e5;
+                border-radius: 8px;
+                padding: 2rem;
+                max-width: 600px;
+                margin: 2rem auto;
+                text-align: center;
+            }
+            
+            .error-details {
+                background: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 1rem;
+                margin: 1rem 0;
+                text-align: left;
+                font-family: monospace;
+                font-size: 0.9rem;
+            }
+            
+            .error-actions {
+                margin-top: 2rem;
+                display: flex;
+                gap: 1rem;
+                justify-content: center;
+            }
+            
+            .btn {
+                display: inline-block;
+                padding: 0.5rem 1rem;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 500;
+            }
+            
+            .btn-primary {
+                background: #007bff;
+                color: white;
+            }
+            
+            .btn-secondary {
+                background: #6c757d;
+                color: white;
+            }
+            
+            .btn:hover {
+                opacity: 0.9;
+            }
+        </style>
+    </div>
+</body>
+</html>

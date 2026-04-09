@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Calendar Test</title>
+    <style>
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            border: 2px solid red;
+        }
+        .calendar-day {
+            aspect-ratio: 1;
+            border: 1px solid #ccc;
+            padding: 4px;
+            text-align: center;
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Calendar Test</h1>
+    <div id="calendar-month"></div>
+    <div class="calendar-days" id="calendar-days"></div>
+    
+    <script>
+        let currentDate = new Date();
+        
+        function renderCalendar() {
+            console.log('Starting renderCalendar');
+            const monthHeader = document.getElementById('calendar-month');
+            const daysContainer = document.getElementById('calendar-days');
+            
+            console.log('Elements:', {monthHeader, daysContainer});
+            
+            if (!monthHeader || !daysContainer) {
+                console.error('Elements not found');
+                return;
+            }
+            
+            monthHeader.textContent = 'Test Month';
+            daysContainer.innerHTML = '';
+            
+            // Add 7 test days
+            for (let i = 1; i <= 7; i++) {
+                const day = document.createElement('div');
+                day.className = 'calendar-day';
+                day.textContent = i;
+                daysContainer.appendChild(day);
+                console.log('Added day', i);
+            }
+            
+            console.log('Calendar rendered, children count:', daysContainer.children.length);
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            renderCalendar();
+        });
+    </script>
+</body>
+</html>
